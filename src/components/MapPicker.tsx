@@ -86,7 +86,7 @@ export function MapPicker({ open, onClose, onSelect, apiKey, initialCenter }: Ma
       }
       script = document.createElement("script");
       script.type = "text/javascript";
-      script.src = `https://webapi.amap.com/maps?v=1.4.15&key=${apiKey}`;
+      script.src = `https://webapi.amap.com/maps?v=1.4.15&key=${apiKey}&plugin=AMap.PlaceSearch`;
       script.onerror = () => setScriptFailed(true);
       document.head.appendChild(script);
       timeout = setTimeout(() => {
