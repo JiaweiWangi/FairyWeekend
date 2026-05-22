@@ -1,100 +1,61 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
+import pca from "china-division/dist/pca.json";
 
-type District = {
-  adcode: string;
-  name: string;
-  level: string;
-  center?: string;
-  districts?: District[];
-};
+// pca: { 省: { 市: [区, 区, ...] } }
+const PCA = pca as Record<string, Record<string, string[]>>;
 
 interface Props {
-  apiKey: string;
   value?: { province?: string; city?: string; district?: string };
   onChange: (v: {
     province: string;
     city: string;
     district: string;
     label: string;
-    center?: { lat: number; lng: number };
   }) => void;
 }
 
-export function CityCascader({ apiKey, value, onChange }: Props) {
-  const [provinces, setProvinces] = useState<District[]>([]);
-  const [cities, setCities] = useState<District[]>([]);
-  const [districts, setDistricts] = useState<District[]>([]);
+// 直辖市 / 特殊：城市层只有"市辖区"，折叠掉
+const MUNICIPALITIES = new Set([
+  "北京市",
+  "天津市",
+  "上海市",
+  "重庆市",
+  "香港特别行政区",
+  "澳门特别行政区",
+]);
+
+export function CityCascader({ value, onChange }: Props) {
   const [province, setProvince] = useState(value?.province ?? "");
   const [city, setCity] = useState(value?.city ?? "");
   const [district, setDistrict] = useState(value?.district ?? "");
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
 
-  // Load provinces
-  useEffect(() => {
-    if (!apiKey) {
-      setErr("地图服务未配置");
-      return;
-    }
-    setLoading(true);
-    fetch(
-      `https://restapi.amap.com/v3/config/district?keywords=中国&subdistrict=1&key=${apiKey}`,
-    )
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.status === "1" && d.districts?.[0]?.districts) {
-          setProvinces(d.districts[0].districts as District[]);
-        } else {
-          setErr("加载省份失败");
-        }
-      })
-      .catch(() => setErr("网络错误"))
-      .finally(() => setLoading(false));
-  }, [apiKey]);
+  const provinces = useMemo(() => Object.keys(PCA), []);
 
-  // Load cities/districts when province selected
-  useEffect(() => {
-    if (!province || !apiKey) {
-      setCities([]);
-      return;
-    }
-    fetch(
-      `https://restapi.amap.com/v3/config/district?keywords=${encodeURIComponent(province)}&subdistrict=2&key=${apiKey}`,
-    )
-      .then((r) => r.json())
-      .then((d) => {
-        const sub = (d.districts?.[0]?.districts ?? []) as District[];
-        setCities(sub);
-      })
-      .catch(() => setCities([]));
-  }, [province, apiKey]);
+  const isMuni = MUNICIPALITIES.has(province);
 
-  // Update districts when city changes
-  useEffect(() => {
-    if (!city) {
-      setDistricts([]);
-      return;
+  const cities = useMemo(() => {
+    if (!province) return [];
+    return Object.keys(PCA[province] ?? {});
+  }, [province]);
+
+  const districts = useMemo(() => {
+    if (!province) return [];
+    if (isMuni) {
+      // 直辖市直接取第一个键（"市辖区"）下的区
+      const first = Object.keys(PCA[province] ?? {})[0];
+      return first ? PCA[province][first] : [];
     }
-    const c = cities.find((x) => x.name === city);
-    setDistricts(c?.districts ?? []);
-  }, [city, cities]);
+    if (!city) return [];
+    return PCA[province]?.[city] ?? [];
+  }, [province, city, isMuni]);
 
   function emit(p: string, c: string, dist: string) {
-    const cityObj = cities.find((x) => x.name === c);
-    const distObj = cityObj?.districts?.find((x) => x.name === dist);
-    const centerStr = distObj?.center ?? cityObj?.center;
-    let center: { lat: number; lng: number } | undefined;
-    if (centerStr) {
-      const [lng, lat] = centerStr.split(",").map(Number);
-      if (!isNaN(lng) && !isNaN(lat)) center = { lat, lng };
-    }
-    const label =
-      [c || p, dist].filter(Boolean).join("·") || p || "";
-    onChange({ province: p, city: c, district: dist, label, center });
+    const effectiveCity = MUNICIPALITIES.has(p) ? p : c;
+    const label = [effectiveCity || p, dist].filter(Boolean).join("·") || p || "";
+    onChange({ province: p, city: effectiveCity, district: dist, label });
   }
 
-  const selectCls =
-    "pixel-panel p-2 text-sm bg-input flex-1 min-w-0";
+  const selectCls = "pixel-panel p-2 text-sm bg-input flex-1 min-w-0";
 
   return (
     <div className="space-y-2">
@@ -102,7 +63,6 @@ export function CityCascader({ apiKey, value, onChange }: Props) {
         <select
           className={selectCls}
           value={province}
-          disabled={loading || !provinces.length}
           onChange={(e) => {
             const p = e.target.value;
             setProvince(p);
@@ -112,33 +72,35 @@ export function CityCascader({ apiKey, value, onChange }: Props) {
           }}
           style={{ fontFamily: "var(--font-serif-cn)" }}
         >
-          <option value="">{loading ? "加载中…" : "省/直辖市"}</option>
+          <option value="">省/直辖市</option>
           {provinces.map((p) => (
-            <option key={p.adcode} value={p.name}>
-              {p.name}
+            <option key={p} value={p}>
+              {p}
             </option>
           ))}
         </select>
 
-        <select
-          className={selectCls}
-          value={city}
-          disabled={!cities.length}
-          onChange={(e) => {
-            const c = e.target.value;
-            setCity(c);
-            setDistrict("");
-            emit(province, c, "");
-          }}
-          style={{ fontFamily: "var(--font-serif-cn)" }}
-        >
-          <option value="">城市</option>
-          {cities.map((c) => (
-            <option key={c.adcode} value={c.name}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+        {!isMuni && (
+          <select
+            className={selectCls}
+            value={city}
+            disabled={!cities.length}
+            onChange={(e) => {
+              const c = e.target.value;
+              setCity(c);
+              setDistrict("");
+              emit(province, c, "");
+            }}
+            style={{ fontFamily: "var(--font-serif-cn)" }}
+          >
+            <option value="">城市</option>
+            {cities.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        )}
 
         <select
           className={selectCls}
@@ -153,13 +115,12 @@ export function CityCascader({ apiKey, value, onChange }: Props) {
         >
           <option value="">区/县</option>
           {districts.map((d) => (
-            <option key={d.adcode} value={d.name}>
-              {d.name}
+            <option key={d} value={d}>
+              {d}
             </option>
           ))}
         </select>
       </div>
-      {err && <div className="text-xs text-destructive pixel">{err}</div>}
     </div>
   );
 }
