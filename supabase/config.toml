@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.resolve-location]
 verify_jwt = false
+
+[functions.record-quest]
+verify_jwt = false

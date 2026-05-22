@@ -1,5 +1,6 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { clearRun, loadRun } from "@/lib/quest-store";
 import type { QuestRunState } from "@/lib/quest-types";
 
@@ -10,6 +11,12 @@ export const Route = createFileRoute("/report")({
 function ReportPage() {
   const navigate = useNavigate();
   const [run, setRun] = useState<QuestRunState | null>(null);
+  const [rating, setRating] = useState<number>(0);
+  const [feedback, setFeedback] = useState("");
+  const [likedOrders, setLikedOrders] = useState<number[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [dmReply, setDmReply] = useState<string>("");
 
   useEffect(() => {
     const r = loadRun();
@@ -18,12 +25,47 @@ function ReportPage() {
       return;
     }
     setRun(r);
+    setLikedOrders(r.unlockedStageOrders);
   }, [navigate]);
 
   if (!run) return null;
   const totalStages = run.quest.stages.length;
   const unlocked = run.unlockedStageOrders.length;
   const date = new Date(run.createdAt).toLocaleDateString("zh-CN");
+
+  function toggleLiked(order: number) {
+    setLikedOrders((cur) =>
+      cur.includes(order) ? cur.filter((o) => o !== order) : [...cur, order],
+    );
+  }
+
+  async function handleSubmitFeedback() {
+    if (!run || submitting) return;
+    setSubmitting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("record-quest", {
+        body: {
+          player_key: "default",
+          character_class: run.character,
+          emotion: run.emotion,
+          city: run.city ?? "",
+          quest: run.quest,
+          stages_unlocked: unlocked,
+          rating: rating || null,
+          feedback,
+          liked_stage_orders: likedOrders,
+        },
+      });
+      if (error) throw error;
+      setSaved(true);
+      if (data?.profile) setDmReply(data.profile);
+    } catch (e) {
+      console.error(e);
+      alert("DM 没接到反馈，稍后再试一下");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   function handleRestart() {
     clearRun();
@@ -67,7 +109,7 @@ function ReportPage() {
         <div className="grid grid-cols-3 gap-2 mb-5 text-center">
           <Stat label="关卡" value={`${unlocked}/${totalStages}`} />
           <Stat label="停留" value={`${run.quest.stages.reduce((a, s) => a + s.stay_minutes, 0)}分`} />
-          <Stat label="评分" value="★★★" />
+          <Stat label="评分" value={rating ? "★".repeat(rating) : "—"} />
         </div>
 
         {/* Emotion arc */}
@@ -113,6 +155,83 @@ function ReportPage() {
           })}
         </div>
       </div>
+
+      {/* DM 反馈表单 */}
+      {!saved ? (
+        <div className="pixel-border p-5 mb-6">
+          <div className="text-xs pixel text-accent mb-3">▸ 跟 DM 说两句（下次更懂你）</div>
+
+          <div className="mb-4">
+            <div className="text-xs text-muted-foreground mb-2">这次整体几星？</div>
+            <div className="flex gap-2">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setRating(n)}
+                  className="text-2xl"
+                  style={{ color: n <= rating ? "var(--color-primary)" : "var(--color-muted-foreground)" }}
+                >
+                  ★
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <div className="text-xs text-muted-foreground mb-2">勾选你真正喜欢的关卡（默认按解锁选中）</div>
+            <div className="space-y-1.5">
+              {run.quest.stages.map((s) => {
+                const liked = likedOrders.includes(s.order);
+                return (
+                  <button
+                    key={s.order}
+                    onClick={() => toggleLiked(s.order)}
+                    className="w-full text-left text-xs flex items-center gap-2 pixel-panel p-2"
+                    style={{
+                      borderColor: liked ? "var(--color-primary)" : undefined,
+                      color: liked ? "var(--color-foreground)" : "var(--color-muted-foreground)",
+                    }}
+                  >
+                    <span className="pixel" style={{ color: liked ? "var(--color-primary)" : undefined }}>
+                      {liked ? "♥" : "○"}
+                    </span>
+                    <span>{s.stage_name} · {s.location_name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <div className="text-xs text-muted-foreground mb-2">想跟 DM 说点啥？（可选）</div>
+            <textarea
+              value={feedback}
+              onChange={(e) => setFeedback(e.target.value)}
+              rows={3}
+              placeholder="比如：第二关太累了，咖啡馆超喜欢"
+              className="w-full pixel-panel p-2 text-xs bg-transparent resize-none"
+            />
+          </div>
+
+          <button
+            onClick={handleSubmitFeedback}
+            disabled={submitting}
+            className="pixel-btn w-full"
+          >
+            {submitting ? "DM 正在记录…" : "✎ 交给 DM 记住"}
+          </button>
+        </div>
+      ) : (
+        <div className="pixel-border p-5 mb-6">
+          <div className="text-xs pixel text-accent mb-2">▸ DM 的小本本</div>
+          <p className="text-sm leading-relaxed" style={{ fontFamily: "var(--font-serif-cn)" }}>
+            {dmReply || "记下了。下次见。"}
+          </p>
+          <div className="text-[10px] text-muted-foreground mt-2">
+            * 下次开副本时，DM 会用这些记忆给你定制
+          </div>
+        </div>
+      )}
 
       <button onClick={handleShare} className="pixel-btn w-full mb-3">
         ↗ 分享战绩
