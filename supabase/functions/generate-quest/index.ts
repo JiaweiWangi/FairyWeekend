@@ -152,7 +152,7 @@ async function searchPOIs(
     const r = await fetch(url);
     const j = await r.json();
     if (j.status !== "1" || !Array.isArray(j.pois)) return [];
-    return j.pois.slice(0, 6).map((p: Record<string, unknown>) => ({
+    return j.pois.slice(0, 4).map((p: Record<string, unknown>) => ({
       name: String(p.name ?? ""),
       address: String(p.address ?? ""),
       type: String(p.type ?? "").split(";")[0] || "",
