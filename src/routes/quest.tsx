@@ -153,8 +153,33 @@ function MapScreen({ run }: { run: QuestRunState }) {
       <h1 className="text-xl pixel text-primary mb-1 leading-tight">
         《{run.quest.quest_name}》
       </h1>
-      <div className="text-xs text-muted-foreground mb-5">
+      <div className="text-xs text-muted-foreground mb-3">
         {run.character} · {run.emotion}
+      </div>
+
+      {/* Pixel panorama — stitches every stage scene into one continuous strip */}
+      <div className="pixel-panel overflow-hidden mb-4 flex">
+        {stages.map((s, i) => {
+          const unlocked = run.unlockedStageOrders.includes(s.order);
+          return (
+            <div
+              key={s.order}
+              className="flex-1 relative"
+              style={{
+                borderRight:
+                  i < stages.length - 1
+                    ? "1px dashed color-mix(in oklab, var(--color-primary) 40%, transparent)"
+                    : undefined,
+                filter: unlocked ? undefined : "saturate(0.35) brightness(0.7)",
+              }}
+            >
+              <PixelScene locationType={s.location_type} height={72} />
+              <div className="absolute top-1 left-1 text-[9px] pixel text-accent bg-black/60 px-1">
+                {s.order}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* RPG Map */}
