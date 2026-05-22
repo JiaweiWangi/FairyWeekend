@@ -205,10 +205,8 @@ function Index() {
           </div>
         </div>
         <CityCascader
-          apiKey={amapKey}
           onChange={(v) => {
             setCity(v.label);
-            if (v.center) setCoords(v.center);
           }}
         />
         <input
