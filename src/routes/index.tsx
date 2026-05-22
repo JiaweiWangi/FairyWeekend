@@ -101,7 +101,7 @@ function Index() {
 
   async function openMapPicker() {
     try {
-      const res = await fetchAmapKey({ data: {} });
+      const res = await fetchAmapKey();
       setAmapKey(res.key || "");
     } catch {
       setAmapKey("");
