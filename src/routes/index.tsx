@@ -27,13 +27,20 @@ function inferTimePeriod(): string {
 function Index() {
   const navigate = useNavigate();
   const [selected, setSelected] = useState<CharacterClass | null>(null);
-  const [emotion, setEmotion] = useState<string>("");
+  const [emotions, setEmotions] = useState<string[]>([]);
   const [customEmotion, setCustomEmotion] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const finalEmotion = customEmotion.trim() || emotion;
-  const canStart = selected && finalEmotion;
+  const finalEmotion =
+    [...emotions, customEmotion.trim()].filter(Boolean).join(" · ");
+  const canStart = !!selected && finalEmotion.length > 0;
+
+  function toggleEmotion(chip: string) {
+    setEmotions((prev) =>
+      prev.includes(chip) ? prev.filter((e) => e !== chip) : [...prev, chip],
+    );
+  }
 
   async function handleStart() {
     if (!selected || !finalEmotion) return;
@@ -142,29 +149,28 @@ function Index() {
 
       {/* Emotion input */}
       <section className="mb-7">
-        <h2 className="text-xs pixel text-primary mb-3">▸ 今日状态</h2>
+        <div className="flex items-baseline justify-between mb-3">
+          <h2 className="text-xs pixel text-primary">▸ 今日状态（可多选）</h2>
+          <span className="text-xs text-muted-foreground">
+            已选 {emotions.length}
+          </span>
+        </div>
         <div className="flex flex-wrap gap-2 mb-3">
           {EMOTION_CHIPS.map((chip) => {
-            const active = emotion === chip && !customEmotion.trim();
+            const active = emotions.includes(chip);
             return (
               <button
                 key={chip}
-                onClick={() => {
-                  setEmotion(chip);
-                  setCustomEmotion("");
-                }}
-                className="px-3 py-2 text-sm pixel-panel"
+                onClick={() => toggleEmotion(chip)}
+                className="px-3 py-2 text-sm pixel-panel transition-colors"
                 style={{
-                  background: active
-                    ? "var(--color-primary)"
-                    : undefined,
-                  color: active
-                    ? "var(--color-primary-foreground)"
-                    : undefined,
+                  background: active ? "var(--color-primary)" : undefined,
+                  color: active ? "var(--color-primary-foreground)" : undefined,
                   borderColor: active ? "var(--color-primary)" : undefined,
                   fontFamily: "var(--font-serif-cn)",
                 }}
               >
+                {active ? "✓ " : ""}
                 {chip}
               </button>
             );
@@ -173,7 +179,7 @@ function Index() {
         <textarea
           value={customEmotion}
           onChange={(e) => setCustomEmotion(e.target.value)}
-          placeholder="或者，一句话告诉 DM 你今天什么状态…"
+          placeholder="还想补一句？告诉 DM 今天的具体状态…"
           rows={2}
           className="w-full pixel-panel p-3 text-sm bg-input resize-none"
           style={{ fontFamily: "var(--font-serif-cn)" }}
