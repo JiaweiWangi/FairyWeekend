@@ -44,7 +44,7 @@ function Index() {
 
   const finalEmotion =
     [...emotions, customEmotion.trim()].filter(Boolean).join(" · ");
-  const canStart = !!selected || finalEmotion.length > 1;
+  const canStart = !!selected || finalEmotion.length > 0;
 
   function inferClassFromEmotion(emotion: string): CharacterClass {
     const e = emotion.toLowerCase();
