@@ -37,10 +37,14 @@ function Index() {
   const [city, setCity] = useState("");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [amapKey, setAmapKey] = useState("");
+
+  const fetchAmapKey = useServerFn(getAmapKey);
 
   const finalEmotion =
     [...emotions, customEmotion.trim()].filter(Boolean).join(" · ");
-  const canStart = !!selected || finalEmotion.length > 0;
+  const canStart = !!selected || finalEmotion.length > 1;
 
   function inferClassFromEmotion(emotion: string): CharacterClass {
     const e = emotion.toLowerCase();
