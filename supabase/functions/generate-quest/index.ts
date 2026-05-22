@@ -181,9 +181,9 @@ async function gatherCandidates(
         all.push(p);
       }
     }
-    if (all.length >= 18) break;
+    if (all.length >= 24) break;
   }
-  return all.slice(0, 18);
+  return all.slice(0, 24);
 }
 
 Deno.serve(async (req) => {
