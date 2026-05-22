@@ -204,11 +204,18 @@ function Index() {
             </button>
           </div>
         </div>
+        <CityCascader
+          apiKey={amapKey}
+          onChange={(v) => {
+            setCity(v.label);
+            if (v.center) setCoords(v.center);
+          }}
+        />
         <input
           value={city}
           onChange={(e) => setCity(e.target.value)}
-          placeholder={coords ? "可留空（用定位） 或 填城市/区域覆盖" : "城市 / 区域，比如：上海·徐汇"}
-          className="w-full pixel-panel p-2 text-sm bg-input"
+          placeholder="或手动输入，例：上海·徐汇"
+          className="w-full pixel-panel p-2 text-sm bg-input mt-2"
           style={{ fontFamily: "var(--font-serif-cn)" }}
         />
         {coords && (
