@@ -1,5 +1,5 @@
 // Edge function: generate a city RPG quest based on player class + emotion.
-// Uses Lovable AI Gateway (no API key required from user).
+// Uses Lovable AI Gateway + Amap (高德) Web Service for real POI data.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,27 +9,25 @@ const corsHeaders = {
 
 const SYSTEM_PROMPT = `你是「异界漂流」的城市地下城主（DM），一个懂得城市肌理、人类情绪与叙事节奏的神秘向导。
 
-你的任务：根据冒险者的职业、情绪状态、天气和时间，生成一条包含 3-5 个城市关卡的「周末副本」。
+任务：根据冒险者的职业、情绪、天气、时间，以及【真实候选 POI 列表】，挑选其中 3-5 个生成「周末副本」。
 
 规则：
-1. 副本要有统一的世界观主题（用奇幻隐喻包装真实城市场景）
-2. 每个关卡要有「任务目标」——具体的行为指令，不是去参观，是去做什么
-3. 关卡推荐要有反直觉性，不要景点，要有人情味的真实城市空间
-4. DM 口吻：神秘但不高冷，有时会吐槽，有文学感但不做作
-5. 整条副本有情绪弧线（起点状态 → 通关后状态）
-6. 严格输出 JSON，不要输出任何其他内容`;
+1. location_name 必须严格使用候选列表里某个 POI 的 name（一字不差），location_hint 用候选 POI 的 address。
+2. 副本要有统一世界观主题（奇幻隐喻包装真实城市场景）。
+3. 关卡是「去做什么」，不是「去看什么」。
+4. DM 口吻：神秘有文学感、偶尔吐槽、不做作。
+5. 整条副本要有情绪弧线（起点 → 终点）。
+6. 必须按候选 POI 的真实位置组织顺序，相邻关卡尽量在地理上能走通。
+7. 严格输出 JSON，不要任何额外文字。`;
 
 const QUEST_SCHEMA = {
   type: "object",
   properties: {
-    quest_name: { type: "string", description: "副本名称（带奇幻感的 4-8 字）" },
-    quest_brief: { type: "string", description: "DM 开场白（80-120字，第二人称，带入感强）" },
+    quest_name: { type: "string" },
+    quest_brief: { type: "string" },
     emotion_arc: {
       type: "object",
-      properties: {
-        start: { type: "string" },
-        end: { type: "string" },
-      },
+      properties: { start: { type: "string" }, end: { type: "string" } },
       required: ["start", "end"],
       additionalProperties: false,
     },
@@ -41,7 +39,7 @@ const QUEST_SCHEMA = {
         type: "object",
         properties: {
           order: { type: "number" },
-          stage_name: { type: "string", description: "关卡名（奇幻隐喻）" },
+          stage_name: { type: "string" },
           location_name: { type: "string" },
           location_type: { type: "string" },
           location_hint: { type: "string" },
@@ -54,18 +52,9 @@ const QUEST_SCHEMA = {
           meituan_keyword: { type: "string" },
         },
         required: [
-          "order",
-          "stage_name",
-          "location_name",
-          "location_type",
-          "location_hint",
-          "mission",
-          "dm_narrative",
-          "stay_minutes",
-          "emotion_tags",
-          "unlock_words",
-          "transition",
-          "meituan_keyword",
+          "order", "stage_name", "location_name", "location_type",
+          "location_hint", "mission", "dm_narrative", "stay_minutes",
+          "emotion_tags", "unlock_words", "transition", "meituan_keyword",
         ],
         additionalProperties: false,
       },
@@ -76,6 +65,107 @@ const QUEST_SCHEMA = {
   additionalProperties: false,
 };
 
+// 按职业映射高德 POI 关键词
+const CLASS_KEYWORDS: Record<string, string[]> = {
+  "山系疗愈师": ["公园", "绿道", "山", "江边"],
+  "市井觅食家": ["面馆", "小吃", "早餐", "苍蝇馆", "夜市"],
+  "慢调策展人": ["咖啡", "书店", "美术馆", "博物馆", "展览"],
+  "夜行漫游者": ["酒吧", "夜市", "Live", "便利店", "24小时"],
+  "社区烟火家": ["菜市场", "公园", "社区", "茶馆", "面包店"],
+};
+
+interface POI {
+  name: string;
+  address: string;
+  type: string;
+  location: string; // "lng,lat"
+  distance?: string;
+}
+
+async function wgs84ToGcj02(amapKey: string, lng: number, lat: number): Promise<[number, number]> {
+  try {
+    const url = `https://restapi.amap.com/v3/assistant/coordinate/convert?locations=${lng},${lat}&coordsys=gps&key=${amapKey}`;
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.status === "1" && j.locations) {
+      const [a, b] = (j.locations as string).split(",").map(Number);
+      return [a, b];
+    }
+  } catch (e) {
+    console.warn("coord convert failed:", e);
+  }
+  return [lng, lat];
+}
+
+async function reverseGeocode(amapKey: string, lng: number, lat: number): Promise<string | null> {
+  try {
+    const url = `https://restapi.amap.com/v3/geocode/regeo?location=${lng},${lat}&key=${amapKey}`;
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.status === "1") {
+      const addr = j.regeocode?.addressComponent;
+      if (addr) {
+        const city = (typeof addr.city === "string" && addr.city) || addr.province || "";
+        const district = (typeof addr.district === "string" && addr.district) || "";
+        return [city, district].filter(Boolean).join("·") || null;
+      }
+    }
+  } catch (e) {
+    console.warn("regeo failed:", e);
+  }
+  return null;
+}
+
+async function searchPOIs(
+  amapKey: string,
+  keyword: string,
+  opts: { lng?: number; lat?: number; city?: string },
+): Promise<POI[]> {
+  try {
+    let url: string;
+    if (opts.lng != null && opts.lat != null) {
+      // 周边搜索 3km 内
+      url = `https://restapi.amap.com/v3/place/around?key=${amapKey}&location=${opts.lng},${opts.lat}&keywords=${encodeURIComponent(keyword)}&radius=3000&offset=10&extensions=base`;
+    } else {
+      url = `https://restapi.amap.com/v3/place/text?key=${amapKey}&keywords=${encodeURIComponent(keyword)}&city=${encodeURIComponent(opts.city || "上海")}&offset=10&extensions=base`;
+    }
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.status !== "1" || !Array.isArray(j.pois)) return [];
+    return j.pois.slice(0, 6).map((p: Record<string, unknown>) => ({
+      name: String(p.name ?? ""),
+      address: String(p.address ?? ""),
+      type: String(p.type ?? "").split(";")[0] || "",
+      location: String(p.location ?? ""),
+      distance: p.distance ? String(p.distance) : undefined,
+    })).filter((p: POI) => p.name);
+  } catch (e) {
+    console.warn("POI search failed:", keyword, e);
+    return [];
+  }
+}
+
+async function gatherCandidates(
+  amapKey: string,
+  characterClass: string,
+  ctx: { lng?: number; lat?: number; city?: string },
+): Promise<POI[]> {
+  const keywords = CLASS_KEYWORDS[characterClass] ?? ["公园", "咖啡", "小吃"];
+  const all: POI[] = [];
+  const seen = new Set<string>();
+  for (const kw of keywords) {
+    const pois = await searchPOIs(amapKey, kw, ctx);
+    for (const p of pois) {
+      if (!seen.has(p.name)) {
+        seen.add(p.name);
+        all.push(p);
+      }
+    }
+    if (all.length >= 18) break;
+  }
+  return all.slice(0, 18);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -84,37 +174,68 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     const {
-      character_class = "游荡诗人",
+      character_class = "社区烟火家",
       emotion_input = "蔫蔫的",
       weather = "多云",
       time_period = "下午",
       companion = "独行",
-      city = "上海",
+      city: cityInput = "",
+      lat,
+      lng,
     } = body ?? {};
 
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    const amapKey = Deno.env.get("AMAP_WEB_API_KEY");
     if (!apiKey) {
       return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // 1. 拿真实候选 POI
+    let resolvedCity = cityInput || "";
+    let candidates: POI[] = [];
+    if (amapKey) {
+      let useLng: number | undefined;
+      let useLat: number | undefined;
+      if (typeof lng === "number" && typeof lat === "number") {
+        const [glng, glat] = await wgs84ToGcj02(amapKey, lng, lat);
+        useLng = glng;
+        useLat = glat;
+        if (!resolvedCity) {
+          const c = await reverseGeocode(amapKey, glng, glat);
+          if (c) resolvedCity = c;
+        }
+      }
+      candidates = await gatherCandidates(amapKey, character_class, {
+        lng: useLng, lat: useLat, city: resolvedCity || "上海",
+      });
+    } else {
+      console.warn("AMAP_WEB_API_KEY not set, falling back to pure AI generation");
+    }
+
+    if (!resolvedCity) resolvedCity = "上海";
+
+    // 2. 构造 prompt
+    const candidateBlock = candidates.length
+      ? `\n\n【真实候选 POI】（必须从中挑选 3-5 个；location_name 一字不差）:\n` +
+        candidates.map((p, i) =>
+          `${i + 1}. ${p.name}｜${p.type}｜${p.address}${p.distance ? `｜约${p.distance}米` : ""}`
+        ).join("\n")
+      : "\n\n（没有真实 POI 数据，请按你对该城市的了解生成可信地点）";
 
     const userPrompt = `职业：${character_class}
 今日状态：${emotion_input}
 天气：${weather}
 时间段：${time_period}
 同伴：${companion}
-城市/区域：${city}
+城市/区域：${resolvedCity}${candidateBlock}
 
 请生成今日副本。`;
 
     const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
@@ -123,11 +244,7 @@ Deno.serve(async (req) => {
         ],
         response_format: {
           type: "json_schema",
-          json_schema: {
-            name: "quest",
-            strict: true,
-            schema: QUEST_SCHEMA,
-          },
+          json_schema: { name: "quest", strict: true, schema: QUEST_SCHEMA },
         },
       }),
     });
@@ -135,21 +252,9 @@ Deno.serve(async (req) => {
     if (!aiRes.ok) {
       const errText = await aiRes.text();
       console.error("AI gateway error:", aiRes.status, errText);
-      if (aiRes.status === 429) {
-        return new Response(JSON.stringify({ error: "rate_limited", message: "请求过于频繁，稍后再试。" }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (aiRes.status === 402) {
-        return new Response(JSON.stringify({ error: "payment_required", message: "AI 额度已用尽，请充值。" }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      return new Response(JSON.stringify({ error: "ai_error", detail: errText }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      const status = aiRes.status === 429 || aiRes.status === 402 ? aiRes.status : 500;
+      return new Response(JSON.stringify({ error: "ai_error", status, detail: errText }), {
+        status, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -161,19 +266,17 @@ Deno.serve(async (req) => {
     } catch (e) {
       console.error("Parse error:", e, content);
       return new Response(JSON.stringify({ error: "parse_error", raw: content }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    return new Response(JSON.stringify({ quest }), {
+    return new Response(JSON.stringify({ quest, city: resolvedCity, poi_count: candidates.length }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
     console.error("generate-quest error:", err);
     return new Response(JSON.stringify({ error: String(err) }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
