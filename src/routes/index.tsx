@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import {
   CHARACTER_CLASSES,
   EMOTION_CHIPS,
@@ -8,7 +9,9 @@ import {
 import { startRun } from "@/lib/quest-store";
 import { getSeedQuest, fallbackSeedQuest } from "@/lib/seed-quests";
 import { supabase } from "@/integrations/supabase/client";
+import { getAmapKey } from "@/lib/map.functions";
 import { PixelAvatar } from "@/components/PixelAvatar";
+import { MapPicker } from "@/components/MapPicker";
 
 export const Route = createFileRoute("/")({
   component: Index,
