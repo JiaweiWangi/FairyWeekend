@@ -92,7 +92,7 @@ export function MapPicker({ open, onClose, onSelect, apiKey, initialCenter }: Ma
       timeout = setTimeout(() => {
         if (window.AMap) createMap();
         else setScriptFailed(true);
-      }, 500，0);
+      }, 5000);
     };
 
     loadMap();
