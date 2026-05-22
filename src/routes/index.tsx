@@ -328,6 +328,14 @@ function Index() {
       <footer className="mt-10 text-center text-xs text-muted-foreground pixel">
         © 2026 · 美团黑客松 · 城市漂流
       </footer>
+
+      <MapPicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onSelect={handleMapSelect}
+        apiKey={amapKey}
+        initialCenter={coords ? [coords.lng, coords.lat] : undefined}
+      />
     </div>
   );
 }
