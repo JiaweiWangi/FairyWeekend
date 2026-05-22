@@ -171,11 +171,40 @@ function MapScreen({ run }: { run: QuestRunState }) {
       <div
         className="pixel-panel relative w-full mb-5 overflow-hidden"
         style={{
-          height: 360,
+          height: 440,
           background:
-            "linear-gradient(180deg, oklch(0.22 0.06 280) 0%, oklch(0.18 0.05 240) 100%)",
+            "linear-gradient(180deg, oklch(0.28 0.08 280) 0%, oklch(0.18 0.05 240) 60%, oklch(0.22 0.08 30) 100%)",
         }}
       >
+        {/* Pixel landscape silhouette */}
+        <svg
+          className="absolute inset-x-0 bottom-0 w-full"
+          viewBox="0 0 64 16"
+          preserveAspectRatio="none"
+          shapeRendering="crispEdges"
+          style={{ height: "40%" }}
+        >
+          <polygon points="0,16 0,10 8,4 14,8 22,2 30,9 38,5 46,10 54,3 62,8 64,6 64,16" fill="oklch(0.15 0.04 270)" />
+          <polygon points="0,16 0,13 10,8 20,12 28,6 40,12 50,8 60,11 64,9 64,16" fill="oklch(0.10 0.03 270)" />
+        </svg>
+        {/* Stars */}
+        {[
+          [12, 14], [28, 8], [55, 18], [70, 30], [85, 12], [40, 25],
+        ].map(([x, y], i) => (
+          <div
+            key={i}
+            className="absolute"
+            style={{
+              left: `${x}%`,
+              top: `${y}%`,
+              width: 2,
+              height: 2,
+              background: "var(--color-accent)",
+              boxShadow: "0 0 4px var(--color-accent)",
+            }}
+          />
+        ))}
+
         {/* Grid backdrop */}
         <svg
           className="absolute inset-0 w-full h-full"
@@ -187,7 +216,7 @@ function MapScreen({ run }: { run: QuestRunState }) {
               <path
                 d="M 5 0 L 0 0 0 5"
                 fill="none"
-                stroke="oklch(0.4 0.05 280 / 0.4)"
+                stroke="oklch(0.4 0.05 280 / 0.25)"
                 strokeWidth="0.3"
               />
             </pattern>
@@ -211,8 +240,8 @@ function MapScreen({ run }: { run: QuestRunState }) {
                 stroke={
                   unlocked ? "var(--color-primary)" : "var(--color-border)"
                 }
-                strokeWidth={unlocked ? 0.6 : 0.4}
-                className={unlocked ? "" : "dashed-path"}
+                strokeWidth={unlocked ? 0.8 : 0.5}
+                strokeDasharray={unlocked ? undefined : "1.5,1.5"}
                 vectorEffect="non-scaling-stroke"
               />
             );
@@ -220,9 +249,9 @@ function MapScreen({ run }: { run: QuestRunState }) {
         </svg>
 
         {/* Nodes */}
-        {nodes.map((n, i) => {
+        {nodes.map((n) => {
           const unlocked = run.unlockedStageOrders.includes(n.stage.order);
-          const icon = STAGE_ICONS[i % STAGE_ICONS.length];
+          const icon = locationIcon(n.stage.location_type);
           return (
             <Link
               key={n.stage.order}
@@ -247,11 +276,35 @@ function MapScreen({ run }: { run: QuestRunState }) {
                 {icon}
               </div>
               <div className="mt-1 pixel-panel px-2 py-1 text-[10px] pixel whitespace-nowrap">
-                {n.stage.order}. {n.stage.stage_name.slice(0, 7)}
+                {n.stage.order}. {n.stage.stage_name.slice(0, 6)}
               </div>
             </Link>
           );
         })}
+
+        {/* Player avatar marker — sits on current (next-to-unlock) stage */}
+        {(() => {
+          const currentIdx = nodes.findIndex(
+            (n) => !run.unlockedStageOrders.includes(n.stage.order),
+          );
+          const idx = currentIdx === -1 ? nodes.length - 1 : currentIdx;
+          const n = nodes[idx]!;
+          return (
+            <div
+              className="absolute pointer-events-none"
+              style={{
+                left: `${n.x}%`,
+                top: `${n.y}%`,
+                transform: "translate(-120%, -120%)",
+                animation: "bounce-soft 1.2s ease-in-out infinite",
+              }}
+            >
+              <div className="pixel-panel p-0.5" style={{ background: "#0a0a18" }}>
+                <PixelAvatar character={run.character} size={40} />
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Stage list */}
