@@ -65,13 +65,33 @@ const QUEST_SCHEMA = {
   additionalProperties: false,
 };
 
-// 按职业映射高德 POI 关键词
+// 按职业映射高德 POI 关键词（覆盖美团玩乐主要品类）
 const CLASS_KEYWORDS: Record<string, string[]> = {
-  "山系疗愈师": ["公园", "绿道", "山", "江边"],
-  "市井觅食家": ["面馆", "小吃", "早餐", "苍蝇馆", "夜市"],
-  "慢调策展人": ["咖啡", "书店", "美术馆", "博物馆", "展览"],
-  "夜行漫游者": ["酒吧", "夜市", "Live", "便利店", "24小时"],
-  "社区烟火家": ["菜市场", "公园", "社区", "茶馆", "面包店"],
+  "山系疗愈师": [
+    "公园", "绿道", "山", "江边", "湖", "植物园", "森林",
+    "游泳馆", "健身中心", "瑜伽", "羽毛球馆", "体育场馆", "露营地",
+    "采摘园", "温泉", "按摩足疗", "汗蒸洗浴",
+  ],
+  "市井觅食家": [
+    "面馆", "小吃", "早餐", "夜市", "苍蝇馆", "老字号",
+    "菜市场", "烧烤", "火锅", "茶馆", "甜品", "面包店",
+    "美食街", "商场",
+  ],
+  "慢调策展人": [
+    "咖啡", "书店", "美术馆", "博物馆", "展览", "图书馆",
+    "画廊", "文创园", "独立电影院", "私人影院", "陶艺", "手工DIY",
+    "拼豆", "花艺", "茶馆",
+  ],
+  "夜行漫游者": [
+    "酒吧", "清吧", "Live House", "夜市", "便利店", "24小时",
+    "KTV", "电玩", "网吧电竞", "台球馆", "保龄球", "密室逃脱",
+    "剧本杀", "桌游", "深夜食堂",
+  ],
+  "社区烟火家": [
+    "菜市场", "公园", "社区", "茶馆", "面包店", "棋牌室",
+    "宠物店", "萌宠", "儿童乐园", "商场", "广场",
+    "聚餐", "团建", "桌游", "新奇体验",
+  ],
 };
 
 interface POI {
@@ -132,7 +152,7 @@ async function searchPOIs(
     const r = await fetch(url);
     const j = await r.json();
     if (j.status !== "1" || !Array.isArray(j.pois)) return [];
-    return j.pois.slice(0, 6).map((p: Record<string, unknown>) => ({
+    return j.pois.slice(0, 4).map((p: Record<string, unknown>) => ({
       name: String(p.name ?? ""),
       address: String(p.address ?? ""),
       type: String(p.type ?? "").split(";")[0] || "",
@@ -161,9 +181,9 @@ async function gatherCandidates(
         all.push(p);
       }
     }
-    if (all.length >= 18) break;
+    if (all.length >= 24) break;
   }
-  return all.slice(0, 18);
+  return all.slice(0, 24);
 }
 
 Deno.serve(async (req) => {
