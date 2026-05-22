@@ -67,12 +67,25 @@ export const CHARACTER_CLASSES: CharacterClassInfo[] = [
 
 export const EMOTION_CHIPS = [
   "蔫蔫的",
-  "需要被治愈",
+  "想被治愈",
   "想出去走走",
   "嘴馋",
   "想安静一下",
   "想躲进夜里",
   "想被惊喜砸到",
+  "脑子一团浆糊",
+  "社恐发作",
+  "想找人说话",
+  "想出汗",
+  "想发呆",
+  "莫名躁",
+  "丧得清新",
+  "电量耗尽",
+  "想被人间味包围",
+  "想躲开熟人",
+  "想吃点甜的",
+  "刚被工作搞崩",
+  "周末废人模式",
 ];
 
 export interface Stage {
