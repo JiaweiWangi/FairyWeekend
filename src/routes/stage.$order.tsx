@@ -68,12 +68,41 @@ function StagePage() {
 
       {/* Hero scene with character */}
       <div className="pixel-panel relative overflow-hidden mb-4">
-        <PixelScene locationType={stage.location_type} height={140} />
+        <PixelScene locationType={stage.location_type} height={160} />
+        {/* speech bubble */}
+        <div
+          className="absolute pixel text-[8px] px-2 py-1 bg-background border-2 border-primary text-primary"
+          style={{
+            left: "22%",
+            top: "10px",
+            animation: "bounce-soft 2.4s ease-in-out infinite",
+            transformOrigin: "bottom left",
+          }}
+        >
+          ★ 关卡 {stage.order}
+        </div>
         <div
           className="absolute"
-          style={{ left: "12%", bottom: "8px" }}
+          style={{
+            left: "12%",
+            bottom: "8px",
+            animation: "avatar-hop 1.6s ease-in-out infinite",
+          }}
         >
           <PixelAvatar character={run.character} size={56} />
+        </div>
+        {/* floating sparkles */}
+        <div
+          className="absolute text-primary text-xs"
+          style={{ right: "18%", top: "30%", animation: "sparkle-float 3s ease-in-out infinite" }}
+        >
+          ✦
+        </div>
+        <div
+          className="absolute text-accent text-xs"
+          style={{ right: "30%", top: "55%", animation: "sparkle-float 3.4s ease-in-out infinite 0.8s" }}
+        >
+          ✧
         </div>
       </div>
 
