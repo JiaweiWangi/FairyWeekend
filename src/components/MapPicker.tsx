@@ -183,20 +183,47 @@ export function MapPicker({ open, onClose, onSelect, apiKey, initialCenter }: Ma
           </button>
         </div>
 
-        {/* Results overlay */}
+        {/* Results list (persistent panel) */}
         {searchResults.length > 0 && (
-          <div className="absolute top-[100px] left-3 right-3 z-20 max-h-48 overflow-y-auto pixel-panel bg-card">
-            {searchResults.map((item, i) => (
+          <div className="border-b border-border bg-card">
+            <div className="px-3 py-1.5 text-[10px] pixel text-muted-foreground flex items-center justify-between">
+              <span>▸ 找到 {searchResults.length} 个地点</span>
               <button
-                key={i}
-                onClick={() => handleSelectResult(item)}
-                className="w-full text-left p-2 text-sm border-b border-border last:border-0 hover:bg-primary/10"
-                style={{ fontFamily: "var(--font-serif-cn)" }}
+                onClick={() => setSearchResults([])}
+                className="text-accent hover:text-primary"
               >
-                <div className="font-medium">{item.name}</div>
-                <div className="text-xs text-muted-foreground">{item.address}</div>
+                清除
               </button>
-            ))}
+            </div>
+            <div className="max-h-56 overflow-y-auto">
+              {searchResults.map((item, i) => {
+                const active =
+                  selected?.lat === item.lat && selected?.lng === item.lng;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => handleSelectResult(item)}
+                    className="w-full text-left px-3 py-2 text-sm border-b border-border/50 last:border-0 hover:bg-primary/10 transition-colors"
+                    style={{
+                      fontFamily: "var(--font-serif-cn)",
+                      background: active
+                        ? "color-mix(in oklab, var(--color-primary) 18%, var(--color-card))"
+                        : undefined,
+                    }}
+                  >
+                    <div className="font-medium flex items-center gap-2">
+                      {active && <span className="text-primary pixel text-xs">◆</span>}
+                      {item.name}
+                    </div>
+                    {item.address && (
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {item.address}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 
