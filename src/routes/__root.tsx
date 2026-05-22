@@ -71,20 +71,29 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      {
+        name: "viewport",
+        content:
+          "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover",
+      },
+      { title: "异界漂流 DriftQuest · 你的城市副本" },
+      {
+        name: "description",
+        content:
+          "输入情绪和角色，AI 地下城主为你生成一条城市副本任务线——每个地点是一个关卡，每次出行是一段专属剧情。",
+      },
+      { name: "author", content: "DriftQuest Team" },
+      { property: "og:title", content: "异界漂流 DriftQuest" },
+      { property: "og:description", content: "你的城市，你的剧本，你的周末副本。" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
       {
         rel: "stylesheet",
-        href: appCss,
+        href: "https://fonts.googleapis.com/css2?family=Press+Start+2P&family=ZCOOL+XiaoWei&display=swap",
       },
     ],
   }),
