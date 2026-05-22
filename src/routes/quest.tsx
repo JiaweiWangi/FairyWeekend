@@ -241,7 +241,7 @@ function MapScreen({ run }: { run: QuestRunState }) {
         {/* Nodes */}
         {nodes.map((n) => {
           const unlocked = run.unlockedStageOrders.includes(n.stage.order);
-          const icon = locationIcon(n.stage.location_type);
+          const kind = pickMapIconKind(n.stage.location_type);
           return (
             <Link
               key={n.stage.order}
@@ -251,7 +251,7 @@ function MapScreen({ run }: { run: QuestRunState }) {
               style={{ left: `${n.x}%`, top: `${n.y}%` }}
             >
               <div
-                className={`pixel-panel w-14 h-14 flex items-center justify-center text-3xl ${
+                className={`pixel-panel w-14 h-14 flex items-center justify-center ${
                   unlocked ? "glow-gold" : ""
                 }`}
                 style={{
@@ -263,7 +263,7 @@ function MapScreen({ run }: { run: QuestRunState }) {
                     : undefined,
                 }}
               >
-                {icon}
+                <PixelMapIcon kind={kind} size={44} />
               </div>
               <div className="mt-1 pixel-panel px-2 py-1 text-[10px] pixel whitespace-nowrap">
                 {n.stage.order}. {n.stage.stage_name.slice(0, 6)}
