@@ -34,7 +34,21 @@ function Index() {
 
   const finalEmotion =
     [...emotions, customEmotion.trim()].filter(Boolean).join(" · ");
-  const canStart = !!selected && finalEmotion.length > 0;
+  // 职业和状态是「或」关系：选一边就能出发
+  const canStart = !!selected || finalEmotion.length > 0;
+
+  function inferClassFromEmotion(emotion: string): CharacterClass {
+    const e = emotion.toLowerCase();
+    if (e.includes("走") || e.includes("山") || e.includes("汗") || e.includes("呼吸"))
+      return "山系疗愈师";
+    if (e.includes("嘴") || e.includes("馋") || e.includes("吃") || e.includes("甜"))
+      return "市井觅食家";
+    if (e.includes("安静") || e.includes("呆") || e.includes("吵"))
+      return "慢调策展人";
+    if (e.includes("夜") || e.includes("睡") || e.includes("晚"))
+      return "夜行漫游者";
+    return "社区烟火家";
+  }
 
   function toggleEmotion(chip: string) {
     setEmotions((prev) =>
