@@ -344,8 +344,9 @@ function StageRow({ stage, unlocked }: { stage: Stage; unlocked: boolean }) {
           <div className="text-xs text-muted-foreground truncate">
             📍 {stage.location_name}
           </div>
-          <div className="text-[10px] text-accent mt-0.5 truncate">
-            {locationIcon(stage.location_type)} {stage.location_type}
+          <div className="text-[10px] text-accent mt-0.5 truncate flex items-center gap-1">
+            <PixelMapIcon kind={pickMapIconKind(stage.location_type)} size={14} />
+            {stage.location_type}
           </div>
         </div>
         <div className="text-xs pixel text-accent">▸</div>
