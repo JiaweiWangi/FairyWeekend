@@ -121,10 +121,16 @@ function Index() {
                         <span className="ml-2 text-xs pixel text-primary">◆ 已选</span>
                       )}
                     </div>
-                    <div className="text-xs text-accent mt-0.5">{c.emotion}</div>
-                    <div className="text-sm text-muted-foreground mt-1.5">{c.blurb}</div>
+                    <div
+                      className="text-sm mt-1 text-foreground/90"
+                      style={{ fontFamily: "var(--font-serif-cn)" }}
+                    >
+                      「{c.vibe}」
+                    </div>
+                    <div className="text-xs text-accent mt-1.5">{c.emotion}</div>
+                    <div className="text-xs text-muted-foreground mt-1">{c.blurb}</div>
                     <div className="text-xs text-muted-foreground mt-1.5">
-                      擅长：{c.domain}
+                      场域：{c.domain}
                     </div>
                   </div>
                 </div>
