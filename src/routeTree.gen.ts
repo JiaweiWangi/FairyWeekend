@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as QuestRouteImport } from './routes/quest'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as StageOrderRouteImport } from './routes/stage.$order'
 
 const QuestRoute = QuestRouteImport.update({
   id: '/quest',
@@ -22,31 +23,40 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StageOrderRoute = StageOrderRouteImport.update({
+  id: '/stage/$order',
+  path: '/stage/$order',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/quest': typeof QuestRoute
+  '/stage/$order': typeof StageOrderRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/quest': typeof QuestRoute
+  '/stage/$order': typeof StageOrderRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/quest': typeof QuestRoute
+  '/stage/$order': typeof StageOrderRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/quest'
+  fullPaths: '/' | '/quest' | '/stage/$order'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/quest'
-  id: '__root__' | '/' | '/quest'
+  to: '/' | '/quest' | '/stage/$order'
+  id: '__root__' | '/' | '/quest' | '/stage/$order'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   QuestRoute: typeof QuestRoute
+  StageOrderRoute: typeof StageOrderRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +75,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/stage/$order': {
+      id: '/stage/$order'
+      path: '/stage/$order'
+      fullPath: '/stage/$order'
+      preLoaderRoute: typeof StageOrderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   QuestRoute: QuestRoute,
+  StageOrderRoute: StageOrderRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
