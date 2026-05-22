@@ -43,6 +43,11 @@ function Index() {
 
   const fetchAmapKey = useServerFn(getAmapKey);
 
+  // Preload AMap key for cascader
+  useEffect(() => {
+    fetchAmapKey().then((r) => setAmapKey(r.key || "")).catch(() => {});
+  }, [fetchAmapKey]);
+
   const finalEmotion =
     [...emotions, customEmotion.trim()].filter(Boolean).join(" · ");
   const canStart = !!selected || finalEmotion.length > 0;
