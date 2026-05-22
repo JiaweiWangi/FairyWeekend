@@ -66,9 +66,22 @@ function Index() {
     setLocating(true);
     setErrorMsg(null);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setLocating(false);
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setCoords({ lat, lng });
+        try {
+          const { data, error } = await supabase.functions.invoke("resolve-location", {
+            body: { lat, lng },
+          });
+          if (error) throw error;
+          const label = (data as { label?: string })?.label;
+          if (label) setCity(label);
+        } catch (e) {
+          console.warn("resolve-location failed", e);
+        } finally {
+          setLocating(false);
+        }
       },
       (err) => {
         console.warn("geolocation error", err);
