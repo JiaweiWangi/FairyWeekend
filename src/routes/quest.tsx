@@ -329,29 +329,37 @@ function StageRow({ stage, unlocked }: { stage: Stage; unlocked: boolean }) {
     <Link
       to="/stage/$order"
       params={{ order: String(stage.order) }}
-      className="pixel-panel p-3 flex items-center gap-3 active:translate-x-px"
+      className="pixel-panel overflow-hidden flex active:translate-x-px"
       style={{
         borderColor: unlocked ? "var(--color-primary)" : undefined,
       }}
     >
-      <div
-        className="w-10 h-10 flex-shrink-0 flex items-center justify-center pixel-panel text-sm pixel"
-        style={{
-          background: unlocked ? "var(--color-primary)" : "var(--color-secondary)",
-          color: unlocked
-            ? "var(--color-primary-foreground)"
-            : "var(--color-foreground)",
-        }}
-      >
-        {unlocked ? "✓" : stage.order}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-bold truncate">{stage.stage_name}</div>
-        <div className="text-xs text-muted-foreground truncate">
-          📍 {stage.location_name}
+      <div className="w-24 flex-shrink-0 relative">
+        <PixelScene locationType={stage.location_type} height={84} />
+        <div
+          className="absolute top-1 left-1 w-6 h-6 flex items-center justify-center pixel-panel text-[10px] pixel"
+          style={{
+            background: unlocked ? "var(--color-primary)" : "var(--color-secondary)",
+            color: unlocked
+              ? "var(--color-primary-foreground)"
+              : "var(--color-foreground)",
+          }}
+        >
+          {unlocked ? "✓" : stage.order}
         </div>
       </div>
-      <div className="text-xs pixel text-accent">▸</div>
+      <div className="flex-1 min-w-0 p-3 flex items-center gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-bold truncate">{stage.stage_name}</div>
+          <div className="text-xs text-muted-foreground truncate">
+            📍 {stage.location_name}
+          </div>
+          <div className="text-[10px] text-accent mt-0.5 truncate">
+            {locationIcon(stage.location_type)} {stage.location_type}
+          </div>
+        </div>
+        <div className="text-xs pixel text-accent">▸</div>
+      </div>
     </Link>
   );
 }
