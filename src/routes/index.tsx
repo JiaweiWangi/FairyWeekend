@@ -181,13 +181,22 @@ function Index() {
       <section className="mb-7 pixel-panel p-3">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-xs pixel text-primary">▸ 你在哪</h2>
-          <button
-            onClick={handleLocate}
-            disabled={locating}
-            className="text-xs pixel text-accent hover:text-primary disabled:opacity-50"
-          >
-            {locating ? "定位中…" : coords ? "✓ 已定位 · 重新定位" : "📍 自动定位"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={openMapPicker}
+              className="text-xs pixel text-accent hover:text-primary"
+            >
+              🗺️ 地图选点
+            </button>
+            <span className="text-muted-foreground">|</span>
+            <button
+              onClick={handleLocate}
+              disabled={locating}
+              className="text-xs pixel text-accent hover:text-primary disabled:opacity-50"
+            >
+              {locating ? "定位中…" : coords ? "✓ 已定位 · 重新定位" : "📍 自动定位"}
+            </button>
+          </div>
         </div>
         <input
           value={city}
