@@ -8,6 +8,7 @@ import {
 import { startRun } from "@/lib/quest-store";
 import { getSeedQuest, fallbackSeedQuest } from "@/lib/seed-quests";
 import { supabase } from "@/integrations/supabase/client";
+import { PixelAvatar } from "@/components/PixelAvatar";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -105,7 +106,14 @@ function Index() {
                 }}
               >
                 <div className="flex items-start gap-3">
-                  <div className="text-3xl">{c.emoji}</div>
+                  <div
+                    className="pixel-panel flex-shrink-0 p-1"
+                    style={{
+                      background: "color-mix(in oklab, var(--color-primary) 12%, #0a0a18)",
+                    }}
+                  >
+                    <PixelAvatar character={c.id} size={64} />
+                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-base font-bold">
                       {c.id}
