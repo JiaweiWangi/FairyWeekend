@@ -31,10 +31,12 @@ function Index() {
   const [customEmotion, setCustomEmotion] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [city, setCity] = useState("");
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState(false);
 
   const finalEmotion =
     [...emotions, customEmotion.trim()].filter(Boolean).join(" · ");
-  // 职业和状态是「或」关系：选一边就能出发
   const canStart = !!selected || finalEmotion.length > 0;
 
   function inferClassFromEmotion(emotion: string): CharacterClass {
@@ -56,6 +58,27 @@ function Index() {
     );
   }
 
+  function handleLocate() {
+    if (!navigator.geolocation) {
+      setErrorMsg("浏览器不支持定位，请手动输入城市");
+      return;
+    }
+    setLocating(true);
+    setErrorMsg(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocating(false);
+      },
+      (err) => {
+        console.warn("geolocation error", err);
+        setErrorMsg("定位失败，可手动输入城市/区域");
+        setLocating(false);
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 },
+    );
+  }
+
   async function handleStart() {
     if (!canStart) return;
     const character = selected ?? inferClassFromEmotion(finalEmotion);
@@ -63,7 +86,6 @@ function Index() {
     setLoading(true);
     setErrorMsg(null);
 
-    // First, try AI generation via edge function.
     try {
       const { data, error } = await supabase.functions.invoke("generate-quest", {
         body: {
@@ -72,7 +94,9 @@ function Index() {
           weather: "多云",
           time_period: inferTimePeriod(),
           companion: "独行",
-          city: "上海",
+          city: city.trim(),
+          lat: coords?.lat,
+          lng: coords?.lng,
         },
       });
       if (error) throw error;
@@ -90,7 +114,6 @@ function Index() {
       console.warn("AI 生成失败，使用种子副本：", err);
     }
 
-    // Fallback to seed data so the demo always works.
     const seed =
       getSeedQuest(character, emotionToUse) ?? fallbackSeedQuest(character);
     startRun({ character, emotion: emotionToUse, quest: seed });
@@ -109,6 +132,32 @@ function Index() {
           你的城市，你的剧本，你的周末副本
         </p>
       </header>
+
+      {/* Location */}
+      <section className="mb-7 pixel-panel p-3">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-xs pixel text-primary">▸ 你在哪</h2>
+          <button
+            onClick={handleLocate}
+            disabled={locating}
+            className="text-xs pixel text-accent hover:text-primary disabled:opacity-50"
+          >
+            {locating ? "定位中…" : coords ? "✓ 已定位 · 重新定位" : "📍 自动定位"}
+          </button>
+        </div>
+        <input
+          value={city}
+          onChange={(e) => setCity(e.target.value)}
+          placeholder={coords ? "可留空（用定位） 或 填城市/区域覆盖" : "城市 / 区域，比如：上海·徐汇"}
+          className="w-full pixel-panel p-2 text-sm bg-input"
+          style={{ fontFamily: "var(--font-serif-cn)" }}
+        />
+        {coords && (
+          <div className="text-[10px] text-muted-foreground mt-1.5 pixel">
+            坐标 {coords.lat.toFixed(3)}, {coords.lng.toFixed(3)} · 将在 3km 内搜真实地点
+          </div>
+        )}
+      </section>
 
       {/* Class select */}
       <section className="mb-7">
