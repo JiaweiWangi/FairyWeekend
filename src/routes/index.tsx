@@ -68,7 +68,7 @@ function Index() {
 
     // Fallback to seed data so the demo always works.
     const seed =
-      getSeedQuest(selected, finalEmotion) ?? fallbackSeedQuest();
+      getSeedQuest(selected, finalEmotion) ?? fallbackSeedQuest(selected);
     startRun({ character: selected, emotion: finalEmotion, quest: seed });
     navigate({ to: "/quest" });
   }
