@@ -9,10 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ReportRouteImport } from './routes/report'
 import { Route as QuestRouteImport } from './routes/quest'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as StageOrderRouteImport } from './routes/stage.$order'
 
+const ReportRoute = ReportRouteImport.update({
+  id: '/report',
+  path: '/report',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const QuestRoute = QuestRouteImport.update({
   id: '/quest',
   path: '/quest',
@@ -32,35 +38,46 @@ const StageOrderRoute = StageOrderRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/quest': typeof QuestRoute
+  '/report': typeof ReportRoute
   '/stage/$order': typeof StageOrderRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/quest': typeof QuestRoute
+  '/report': typeof ReportRoute
   '/stage/$order': typeof StageOrderRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/quest': typeof QuestRoute
+  '/report': typeof ReportRoute
   '/stage/$order': typeof StageOrderRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/quest' | '/stage/$order'
+  fullPaths: '/' | '/quest' | '/report' | '/stage/$order'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/quest' | '/stage/$order'
-  id: '__root__' | '/' | '/quest' | '/stage/$order'
+  to: '/' | '/quest' | '/report' | '/stage/$order'
+  id: '__root__' | '/' | '/quest' | '/report' | '/stage/$order'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   QuestRoute: typeof QuestRoute
+  ReportRoute: typeof ReportRoute
   StageOrderRoute: typeof StageOrderRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/report': {
+      id: '/report'
+      path: '/report'
+      fullPath: '/report'
+      preLoaderRoute: typeof ReportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/quest': {
       id: '/quest'
       path: '/quest'
@@ -88,6 +105,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   QuestRoute: QuestRoute,
+  ReportRoute: ReportRoute,
   StageOrderRoute: StageOrderRoute,
 }
 export const routeTree = rootRouteImport
