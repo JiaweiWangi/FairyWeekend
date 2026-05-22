@@ -216,3 +216,8 @@ button:focus, input:focus, textarea:focus, select:focus {
   animation: dash 1s linear infinite;
 }
 @keyframes dash { to { stroke-dashoffset: -8; } }
+
+@keyframes bounce-soft {
+  0%, 100% { transform: translate(-120%, -120%); }
+  50% { transform: translate(-120%, -140%); }
+}
