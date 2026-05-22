@@ -27,13 +27,20 @@ function inferTimePeriod(): string {
 function Index() {
   const navigate = useNavigate();
   const [selected, setSelected] = useState<CharacterClass | null>(null);
-  const [emotion, setEmotion] = useState<string>("");
+  const [emotions, setEmotions] = useState<string[]>([]);
   const [customEmotion, setCustomEmotion] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const finalEmotion = customEmotion.trim() || emotion;
-  const canStart = selected && finalEmotion;
+  const finalEmotion =
+    [...emotions, customEmotion.trim()].filter(Boolean).join(" · ");
+  const canStart = !!selected && finalEmotion.length > 0;
+
+  function toggleEmotion(chip: string) {
+    setEmotions((prev) =>
+      prev.includes(chip) ? prev.filter((e) => e !== chip) : [...prev, chip],
+    );
+  }
 
   async function handleStart() {
     if (!selected || !finalEmotion) return;
