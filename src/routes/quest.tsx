@@ -4,21 +4,11 @@ import { loadRun } from "@/lib/quest-store";
 import type { QuestRunState, Stage } from "@/lib/quest-types";
 import { PixelAvatar } from "@/components/PixelAvatar";
 import { PixelScene } from "@/components/PixelScene";
+import { PixelMapIcon, pickMapIconKind } from "@/components/PixelMapIcon";
 
 export const Route = createFileRoute("/quest")({
   component: QuestPage,
 });
-
-function locationIcon(type: string): string {
-  const t = type.toLowerCase();
-  if (/(咖啡|书|图书)/.test(t)) return "☕";
-  if (/(公园|花园|绿)/.test(t)) return "🌳";
-  if (/(博物|古|寺|庙|遗)/.test(t)) return "🏛️";
-  if (/(水|江|河|海|湖|桥)/.test(t)) return "⛵";
-  if (/(市场|集|夜市|小吃|餐|食)/.test(t)) return "🏮";
-  if (/(山|郊|野|林|森)/.test(t)) return "⛰️";
-  return "🏙️";
-}
 
 function useTypewriter(text: string, speed = 40) {
   const [out, setOut] = useState("");
