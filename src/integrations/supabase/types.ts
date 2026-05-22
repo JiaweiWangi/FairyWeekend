@@ -14,7 +14,78 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      dm_memory: {
+        Row: {
+          disliked_tags: string[] | null
+          loved_tags: string[] | null
+          player_key: string
+          profile: string
+          total_runs: number
+          updated_at: string
+          visited_pois: string[] | null
+        }
+        Insert: {
+          disliked_tags?: string[] | null
+          loved_tags?: string[] | null
+          player_key: string
+          profile?: string
+          total_runs?: number
+          updated_at?: string
+          visited_pois?: string[] | null
+        }
+        Update: {
+          disliked_tags?: string[] | null
+          loved_tags?: string[] | null
+          player_key?: string
+          profile?: string
+          total_runs?: number
+          updated_at?: string
+          visited_pois?: string[] | null
+        }
+        Relationships: []
+      }
+      quest_history: {
+        Row: {
+          character_class: string
+          city: string | null
+          created_at: string
+          emotion: string | null
+          feedback: string | null
+          id: string
+          liked_stage_orders: number[] | null
+          player_key: string
+          quest: Json
+          rating: number | null
+          stages_unlocked: number
+        }
+        Insert: {
+          character_class: string
+          city?: string | null
+          created_at?: string
+          emotion?: string | null
+          feedback?: string | null
+          id?: string
+          liked_stage_orders?: number[] | null
+          player_key?: string
+          quest: Json
+          rating?: number | null
+          stages_unlocked?: number
+        }
+        Update: {
+          character_class?: string
+          city?: string | null
+          created_at?: string
+          emotion?: string | null
+          feedback?: string | null
+          id?: string
+          liked_stage_orders?: number[] | null
+          player_key?: string
+          quest?: Json
+          rating?: number | null
+          stages_unlocked?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
