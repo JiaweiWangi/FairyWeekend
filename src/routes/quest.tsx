@@ -81,8 +81,27 @@ function BriefScreen({
       <h1 className="text-2xl pixel text-primary mb-1 leading-tight">
         《{run.quest.quest_name}》
       </h1>
-      <div className="text-xs text-muted-foreground mb-6">
+      <div className="text-xs text-muted-foreground mb-4">
         {run.character} · {run.emotion}
+      </div>
+
+      <div
+        className="pixel-panel mb-5 flex items-center gap-4 p-4"
+        style={{
+          background:
+            "linear-gradient(180deg, oklch(0.25 0.08 280) 0%, oklch(0.18 0.06 240) 100%)",
+        }}
+      >
+        <div className="pixel-panel p-1 flex-shrink-0" style={{ background: "#0a0a18" }}>
+          <PixelAvatar character={run.character} size={88} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs pixel text-accent mb-1">▸ 当前角色</div>
+          <div className="text-base font-bold">{run.character}</div>
+          <div className="text-xs text-muted-foreground mt-1">
+            Lv.1 · 装备：好奇心、半张地铁卡
+          </div>
+        </div>
       </div>
 
       <div className="pixel-panel p-5 mb-6 flex-1">
