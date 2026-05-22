@@ -99,6 +99,30 @@ function Index() {
     );
   }
 
+  async function openMapPicker() {
+    try {
+      const res = await fetchAmapKey({ data: {} });
+      setAmapKey(res.key || "");
+    } catch {
+      setAmapKey("");
+    }
+    setPickerOpen(true);
+  }
+
+  async function handleMapSelect(lat: number, lng: number) {
+    setCoords({ lat, lng });
+    try {
+      const { data, error } = await supabase.functions.invoke("resolve-location", {
+        body: { lat, lng },
+      });
+      if (error) throw error;
+      const label = (data as { label?: string })?.label;
+      if (label) setCity(label);
+    } catch (e) {
+      console.warn("resolve-location failed", e);
+    }
+  }
+
   async function handleStart() {
     if (!canStart) return;
     const character = selected ?? inferClassFromEmotion(finalEmotion);
