@@ -34,7 +34,21 @@ function Index() {
 
   const finalEmotion =
     [...emotions, customEmotion.trim()].filter(Boolean).join(" · ");
-  const canStart = !!selected && finalEmotion.length > 0;
+  // 职业和状态是「或」关系：选一边就能出发
+  const canStart = !!selected || finalEmotion.length > 0;
+
+  function inferClassFromEmotion(emotion: string): CharacterClass {
+    const e = emotion.toLowerCase();
+    if (e.includes("走") || e.includes("山") || e.includes("汗") || e.includes("呼吸"))
+      return "山系疗愈师";
+    if (e.includes("嘴") || e.includes("馋") || e.includes("吃") || e.includes("甜"))
+      return "市井觅食家";
+    if (e.includes("安静") || e.includes("呆") || e.includes("吵"))
+      return "慢调策展人";
+    if (e.includes("夜") || e.includes("睡") || e.includes("晚"))
+      return "夜行漫游者";
+    return "社区烟火家";
+  }
 
   function toggleEmotion(chip: string) {
     setEmotions((prev) =>
@@ -43,7 +57,9 @@ function Index() {
   }
 
   async function handleStart() {
-    if (!selected || !finalEmotion) return;
+    if (!canStart) return;
+    const character = selected ?? inferClassFromEmotion(finalEmotion);
+    const emotionToUse = finalEmotion || "没特别说，交给 DM 了";
     setLoading(true);
     setErrorMsg(null);
 
@@ -51,8 +67,8 @@ function Index() {
     try {
       const { data, error } = await supabase.functions.invoke("generate-quest", {
         body: {
-          character_class: selected,
-          emotion_input: finalEmotion,
+          character_class: character,
+          emotion_input: emotionToUse,
           weather: "多云",
           time_period: inferTimePeriod(),
           companion: "独行",
@@ -63,8 +79,8 @@ function Index() {
       const quest = (data as { quest?: unknown })?.quest;
       if (!quest) throw new Error("空响应");
       startRun({
-        character: selected,
-        emotion: finalEmotion,
+        character,
+        emotion: emotionToUse,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         quest: quest as any,
       });
@@ -76,8 +92,8 @@ function Index() {
 
     // Fallback to seed data so the demo always works.
     const seed =
-      getSeedQuest(selected, finalEmotion) ?? fallbackSeedQuest(selected);
-    startRun({ character: selected, emotion: finalEmotion, quest: seed });
+      getSeedQuest(character, emotionToUse) ?? fallbackSeedQuest(character);
+    startRun({ character, emotion: emotionToUse, quest: seed });
     navigate({ to: "/quest" });
   }
 
@@ -147,10 +163,17 @@ function Index() {
         </div>
       </section>
 
+      {/* OR divider */}
+      <div className="flex items-center gap-3 mb-7">
+        <div className="flex-1 h-px bg-border" />
+        <span className="text-xs pixel text-muted-foreground">或</span>
+        <div className="flex-1 h-px bg-border" />
+      </div>
+
       {/* Emotion input */}
       <section className="mb-7">
         <div className="flex items-baseline justify-between mb-3">
-          <h2 className="text-xs pixel text-primary">▸ 今日状态（可多选）</h2>
+          <h2 className="text-xs pixel text-primary">▸ 今日状态</h2>
           <span className="text-xs text-muted-foreground">
             已选 {emotions.length}
           </span>
