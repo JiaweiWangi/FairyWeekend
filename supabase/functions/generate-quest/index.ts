@@ -186,6 +186,46 @@ async function gatherCandidates(
   return all.slice(0, 24);
 }
 
+async function fetchMemory(playerKey: string): Promise<{
+  profile: string;
+  loved: string[];
+  disliked: string[];
+  visited: string[];
+  totalRuns: number;
+  recent: Array<{ quest_name: string; city: string; rating: number | null; feedback: string | null; created_at: string }>;
+}> {
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const empty = { profile: "", loved: [], disliked: [], visited: [], totalRuns: 0, recent: [] };
+  if (!url || !key) return empty;
+  try {
+    const headers = { apikey: key, Authorization: `Bearer ${key}` };
+    const [memRes, histRes] = await Promise.all([
+      fetch(`${url}/rest/v1/dm_memory?player_key=eq.${playerKey}&select=*`, { headers }),
+      fetch(`${url}/rest/v1/quest_history?player_key=eq.${playerKey}&select=quest,city,rating,feedback,created_at&order=created_at.desc&limit=5`, { headers }),
+    ]);
+    const mem = (await memRes.json())?.[0] ?? {};
+    const hist = (await histRes.json()) ?? [];
+    return {
+      profile: mem.profile ?? "",
+      loved: mem.loved_tags ?? [],
+      disliked: mem.disliked_tags ?? [],
+      visited: mem.visited_pois ?? [],
+      totalRuns: mem.total_runs ?? 0,
+      recent: hist.map((h: { quest: { quest_name?: string }; city: string; rating: number | null; feedback: string | null; created_at: string }) => ({
+        quest_name: h.quest?.quest_name ?? "",
+        city: h.city,
+        rating: h.rating,
+        feedback: h.feedback,
+        created_at: h.created_at,
+      })),
+    };
+  } catch (e) {
+    console.warn("fetchMemory failed:", e);
+    return empty;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -202,6 +242,7 @@ Deno.serve(async (req) => {
       city: cityInput = "",
       lat,
       lng,
+      player_key = "default",
     } = body ?? {};
 
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
@@ -211,6 +252,9 @@ Deno.serve(async (req) => {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // 0. 拉长期记忆
+    const memory = await fetchMemory(player_key);
 
     // 1. 拿真实候选 POI
     let resolvedCity = cityInput || "";
@@ -236,20 +280,36 @@ Deno.serve(async (req) => {
 
     if (!resolvedCity) resolvedCity = "上海";
 
+    // 过滤掉最近去过的 POI，避免重复
+    const visitedSet = new Set(memory.visited);
+    const filtered = candidates.filter((p) => !visitedSet.has(p.name));
+    const useCandidates = filtered.length >= 6 ? filtered : candidates;
+
     // 2. 构造 prompt
-    const candidateBlock = candidates.length
+    const candidateBlock = useCandidates.length
       ? `\n\n【真实候选 POI】（必须从中挑选 3-5 个；location_name 一字不差）:\n` +
-        candidates.map((p, i) =>
+        useCandidates.map((p, i) =>
           `${i + 1}. ${p.name}｜${p.type}｜${p.address}${p.distance ? `｜约${p.distance}米` : ""}`
         ).join("\n")
       : "\n\n（没有真实 POI 数据，请按你对该城市的了解生成可信地点）";
+
+    const memoryBlock = memory.totalRuns > 0
+      ? `\n\n【DM 的长期记忆】（你已经带 TA 玩过 ${memory.totalRuns} 次，请像老朋友一样懂 TA）:
+- 长期画像：${memory.profile || "（暂无）"}
+- 喜欢的标签：${memory.loved.join("、") || "（暂无）"}
+- 不喜欢的标签：${memory.disliked.join("、") || "（暂无）"}
+- 最近去过的地方（避免重复）：${memory.visited.slice(0, 12).join("、") || "（暂无）"}
+- 最近副本：${memory.recent.map((r) => `《${r.quest_name}》${r.rating ? `★${r.rating}` : ""}${r.feedback ? `「${r.feedback}」` : ""}`).join("；") || "（暂无）"}
+
+请基于这些记忆做个性化：避开 TA 不喜欢的标签，巧妙呼应 TA 的偏好，可以在 dm_narrative 里偶尔提一句"上次去过的XX，这次换个口味"之类的熟人感细节。`
+      : "";
 
     const userPrompt = `职业：${character_class}
 今日状态：${emotion_input}
 天气：${weather}
 时间段：${time_period}
 同伴：${companion}
-城市/区域：${resolvedCity}${candidateBlock}
+城市/区域：${resolvedCity}${memoryBlock}${candidateBlock}
 
 请生成今日副本。`;
 
