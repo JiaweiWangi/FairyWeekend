@@ -57,7 +57,9 @@ function Index() {
   }
 
   async function handleStart() {
-    if (!selected || !finalEmotion) return;
+    if (!canStart) return;
+    const character = selected ?? inferClassFromEmotion(finalEmotion);
+    const emotionToUse = finalEmotion || "没特别说，交给 DM 了";
     setLoading(true);
     setErrorMsg(null);
 
@@ -65,8 +67,8 @@ function Index() {
     try {
       const { data, error } = await supabase.functions.invoke("generate-quest", {
         body: {
-          character_class: selected,
-          emotion_input: finalEmotion,
+          character_class: character,
+          emotion_input: emotionToUse,
           weather: "多云",
           time_period: inferTimePeriod(),
           companion: "独行",
@@ -77,8 +79,8 @@ function Index() {
       const quest = (data as { quest?: unknown })?.quest;
       if (!quest) throw new Error("空响应");
       startRun({
-        character: selected,
-        emotion: finalEmotion,
+        character,
+        emotion: emotionToUse,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         quest: quest as any,
       });
@@ -90,8 +92,8 @@ function Index() {
 
     // Fallback to seed data so the demo always works.
     const seed =
-      getSeedQuest(selected, finalEmotion) ?? fallbackSeedQuest(selected);
-    startRun({ character: selected, emotion: finalEmotion, quest: seed });
+      getSeedQuest(character, emotionToUse) ?? fallbackSeedQuest(character);
+    startRun({ character, emotion: emotionToUse, quest: seed });
     navigate({ to: "/quest" });
   }
 
