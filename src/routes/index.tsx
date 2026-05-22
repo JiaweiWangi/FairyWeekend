@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import {
   CHARACTER_CLASSES,
   EMOTION_CHIPS,
@@ -8,7 +9,9 @@ import {
 import { startRun } from "@/lib/quest-store";
 import { getSeedQuest, fallbackSeedQuest } from "@/lib/seed-quests";
 import { supabase } from "@/integrations/supabase/client";
+import { getAmapKey } from "@/lib/map.functions";
 import { PixelAvatar } from "@/components/PixelAvatar";
+import { MapPicker } from "@/components/MapPicker";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -34,6 +37,10 @@ function Index() {
   const [city, setCity] = useState("");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [amapKey, setAmapKey] = useState("");
+
+  const fetchAmapKey = useServerFn(getAmapKey);
 
   const finalEmotion =
     [...emotions, customEmotion.trim()].filter(Boolean).join(" · ");
@@ -90,6 +97,30 @@ function Index() {
       },
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 },
     );
+  }
+
+  async function openMapPicker() {
+    try {
+      const res = await fetchAmapKey();
+      setAmapKey(res.key || "");
+    } catch {
+      setAmapKey("");
+    }
+    setPickerOpen(true);
+  }
+
+  async function handleMapSelect(lat: number, lng: number) {
+    setCoords({ lat, lng });
+    try {
+      const { data, error } = await supabase.functions.invoke("resolve-location", {
+        body: { lat, lng },
+      });
+      if (error) throw error;
+      const label = (data as { label?: string })?.label;
+      if (label) setCity(label);
+    } catch (e) {
+      console.warn("resolve-location failed", e);
+    }
   }
 
   async function handleStart() {
@@ -150,13 +181,22 @@ function Index() {
       <section className="mb-7 pixel-panel p-3">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-xs pixel text-primary">▸ 你在哪</h2>
-          <button
-            onClick={handleLocate}
-            disabled={locating}
-            className="text-xs pixel text-accent hover:text-primary disabled:opacity-50"
-          >
-            {locating ? "定位中…" : coords ? "✓ 已定位 · 重新定位" : "📍 自动定位"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={openMapPicker}
+              className="text-xs pixel text-accent hover:text-primary"
+            >
+              🗺️ 地图选点
+            </button>
+            <span className="text-muted-foreground">|</span>
+            <button
+              onClick={handleLocate}
+              disabled={locating}
+              className="text-xs pixel text-accent hover:text-primary disabled:opacity-50"
+            >
+              {locating ? "定位中…" : coords ? "✓ 已定位 · 重新定位" : "📍 自动定位"}
+            </button>
+          </div>
         </div>
         <input
           value={city}
@@ -288,6 +328,14 @@ function Index() {
       <footer className="mt-10 text-center text-xs text-muted-foreground pixel">
         © 2026 · 美团黑客松 · 城市漂流
       </footer>
+
+      <MapPicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onSelect={handleMapSelect}
+        apiKey={amapKey}
+        initialCenter={coords ? [coords.lng, coords.lat] : undefined}
+      />
     </div>
   );
 }
