@@ -133,6 +133,32 @@ function Index() {
         </p>
       </header>
 
+      {/* Location */}
+      <section className="mb-7 pixel-panel p-3">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-xs pixel text-primary">▸ 你在哪</h2>
+          <button
+            onClick={handleLocate}
+            disabled={locating}
+            className="text-xs pixel text-accent hover:text-primary disabled:opacity-50"
+          >
+            {locating ? "定位中…" : coords ? "✓ 已定位 · 重新定位" : "📍 自动定位"}
+          </button>
+        </div>
+        <input
+          value={city}
+          onChange={(e) => setCity(e.target.value)}
+          placeholder={coords ? "可留空（用定位） 或 填城市/区域覆盖" : "城市 / 区域，比如：上海·徐汇"}
+          className="w-full pixel-panel p-2 text-sm bg-input"
+          style={{ fontFamily: "var(--font-serif-cn)" }}
+        />
+        {coords && (
+          <div className="text-[10px] text-muted-foreground mt-1.5 pixel">
+            坐标 {coords.lat.toFixed(3)}, {coords.lng.toFixed(3)} · 将在 3km 内搜真实地点
+          </div>
+        )}
+      </section>
+
       {/* Class select */}
       <section className="mb-7">
         <h2 className="text-xs pixel text-primary mb-3">▸ 选择职业</h2>
