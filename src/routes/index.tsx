@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getAmapKey } from "@/lib/map.functions";
 import { PixelAvatar } from "@/components/PixelAvatar";
 import { MapPicker } from "@/components/MapPicker";
+import { CityCascader } from "@/components/CityCascader";
 
 export const Route = createFileRoute("/")({
   component: Index,
