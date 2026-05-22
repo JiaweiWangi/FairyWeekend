@@ -2,6 +2,8 @@ import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-r
 import { useEffect, useState } from "react";
 import { loadRun, unlockStage } from "@/lib/quest-store";
 import type { QuestRunState, Stage } from "@/lib/quest-types";
+import { PixelAvatar } from "@/components/PixelAvatar";
+import { PixelScene } from "@/components/PixelScene";
 
 export const Route = createFileRoute("/stage/$order")({
   component: StagePage,
@@ -60,9 +62,20 @@ function StagePage() {
       <div className="text-xs pixel text-accent mt-4 mb-1">
         关卡 {stage.order} / {run.quest.stages.length}
       </div>
-      <h1 className="text-xl pixel text-primary leading-tight mb-2">
+      <h1 className="text-xl pixel text-primary leading-tight mb-3">
         《{stage.stage_name}》
       </h1>
+
+      {/* Hero scene with character */}
+      <div className="pixel-panel relative overflow-hidden mb-4">
+        <PixelScene locationType={stage.location_type} height={140} />
+        <div
+          className="absolute"
+          style={{ left: "12%", bottom: "8px" }}
+        >
+          <PixelAvatar character={run.character} size={56} />
+        </div>
+      </div>
 
       <StageBlock label="真实地点">
         <div className="font-bold text-base">{stage.location_name}</div>
