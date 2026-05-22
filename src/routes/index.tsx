@@ -163,10 +163,17 @@ function Index() {
         </div>
       </section>
 
+      {/* OR divider */}
+      <div className="flex items-center gap-3 mb-7">
+        <div className="flex-1 h-px bg-border" />
+        <span className="text-xs pixel text-muted-foreground">或</span>
+        <div className="flex-1 h-px bg-border" />
+      </div>
+
       {/* Emotion input */}
       <section className="mb-7">
         <div className="flex items-baseline justify-between mb-3">
-          <h2 className="text-xs pixel text-primary">▸ 今日状态（可多选）</h2>
+          <h2 className="text-xs pixel text-primary">▸ 今日状态</h2>
           <span className="text-xs text-muted-foreground">
             已选 {emotions.length}
           </span>
