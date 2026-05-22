@@ -2,12 +2,23 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { loadRun } from "@/lib/quest-store";
 import type { QuestRunState, Stage } from "@/lib/quest-types";
+import { PixelAvatar } from "@/components/PixelAvatar";
+import { PixelScene } from "@/components/PixelScene";
 
 export const Route = createFileRoute("/quest")({
   component: QuestPage,
 });
 
-const STAGE_ICONS = ["🏰", "⛩️", "📜", "🗡️", "💎"];
+function locationIcon(type: string): string {
+  const t = type.toLowerCase();
+  if (/(咖啡|书|图书)/.test(t)) return "☕";
+  if (/(公园|花园|绿)/.test(t)) return "🌳";
+  if (/(博物|古|寺|庙|遗)/.test(t)) return "🏛️";
+  if (/(水|江|河|海|湖|桥)/.test(t)) return "⛵";
+  if (/(市场|集|夜市|小吃|餐|食)/.test(t)) return "🏮";
+  if (/(山|郊|野|林|森)/.test(t)) return "⛰️";
+  return "🏙️";
+}
 
 function useTypewriter(text: string, speed = 40) {
   const [out, setOut] = useState("");
@@ -70,8 +81,27 @@ function BriefScreen({
       <h1 className="text-2xl pixel text-primary mb-1 leading-tight">
         《{run.quest.quest_name}》
       </h1>
-      <div className="text-xs text-muted-foreground mb-6">
+      <div className="text-xs text-muted-foreground mb-4">
         {run.character} · {run.emotion}
+      </div>
+
+      <div
+        className="pixel-panel mb-5 flex items-center gap-4 p-4"
+        style={{
+          background:
+            "linear-gradient(180deg, oklch(0.25 0.08 280) 0%, oklch(0.18 0.06 240) 100%)",
+        }}
+      >
+        <div className="pixel-panel p-1 flex-shrink-0" style={{ background: "#0a0a18" }}>
+          <PixelAvatar character={run.character} size={88} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs pixel text-accent mb-1">▸ 当前角色</div>
+          <div className="text-base font-bold">{run.character}</div>
+          <div className="text-xs text-muted-foreground mt-1">
+            Lv.1 · 装备：好奇心、半张地铁卡
+          </div>
+        </div>
       </div>
 
       <div className="pixel-panel p-5 mb-6 flex-1">
@@ -141,11 +171,40 @@ function MapScreen({ run }: { run: QuestRunState }) {
       <div
         className="pixel-panel relative w-full mb-5 overflow-hidden"
         style={{
-          height: 360,
+          height: 440,
           background:
-            "linear-gradient(180deg, oklch(0.22 0.06 280) 0%, oklch(0.18 0.05 240) 100%)",
+            "linear-gradient(180deg, oklch(0.28 0.08 280) 0%, oklch(0.18 0.05 240) 60%, oklch(0.22 0.08 30) 100%)",
         }}
       >
+        {/* Pixel landscape silhouette */}
+        <svg
+          className="absolute inset-x-0 bottom-0 w-full"
+          viewBox="0 0 64 16"
+          preserveAspectRatio="none"
+          shapeRendering="crispEdges"
+          style={{ height: "40%" }}
+        >
+          <polygon points="0,16 0,10 8,4 14,8 22,2 30,9 38,5 46,10 54,3 62,8 64,6 64,16" fill="oklch(0.15 0.04 270)" />
+          <polygon points="0,16 0,13 10,8 20,12 28,6 40,12 50,8 60,11 64,9 64,16" fill="oklch(0.10 0.03 270)" />
+        </svg>
+        {/* Stars */}
+        {[
+          [12, 14], [28, 8], [55, 18], [70, 30], [85, 12], [40, 25],
+        ].map(([x, y], i) => (
+          <div
+            key={i}
+            className="absolute"
+            style={{
+              left: `${x}%`,
+              top: `${y}%`,
+              width: 2,
+              height: 2,
+              background: "var(--color-accent)",
+              boxShadow: "0 0 4px var(--color-accent)",
+            }}
+          />
+        ))}
+
         {/* Grid backdrop */}
         <svg
           className="absolute inset-0 w-full h-full"
@@ -157,7 +216,7 @@ function MapScreen({ run }: { run: QuestRunState }) {
               <path
                 d="M 5 0 L 0 0 0 5"
                 fill="none"
-                stroke="oklch(0.4 0.05 280 / 0.4)"
+                stroke="oklch(0.4 0.05 280 / 0.25)"
                 strokeWidth="0.3"
               />
             </pattern>
@@ -181,8 +240,8 @@ function MapScreen({ run }: { run: QuestRunState }) {
                 stroke={
                   unlocked ? "var(--color-primary)" : "var(--color-border)"
                 }
-                strokeWidth={unlocked ? 0.6 : 0.4}
-                className={unlocked ? "" : "dashed-path"}
+                strokeWidth={unlocked ? 0.8 : 0.5}
+                strokeDasharray={unlocked ? undefined : "1.5,1.5"}
                 vectorEffect="non-scaling-stroke"
               />
             );
@@ -190,9 +249,9 @@ function MapScreen({ run }: { run: QuestRunState }) {
         </svg>
 
         {/* Nodes */}
-        {nodes.map((n, i) => {
+        {nodes.map((n) => {
           const unlocked = run.unlockedStageOrders.includes(n.stage.order);
-          const icon = STAGE_ICONS[i % STAGE_ICONS.length];
+          const icon = locationIcon(n.stage.location_type);
           return (
             <Link
               key={n.stage.order}
@@ -217,11 +276,35 @@ function MapScreen({ run }: { run: QuestRunState }) {
                 {icon}
               </div>
               <div className="mt-1 pixel-panel px-2 py-1 text-[10px] pixel whitespace-nowrap">
-                {n.stage.order}. {n.stage.stage_name.slice(0, 7)}
+                {n.stage.order}. {n.stage.stage_name.slice(0, 6)}
               </div>
             </Link>
           );
         })}
+
+        {/* Player avatar marker — sits on current (next-to-unlock) stage */}
+        {(() => {
+          const currentIdx = nodes.findIndex(
+            (n) => !run.unlockedStageOrders.includes(n.stage.order),
+          );
+          const idx = currentIdx === -1 ? nodes.length - 1 : currentIdx;
+          const n = nodes[idx]!;
+          return (
+            <div
+              className="absolute pointer-events-none"
+              style={{
+                left: `${n.x}%`,
+                top: `${n.y}%`,
+                transform: "translate(-120%, -120%)",
+                animation: "bounce-soft 1.2s ease-in-out infinite",
+              }}
+            >
+              <div className="pixel-panel p-0.5" style={{ background: "#0a0a18" }}>
+                <PixelAvatar character={run.character} size={40} />
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Stage list */}
@@ -246,29 +329,37 @@ function StageRow({ stage, unlocked }: { stage: Stage; unlocked: boolean }) {
     <Link
       to="/stage/$order"
       params={{ order: String(stage.order) }}
-      className="pixel-panel p-3 flex items-center gap-3 active:translate-x-px"
+      className="pixel-panel overflow-hidden flex active:translate-x-px"
       style={{
         borderColor: unlocked ? "var(--color-primary)" : undefined,
       }}
     >
-      <div
-        className="w-10 h-10 flex-shrink-0 flex items-center justify-center pixel-panel text-sm pixel"
-        style={{
-          background: unlocked ? "var(--color-primary)" : "var(--color-secondary)",
-          color: unlocked
-            ? "var(--color-primary-foreground)"
-            : "var(--color-foreground)",
-        }}
-      >
-        {unlocked ? "✓" : stage.order}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-bold truncate">{stage.stage_name}</div>
-        <div className="text-xs text-muted-foreground truncate">
-          📍 {stage.location_name}
+      <div className="w-24 flex-shrink-0 relative">
+        <PixelScene locationType={stage.location_type} height={84} />
+        <div
+          className="absolute top-1 left-1 w-6 h-6 flex items-center justify-center pixel-panel text-[10px] pixel"
+          style={{
+            background: unlocked ? "var(--color-primary)" : "var(--color-secondary)",
+            color: unlocked
+              ? "var(--color-primary-foreground)"
+              : "var(--color-foreground)",
+          }}
+        >
+          {unlocked ? "✓" : stage.order}
         </div>
       </div>
-      <div className="text-xs pixel text-accent">▸</div>
+      <div className="flex-1 min-w-0 p-3 flex items-center gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-bold truncate">{stage.stage_name}</div>
+          <div className="text-xs text-muted-foreground truncate">
+            📍 {stage.location_name}
+          </div>
+          <div className="text-[10px] text-accent mt-0.5 truncate">
+            {locationIcon(stage.location_type)} {stage.location_type}
+          </div>
+        </div>
+        <div className="text-xs pixel text-accent">▸</div>
+      </div>
     </Link>
   );
 }
