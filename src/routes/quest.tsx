@@ -4,21 +4,11 @@ import { loadRun } from "@/lib/quest-store";
 import type { QuestRunState, Stage } from "@/lib/quest-types";
 import { PixelAvatar } from "@/components/PixelAvatar";
 import { PixelScene } from "@/components/PixelScene";
+import { PixelMapIcon, pickMapIconKind } from "@/components/PixelMapIcon";
 
 export const Route = createFileRoute("/quest")({
   component: QuestPage,
 });
-
-function locationIcon(type: string): string {
-  const t = type.toLowerCase();
-  if (/(咖啡|书|图书)/.test(t)) return "☕";
-  if (/(公园|花园|绿)/.test(t)) return "🌳";
-  if (/(博物|古|寺|庙|遗)/.test(t)) return "🏛️";
-  if (/(水|江|河|海|湖|桥)/.test(t)) return "⛵";
-  if (/(市场|集|夜市|小吃|餐|食)/.test(t)) return "🏮";
-  if (/(山|郊|野|林|森)/.test(t)) return "⛰️";
-  return "🏙️";
-}
 
 function useTypewriter(text: string, speed = 40) {
   const [out, setOut] = useState("");
@@ -163,8 +153,33 @@ function MapScreen({ run }: { run: QuestRunState }) {
       <h1 className="text-xl pixel text-primary mb-1 leading-tight">
         《{run.quest.quest_name}》
       </h1>
-      <div className="text-xs text-muted-foreground mb-5">
+      <div className="text-xs text-muted-foreground mb-3">
         {run.character} · {run.emotion}
+      </div>
+
+      {/* Pixel panorama — stitches every stage scene into one continuous strip */}
+      <div className="pixel-panel overflow-hidden mb-4 flex">
+        {stages.map((s, i) => {
+          const unlocked = run.unlockedStageOrders.includes(s.order);
+          return (
+            <div
+              key={s.order}
+              className="flex-1 relative"
+              style={{
+                borderRight:
+                  i < stages.length - 1
+                    ? "1px dashed color-mix(in oklab, var(--color-primary) 40%, transparent)"
+                    : undefined,
+                filter: unlocked ? undefined : "saturate(0.35) brightness(0.7)",
+              }}
+            >
+              <PixelScene locationType={s.location_type} height={72} />
+              <div className="absolute top-1 left-1 text-[9px] pixel text-accent bg-black/60 px-1">
+                {s.order}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* RPG Map */}
@@ -251,7 +266,7 @@ function MapScreen({ run }: { run: QuestRunState }) {
         {/* Nodes */}
         {nodes.map((n) => {
           const unlocked = run.unlockedStageOrders.includes(n.stage.order);
-          const icon = locationIcon(n.stage.location_type);
+          const kind = pickMapIconKind(n.stage.location_type);
           return (
             <Link
               key={n.stage.order}
@@ -261,7 +276,7 @@ function MapScreen({ run }: { run: QuestRunState }) {
               style={{ left: `${n.x}%`, top: `${n.y}%` }}
             >
               <div
-                className={`pixel-panel w-14 h-14 flex items-center justify-center text-3xl ${
+                className={`pixel-panel w-14 h-14 flex items-center justify-center ${
                   unlocked ? "glow-gold" : ""
                 }`}
                 style={{
@@ -273,7 +288,7 @@ function MapScreen({ run }: { run: QuestRunState }) {
                     : undefined,
                 }}
               >
-                {icon}
+                <PixelMapIcon kind={kind} size={44} />
               </div>
               <div className="mt-1 pixel-panel px-2 py-1 text-[10px] pixel whitespace-nowrap">
                 {n.stage.order}. {n.stage.stage_name.slice(0, 6)}
@@ -354,8 +369,9 @@ function StageRow({ stage, unlocked }: { stage: Stage; unlocked: boolean }) {
           <div className="text-xs text-muted-foreground truncate">
             📍 {stage.location_name}
           </div>
-          <div className="text-[10px] text-accent mt-0.5 truncate">
-            {locationIcon(stage.location_type)} {stage.location_type}
+          <div className="text-[10px] text-accent mt-0.5 truncate flex items-center gap-1">
+            <PixelMapIcon kind={pickMapIconKind(stage.location_type)} size={14} />
+            {stage.location_type}
           </div>
         </div>
         <div className="text-xs pixel text-accent">▸</div>
