@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   CHARACTER_CLASSES,
@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getAmapKey } from "@/lib/map.functions";
 import { PixelAvatar } from "@/components/PixelAvatar";
 import { MapPicker } from "@/components/MapPicker";
+import { CityCascader } from "@/components/CityCascader";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -41,6 +42,11 @@ function Index() {
   const [amapKey, setAmapKey] = useState("");
 
   const fetchAmapKey = useServerFn(getAmapKey);
+
+  // Preload AMap key for cascader
+  useEffect(() => {
+    fetchAmapKey().then((r) => setAmapKey(r.key || "")).catch(() => {});
+  }, [fetchAmapKey]);
 
   const finalEmotion =
     [...emotions, customEmotion.trim()].filter(Boolean).join(" · ");
@@ -198,11 +204,18 @@ function Index() {
             </button>
           </div>
         </div>
+        <CityCascader
+          apiKey={amapKey}
+          onChange={(v) => {
+            setCity(v.label);
+            if (v.center) setCoords(v.center);
+          }}
+        />
         <input
           value={city}
           onChange={(e) => setCity(e.target.value)}
-          placeholder={coords ? "可留空（用定位） 或 填城市/区域覆盖" : "城市 / 区域，比如：上海·徐汇"}
-          className="w-full pixel-panel p-2 text-sm bg-input"
+          placeholder="或手动输入，例：上海·徐汇"
+          className="w-full pixel-panel p-2 text-sm bg-input mt-2"
           style={{ fontFamily: "var(--font-serif-cn)" }}
         />
         {coords && (
