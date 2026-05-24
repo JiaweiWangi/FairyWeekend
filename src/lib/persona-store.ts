@@ -50,3 +50,28 @@ export function completeScene(order: number) {
     saveRun(run);
   }
 }
+
+export function recordScene(order: number, patch: Partial<Omit<SceneRecord, "completedAt">>) {
+  const run = loadRun();
+  if (!run) return;
+  const records = run.sceneRecords ?? {};
+  const prev = records[order];
+  records[order] = {
+    ...(prev ?? {}),
+    ...patch,
+    completedAt: prev?.completedAt ?? Date.now(),
+  };
+  run.sceneRecords = records;
+  if (!run.completedSceneOrders.includes(order)) {
+    run.completedSceneOrders.push(order);
+  }
+  saveRun(run);
+}
+
+export function clearSceneRecord(order: number) {
+  const run = loadRun();
+  if (!run) return;
+  if (run.sceneRecords) delete run.sceneRecords[order];
+  run.completedSceneOrders = run.completedSceneOrders.filter((o) => o !== order);
+  saveRun(run);
+}
