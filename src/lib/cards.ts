@@ -90,6 +90,11 @@ const _PERSONA_CARDS_BASE: PersonaCard[] = [
   },
 ];
 
+export const PERSONA_CARDS: PersonaCard[] = _PERSONA_CARDS_BASE.map((c) => ({
+  ...c,
+  cover: COVERS[c.id],
+}));
+
 // 抽卡权重（百分比，合计 100）
 const RARITY_WEIGHTS: Record<Rarity, number> = {
   N: 50,
