@@ -2,6 +2,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { loadRun, completeScene } from "@/lib/persona-store";
 import type { JourneyRunState, JourneyScene } from "@/lib/persona-types";
+import { VenueIcon, detectVenue } from "@/components/VenueIcon";
+
 
 export const Route = createFileRoute("/journey")({ component: JourneyPage });
 
@@ -187,6 +189,7 @@ function JourneyMap({
       {points.map((pt, i) => {
         const scene = scenes[i];
         const done = completed.includes(scene.order);
+        const kind = detectVenue(scene.location_type, scene.location_name);
         return (
           <button
             key={scene.order}
@@ -194,23 +197,34 @@ function JourneyMap({
             className="absolute -translate-x-1/2 -translate-y-1/2 group"
             style={{ left: `${(pt.x / W) * 100}%`, top: `${(pt.y / H) * 100}%` }}
           >
-            <div className="relative">
+            <div className="relative flex flex-col items-center">
+              {/* venue illustration with cushion */}
               <div
-                className="w-10 h-10 rounded-full flex items-center justify-center cn-serif text-[14px] shadow-lg transition-transform group-hover:scale-110"
+                className="relative rounded-full transition-transform group-hover:scale-110"
                 style={{
-                  background: done
-                    ? "linear-gradient(160deg, #f5b8c4, #e8c97a)"
-                    : "linear-gradient(160deg, #fffdf3, #f3ead0)",
-                  color: "#3d3530",
-                  border: "2px solid #fff8e8",
-                  boxShadow: "0 4px 12px rgba(80,90,60,0.35)",
+                  width: 56, height: 56,
+                  background: "radial-gradient(circle at 50% 40%, #fffdf3 0%, #f3ead0 65%, transparent 100%)",
+                  filter: done ? "saturate(1.1)" : "none",
+                  boxShadow: "0 6px 14px rgba(80,90,60,0.35)",
                 }}
               >
-                {done ? "✓" : scene.order}
+                <VenueIcon kind={kind} size={56} />
+                {/* order pill */}
+                <div
+                  className="absolute -top-1 -left-1 w-5 h-5 rounded-full flex items-center justify-center display text-[10px]"
+                  style={{
+                    background: done ? "linear-gradient(160deg,#f5b8c4,#e8c97a)" : "#fff8e8",
+                    color: "#3d3530",
+                    border: "1.5px solid #fff",
+                    boxShadow: "0 2px 4px rgba(0,0,0,0.15)",
+                  }}
+                >
+                  {done ? "✓" : scene.order}
+                </div>
               </div>
               <div
-                className="absolute left-1/2 -translate-x-1/2 mt-1 cn-serif text-[11px] whitespace-nowrap px-2 py-0.5 rounded-full"
-                style={{ background: "rgba(255,253,243,0.92)", color: "#3d3530", boxShadow: "0 2px 6px rgba(0,0,0,0.08)" }}
+                className="mt-1 cn-serif text-[11px] whitespace-nowrap px-2 py-0.5 rounded-full"
+                style={{ background: "rgba(255,253,243,0.95)", color: "#3d3530", boxShadow: "0 2px 6px rgba(0,0,0,0.08)" }}
               >
                 {scene.scene_name}
               </div>
@@ -218,6 +232,7 @@ function JourneyMap({
           </button>
         );
       })}
+
     </div>
   );
 }
@@ -235,55 +250,145 @@ function SceneSheet({
 }) {
   const mapHref = `https://uri.amap.com/marker?name=${encodeURIComponent(scene.location_name)}&src=todaypersona&coordinate=gaode&callnative=1`;
   const meituanHref = `https://i.meituan.com/s/${encodeURIComponent(scene.meituan_keyword || scene.location_name)}`;
+  const kind = detectVenue(scene.location_type, scene.location_name);
+
+  // Pick a hero background per venue family
+  const heroBg: Record<string, string> = {
+    cafe: "linear-gradient(160deg,#f3e6d2 0%,#e8c2a0 100%)",
+    bakery: "linear-gradient(160deg,#fff1d6 0%,#f5d68a 100%)",
+    dessert: "linear-gradient(160deg,#fde4ea 0%,#f5b8c4 100%)",
+    bar: "linear-gradient(160deg,#3d3a4a 0%,#5a4d70 100%)",
+    noodle: "linear-gradient(160deg,#fff1d6 0%,#f5a98a 100%)",
+    restaurant: "linear-gradient(160deg,#fde4d0 0%,#e89a7a 100%)",
+    market: "linear-gradient(160deg,#fff1d6 0%,#e89a8a 100%)",
+    bookstore: "linear-gradient(160deg,#e8efd8 0%,#a8c08a 100%)",
+    flower: "linear-gradient(160deg,#fde4ea 0%,#f5b8c4 60%,#a8c7d6 100%)",
+    plant: "linear-gradient(160deg,#e8efd8 0%,#8aa873 100%)",
+    park: "linear-gradient(160deg,#dfeacd 0%,#a8c08a 100%)",
+    gallery: "linear-gradient(160deg,#f5ecda 0%,#d8c8b8 100%)",
+    museum: "linear-gradient(160deg,#f5ecda 0%,#d8c8b8 100%)",
+    cinema: "linear-gradient(160deg,#3d3a4a 0%,#7a5a8a 100%)",
+    spa: "linear-gradient(160deg,#e0eef2 0%,#a8c7d6 100%)",
+    temple: "linear-gradient(160deg,#f5d68a 0%,#c47a5b 100%)",
+    river: "linear-gradient(160deg,#e0eef2 0%,#7ea8bd 100%)",
+    street: "linear-gradient(160deg,#fde4d0 0%,#e85d6f 100%)",
+    shop: "linear-gradient(160deg,#fff1d6 0%,#c9bf9e 100%)",
+    default: "linear-gradient(160deg,#f3e6f5 0%,#a78bf0 100%)",
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/30" />
+    <div className="fixed inset-0 z-50 flex items-end justify-center fade-in" onClick={onClose}>
+      <div className="absolute inset-0" style={{ background: "rgba(40,35,30,0.45)", backdropFilter: "blur(4px)" }} />
       <div
-        className="relative w-full max-w-xl rounded-t-3xl bg-[var(--card)] p-6 fade-up"
-        style={{ maxHeight: "85vh", overflowY: "auto" }}
+        className="relative w-full max-w-xl rounded-t-[32px] overflow-hidden bg-[var(--card)] fade-up"
+        style={{ maxHeight: "90vh", overflowY: "auto", boxShadow: "0 -20px 60px rgba(0,0,0,0.2)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between mb-3">
-          <div className="scene-chip">SCENE 0{scene.order}</div>
-          <button onClick={onClose} className="display text-[12px] opacity-70">关闭 ✕</button>
-        </div>
-
-        <h3 className="cn-serif text-[22px] text-[var(--ink)] leading-snug">「{scene.scene_name}」</h3>
-        <div className="cn-serif text-[13px] text-[var(--ink-soft)] mt-1">
-          {scene.location_name} <span className="opacity-70 ml-1">· {scene.location_type}</span>
-        </div>
-        {scene.location_hint && (
-          <div className="cn-serif text-[12px] text-[var(--ink-soft)] mt-0.5">
-            📍 {scene.location_hint}{city ? ` · ${city}` : ""} · 停留~{scene.stay_minutes}min
+        {/* Hero illustration */}
+        <div
+          className="relative h-44 flex items-center justify-center overflow-hidden"
+          style={{ background: heroBg[kind] || heroBg.default }}
+        >
+          {/* sun + clouds */}
+          <div
+            className="absolute"
+            style={{ top: 18, right: 32, width: 36, height: 36, borderRadius: "50%",
+              background: "radial-gradient(circle,#fff8e8 0%,#f5d68a 70%,transparent 100%)" }}
+          />
+          <svg className="absolute" style={{ top: 24, left: 24 }} width="60" height="20" viewBox="0 0 60 20">
+            <ellipse cx="15" cy="12" rx="12" ry="6" fill="#fff8e8" opacity="0.7" />
+            <ellipse cx="28" cy="10" rx="9" ry="5" fill="#fff8e8" opacity="0.85" />
+          </svg>
+          {/* ground */}
+          <div className="absolute bottom-0 left-0 right-0 h-12"
+            style={{ background: "linear-gradient(180deg, transparent, rgba(255,253,243,0.5))" }} />
+          {/* big venue icon */}
+          <div className="relative" style={{ transform: "translateY(8px)" }}>
+            <VenueIcon kind={kind} size={150} />
           </div>
-        )}
-
-        <p className="cn-serif text-[15px] leading-[1.9] text-[var(--ink)] mt-4">
-          {scene.persona_narrative}
-        </p>
-
-        <div className="mt-4 px-4 py-3 rounded-2xl bg-[oklch(0.97_0.025_60)] border border-[var(--border)]">
-          <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)] mb-1.5">YOUR TASK</div>
-          <div className="cn-serif text-[14px] text-[var(--ink)] italic">{scene.action_task}</div>
-        </div>
-
-        {scene.emotion_tags?.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-4">
-            {scene.emotion_tags.map((t) => (
-              <span key={t} className="cn-serif text-[11px] px-2.5 py-1 rounded-full bg-[var(--muted)] text-[var(--ink-soft)]">#{t}</span>
-            ))}
-          </div>
-        )}
-
-        <div className="flex gap-2 mt-5">
-          <a href={mapHref} target="_blank" rel="noreferrer" className="btn-ghost flex-1 justify-center">🧭 导航</a>
-          <a href={meituanHref} target="_blank" rel="noreferrer" className="btn-ghost flex-1 justify-center">🥡 美团</a>
-          <button onClick={onToggle} className="btn-soft" style={{ padding: "10px 16px" }}>
-            {done ? "✓ 已打卡" : "打卡"}
+          {/* drag handle */}
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-white/60" />
+          {/* close */}
+          <button
+            onClick={onClose}
+            className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center display text-[14px]"
+            style={{ background: "rgba(255,253,243,0.85)", color: "#3d3530", boxShadow: "0 2px 6px rgba(0,0,0,0.12)" }}
+          >
+            ✕
           </button>
+          {/* scene chip */}
+          <div className="absolute top-3 left-4 scene-chip" style={{ background: "rgba(255,253,243,0.9)" }}>
+            SCENE 0{scene.order}
+          </div>
+          {done && (
+            <div className="absolute bottom-3 right-4 cn-serif text-[11px] px-2.5 py-1 rounded-full"
+              style={{ background: "linear-gradient(160deg,#f5b8c4,#e8c97a)", color: "#3d3530" }}>
+              ✓ 已打卡
+            </div>
+          )}
+        </div>
+
+        <div className="p-6 pt-5">
+          <h3 className="cn-serif text-[22px] text-[var(--ink)] leading-snug">「{scene.scene_name}」</h3>
+          <div className="cn-serif text-[13px] text-[var(--ink-soft)] mt-1">
+            {scene.location_name} <span className="opacity-70 ml-1">· {scene.location_type}</span>
+          </div>
+          {scene.location_hint && (
+            <div className="cn-serif text-[12px] text-[var(--ink-soft)] mt-1 flex items-center gap-1.5">
+              <span>📍</span>
+              <span>{scene.location_hint}{city ? ` · ${city}` : ""}</span>
+              <span className="opacity-60">· 停留~{scene.stay_minutes}min</span>
+            </div>
+          )}
+
+          {/* Decorative divider */}
+          <div className="flex items-center gap-3 my-4">
+            <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg,transparent,#d8c8b8,transparent)" }} />
+            <div className="display italic text-[11px] text-[var(--ink-soft)]">叙事</div>
+            <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg,transparent,#d8c8b8,transparent)" }} />
+          </div>
+
+          <p className="cn-serif text-[15px] leading-[1.95] text-[var(--ink)] first-letter:text-[26px] first-letter:font-serif first-letter:mr-1">
+            {scene.persona_narrative}
+          </p>
+
+          {/* Task card */}
+          <div
+            className="mt-5 p-4 rounded-2xl relative overflow-hidden"
+            style={{
+              background: "linear-gradient(135deg, oklch(0.97 0.04 60) 0%, oklch(0.95 0.06 30) 100%)",
+              border: "1px solid oklch(0.88 0.06 50)",
+            }}
+          >
+            <div className="absolute top-2 right-3 display text-[24px] opacity-15">✦</div>
+            <div className="display text-[10px] tracking-[0.35em] text-[var(--ink-soft)] mb-2">
+              YOUR TASK · 今日行动
+            </div>
+            <div className="cn-serif text-[15px] text-[var(--ink)] leading-relaxed italic">
+              {scene.action_task}
+            </div>
+          </div>
+
+          {scene.emotion_tags?.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-4">
+              {scene.emotion_tags.map((t) => (
+                <span key={t} className="cn-serif text-[11px] px-2.5 py-1 rounded-full bg-[var(--muted)] text-[var(--ink-soft)]">
+                  #{t}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="flex gap-2 mt-6">
+            <a href={mapHref} target="_blank" rel="noreferrer" className="btn-ghost flex-1 justify-center">🧭 导航</a>
+            <a href={meituanHref} target="_blank" rel="noreferrer" className="btn-ghost flex-1 justify-center">🥡 美团</a>
+            <button onClick={onToggle} className="btn-soft" style={{ padding: "10px 18px" }}>
+              {done ? "✓ 已打卡" : "打卡 ✦"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
+
   );
 }
