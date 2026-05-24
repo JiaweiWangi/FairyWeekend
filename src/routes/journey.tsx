@@ -93,9 +93,10 @@ function JourneyPage() {
         <SceneSheet
           scene={openScene}
           done={completedSceneOrders.includes(openScene.order)}
+          record={run.sceneRecords?.[openScene.order]}
           city={city}
           onClose={() => setOpenScene(null)}
-          onToggle={() => toggle(openScene.order)}
+          onUpdated={refresh}
         />
       )}
     </div>
