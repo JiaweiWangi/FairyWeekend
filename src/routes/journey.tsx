@@ -33,8 +33,7 @@ function JourneyPage() {
   const { card, journey, city, completedSceneOrders } = run;
   const allDone = completedSceneOrders.length >= journey.scenes.length;
 
-  function toggle(order: number) {
-    completeScene(order);
+  function refresh() {
     const r = loadRun();
     if (r) setRun(r);
   }
