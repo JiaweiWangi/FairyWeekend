@@ -293,4 +293,15 @@
   50%      { opacity: 1;   transform: scale(1.05); }
 }
 
+.tarot-shuffle {
+  animation: tarot-shuffle 1.3s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+@keyframes tarot-shuffle {
+  0%   { transform: translateX(0) rotate(0deg); }
+  25%  { transform: translateX(-60px) rotate(-8deg) translateY(-10px); }
+  55%  { transform: translateX(70px) rotate(10deg) translateY(-6px); }
+  80%  { transform: translateX(-15px) rotate(-3deg); }
+  100% { transform: translateX(0) rotate(0deg); }
+}
+
 button:focus, input:focus, textarea:focus, select:focus { outline: none; }
