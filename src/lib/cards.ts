@@ -1,4 +1,19 @@
 import type { PersonaCard, Rarity } from "./persona-types";
+import cover001 from "@/assets/persona/card_001.png";
+import cover002 from "@/assets/persona/card_002.png";
+import cover003 from "@/assets/persona/card_003.png";
+import cover004 from "@/assets/persona/card_004.png";
+import cover005 from "@/assets/persona/card_005.png";
+import cover006 from "@/assets/persona/card_006.png";
+
+const COVERS: Record<string, string> = {
+  card_001: cover001,
+  card_002: cover002,
+  card_003: cover003,
+  card_004: cover004,
+  card_005: cover005,
+  card_006: cover006,
+};
 
 export const PERSONA_CARDS: PersonaCard[] = [
   {

@@ -8,6 +8,7 @@ export interface PersonaCard {
   mission: string;           // 今日使命
   colors: string[];          // 卡片配色（3 色）
   illustration_keyword: string;
+  cover?: string;            // 卡面插画 URL（可选）
 }
 
 export interface JourneyScene {
