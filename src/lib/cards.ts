@@ -1,6 +1,21 @@
 import type { PersonaCard, Rarity } from "./persona-types";
+import cover001 from "@/assets/persona/card_001.png";
+import cover002 from "@/assets/persona/card_002.png";
+import cover003 from "@/assets/persona/card_003.png";
+import cover004 from "@/assets/persona/card_004.png";
+import cover005 from "@/assets/persona/card_005.png";
+import cover006 from "@/assets/persona/card_006.png";
 
-export const PERSONA_CARDS: PersonaCard[] = [
+const COVERS: Record<string, string> = {
+  card_001: cover001,
+  card_002: cover002,
+  card_003: cover003,
+  card_004: cover004,
+  card_005: cover005,
+  card_006: cover006,
+};
+
+const _PERSONA_CARDS_BASE: PersonaCard[] = [
   {
     id: "card_001",
     rarity: "SR",
@@ -74,6 +89,11 @@ export const PERSONA_CARDS: PersonaCard[] = [
     illustration_keyword: "local_pretender",
   },
 ];
+
+export const PERSONA_CARDS: PersonaCard[] = _PERSONA_CARDS_BASE.map((c) => ({
+  ...c,
+  cover: COVERS[c.id],
+}));
 
 // 抽卡权重（百分比，合计 100）
 const RARITY_WEIGHTS: Record<Rarity, number> = {
