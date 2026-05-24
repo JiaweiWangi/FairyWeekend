@@ -351,10 +351,15 @@ function SceneSheet({
           <div className="flex gap-2 mt-6">
             <a href={mapHref} target="_blank" rel="noreferrer" className="btn-ghost flex-1 justify-center">🧭 导航</a>
             <a href={meituanHref} target="_blank" rel="noreferrer" className="btn-ghost flex-1 justify-center">🥡 美团</a>
-            <button onClick={onToggle} className="btn-soft" style={{ padding: "10px 18px" }}>
-              {done ? "✓ 已打卡" : "打卡 ✦"}
-            </button>
           </div>
+
+          <CheckInPanel
+            sceneOrder={scene.order}
+            done={done}
+            record={record}
+            onUpdated={onUpdated}
+          />
+
         </div>
       </div>
     </div>
