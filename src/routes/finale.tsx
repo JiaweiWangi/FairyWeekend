@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { loadRun, clearRun } from "@/lib/persona-store";
+import { loadRun, clearRun, archiveCurrentRun } from "@/lib/persona-store";
 import type { JourneyRunState } from "@/lib/persona-types";
 import { RARITY_LABEL } from "@/lib/cards";
 
@@ -15,6 +15,7 @@ function FinalePage() {
     const r = loadRun();
     if (!r) { navigate({ to: "/" }); return; }
     setRun(r);
+    archiveCurrentRun(); // 永久收录这段旅程到个人中心
     const text = r.journey.closing;
     let i = 0;
     const t = setInterval(() => {
@@ -114,6 +115,12 @@ function FinalePage() {
           className="btn-soft w-full justify-center"
         >
           ✶ 分享今日故事
+        </button>
+        <button
+          onClick={() => navigate({ to: "/me" })}
+          className="btn-soft w-full justify-center"
+        >
+          ❦ 收进我的连载
         </button>
         <button
           onClick={() => { clearRun(); navigate({ to: "/" }); }}
