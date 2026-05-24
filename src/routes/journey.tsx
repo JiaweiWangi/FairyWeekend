@@ -189,6 +189,7 @@ function JourneyMap({
       {points.map((pt, i) => {
         const scene = scenes[i];
         const done = completed.includes(scene.order);
+        const kind = detectVenue(scene.location_type, scene.location_name);
         return (
           <button
             key={scene.order}
@@ -196,23 +197,34 @@ function JourneyMap({
             className="absolute -translate-x-1/2 -translate-y-1/2 group"
             style={{ left: `${(pt.x / W) * 100}%`, top: `${(pt.y / H) * 100}%` }}
           >
-            <div className="relative">
+            <div className="relative flex flex-col items-center">
+              {/* venue illustration with cushion */}
               <div
-                className="w-10 h-10 rounded-full flex items-center justify-center cn-serif text-[14px] shadow-lg transition-transform group-hover:scale-110"
+                className="relative rounded-full transition-transform group-hover:scale-110"
                 style={{
-                  background: done
-                    ? "linear-gradient(160deg, #f5b8c4, #e8c97a)"
-                    : "linear-gradient(160deg, #fffdf3, #f3ead0)",
-                  color: "#3d3530",
-                  border: "2px solid #fff8e8",
-                  boxShadow: "0 4px 12px rgba(80,90,60,0.35)",
+                  width: 56, height: 56,
+                  background: "radial-gradient(circle at 50% 40%, #fffdf3 0%, #f3ead0 65%, transparent 100%)",
+                  filter: done ? "saturate(1.1)" : "none",
+                  boxShadow: "0 6px 14px rgba(80,90,60,0.35)",
                 }}
               >
-                {done ? "✓" : scene.order}
+                <VenueIcon kind={kind} size={56} />
+                {/* order pill */}
+                <div
+                  className="absolute -top-1 -left-1 w-5 h-5 rounded-full flex items-center justify-center display text-[10px]"
+                  style={{
+                    background: done ? "linear-gradient(160deg,#f5b8c4,#e8c97a)" : "#fff8e8",
+                    color: "#3d3530",
+                    border: "1.5px solid #fff",
+                    boxShadow: "0 2px 4px rgba(0,0,0,0.15)",
+                  }}
+                >
+                  {done ? "✓" : scene.order}
+                </div>
               </div>
               <div
-                className="absolute left-1/2 -translate-x-1/2 mt-1 cn-serif text-[11px] whitespace-nowrap px-2 py-0.5 rounded-full"
-                style={{ background: "rgba(255,253,243,0.92)", color: "#3d3530", boxShadow: "0 2px 6px rgba(0,0,0,0.08)" }}
+                className="mt-1 cn-serif text-[11px] whitespace-nowrap px-2 py-0.5 rounded-full"
+                style={{ background: "rgba(255,253,243,0.95)", color: "#3d3530", boxShadow: "0 2px 6px rgba(0,0,0,0.08)" }}
               >
                 {scene.scene_name}
               </div>
@@ -220,6 +232,7 @@ function JourneyMap({
           </button>
         );
       })}
+
     </div>
   );
 }
