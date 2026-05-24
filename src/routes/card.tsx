@@ -84,19 +84,28 @@ function CardPage() {
 
       <div className="persona-card relative" data-rarity={card.rarity} style={{ minHeight: 540 }}>
         <div
-          className="relative h-44 overflow-hidden"
-          style={{ background: `linear-gradient(160deg, ${a} 0%, ${b} 100%)` }}
+          className="relative h-72 overflow-hidden"
+          style={
+            card.cover
+              ? undefined
+              : { background: `linear-gradient(160deg, ${a} 0%, ${b} 100%)` }
+          }
         >
-          <div
-            className="absolute inset-0 opacity-70"
-            style={{
-              background: `radial-gradient(circle at 20% 30%, ${c} 0%, transparent 50%), radial-gradient(circle at 80% 70%, ${a} 0%, transparent 55%)`,
-            }}
-          />
+          {card.cover ? (
+            <img src={card.cover} alt={card.identity} className="absolute inset-0 w-full h-full object-cover" />
+          ) : (
+            <div
+              className="absolute inset-0 opacity-70"
+              style={{
+                background: `radial-gradient(circle at 20% 30%, ${c} 0%, transparent 50%), radial-gradient(circle at 80% 70%, ${a} 0%, transparent 55%)`,
+              }}
+            />
+          )}
+          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/35 to-transparent pointer-events-none" />
           <div className="absolute top-4 left-4 rarity-chip" data-rarity={card.rarity}>
             ✦ {card.rarity} · {RARITY_LABEL[card.rarity]}
           </div>
-          <div className="absolute bottom-4 right-4 display italic text-sm text-[var(--ink)] opacity-70">
+          <div className="absolute bottom-4 right-4 display italic text-sm text-white/90 drop-shadow">
             {card.id.replace("card_", "No.")}
           </div>
         </div>
