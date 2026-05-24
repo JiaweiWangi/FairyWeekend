@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { loadRun, completeScene } from "@/lib/persona-store";
-import type { JourneyRunState, JourneyScene } from "@/lib/persona-types";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { loadRun, recordScene, clearSceneRecord } from "@/lib/persona-store";
+import type { JourneyRunState, JourneyScene, SceneRecord } from "@/lib/persona-types";
 import { VenueIcon, detectVenue } from "@/components/VenueIcon";
 import { toast } from "sonner";
 
@@ -33,8 +33,7 @@ function JourneyPage() {
   const { card, journey, city, completedSceneOrders } = run;
   const allDone = completedSceneOrders.length >= journey.scenes.length;
 
-  function toggle(order: number) {
-    completeScene(order);
+  function refresh() {
     const r = loadRun();
     if (r) setRun(r);
   }
@@ -94,9 +93,10 @@ function JourneyPage() {
         <SceneSheet
           scene={openScene}
           done={completedSceneOrders.includes(openScene.order)}
+          record={run.sceneRecords?.[openScene.order]}
           city={city}
           onClose={() => setOpenScene(null)}
-          onToggle={() => toggle(openScene.order)}
+          onUpdated={refresh}
         />
       )}
     </div>
@@ -241,13 +241,14 @@ function JourneyMap({
 /* ============ Scene bottom sheet ============ */
 
 function SceneSheet({
-  scene, done, city, onClose, onToggle,
+  scene, done, record, city, onClose, onUpdated,
 }: {
   scene: JourneyScene;
   done: boolean;
+  record?: SceneRecord;
   city?: string;
   onClose: () => void;
-  onToggle: () => void;
+  onUpdated: () => void;
 }) {
   const mapHref = `https://uri.amap.com/marker?name=${encodeURIComponent(scene.location_name)}&src=todaypersona&coordinate=gaode&callnative=1`;
   const meituanHref = `https://i.meituan.com/s/${encodeURIComponent(scene.meituan_keyword || scene.location_name)}`;
@@ -350,10 +351,15 @@ function SceneSheet({
           <div className="flex gap-2 mt-6">
             <a href={mapHref} target="_blank" rel="noreferrer" className="btn-ghost flex-1 justify-center">🧭 导航</a>
             <a href={meituanHref} target="_blank" rel="noreferrer" className="btn-ghost flex-1 justify-center">🥡 美团</a>
-            <button onClick={onToggle} className="btn-soft" style={{ padding: "10px 18px" }}>
-              {done ? "✓ 已打卡" : "打卡 ✦"}
-            </button>
           </div>
+
+          <CheckInPanel
+            sceneOrder={scene.order}
+            done={done}
+            record={record}
+            onUpdated={onUpdated}
+          />
+
         </div>
       </div>
     </div>
@@ -598,6 +604,233 @@ function SceneHero({
           ✓ 已打卡
         </div>
       )}
+    </div>
+  );
+}
+
+/* ============ Check-in panel: note + photo + mood ============ */
+
+const MOODS = ["✨", "🌿", "☕", "🌊", "🌸", "🔥", "🌙", "🍃"];
+const NOTE_MAX = 240;
+
+async function fileToCompressedDataUrl(file: File, maxDim = 900, quality = 0.78): Promise<string> {
+  const dataUrl = await new Promise<string>((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result));
+    r.onerror = () => rej(r.error);
+    r.readAsDataURL(file);
+  });
+  const img = await new Promise<HTMLImageElement>((res, rej) => {
+    const i = new Image();
+    i.onload = () => res(i);
+    i.onerror = () => rej(new Error("image decode failed"));
+    i.src = dataUrl;
+  });
+  let { width: w, height: h } = img;
+  if (w > maxDim || h > maxDim) {
+    const r = Math.min(maxDim / w, maxDim / h);
+    w = Math.round(w * r); h = Math.round(h * r);
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return dataUrl;
+  ctx.drawImage(img, 0, 0, w, h);
+  return canvas.toDataURL("image/jpeg", quality);
+}
+
+function CheckInPanel({
+  sceneOrder, done, record, onUpdated,
+}: {
+  sceneOrder: number;
+  done: boolean;
+  record?: SceneRecord;
+  onUpdated: () => void;
+}) {
+  const [editing, setEditing] = useState(!done);
+  const [note, setNote] = useState(record?.note ?? "");
+  const [photo, setPhoto] = useState<string | undefined>(record?.photo);
+  const [mood, setMood] = useState<string | undefined>(record?.mood);
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Reset state when switching scenes
+  useEffect(() => {
+    setNote(record?.note ?? "");
+    setPhoto(record?.photo);
+    setMood(record?.mood);
+    setEditing(!done);
+  }, [sceneOrder, done, record?.note, record?.photo, record?.mood]);
+
+  async function handlePhoto(e: ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setBusy(true);
+    try {
+      const url = await fileToCompressedDataUrl(f);
+      setPhoto(url);
+    } catch (err) {
+      console.error(err);
+      toast.error("照片读不出来，换一张试试？");
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  function save() {
+    recordScene(sceneOrder, {
+      note: note.trim() || undefined,
+      photo,
+      mood,
+    });
+    toast.success(done ? "已更新这条记录 ✦" : "打卡完成 ✦", {
+      description: note ? `「${note.slice(0, 24)}${note.length > 24 ? "…" : ""}」` : undefined,
+    });
+    setEditing(false);
+    onUpdated();
+  }
+
+  function removePhoto() { setPhoto(undefined); }
+
+  function undo() {
+    clearSceneRecord(sceneOrder);
+    setNote(""); setPhoto(undefined); setMood(undefined);
+    setEditing(true);
+    onUpdated();
+    toast("已取消打卡");
+  }
+
+  // ============ Recap view (done & not editing) ============
+  if (done && !editing) {
+    return (
+      <div className="mt-6 rounded-2xl border p-4 fade-up"
+        style={{ background: "linear-gradient(160deg,#fff8e8 0%,#fdf0f5 100%)", borderColor: "#f0e1c8" }}>
+        <div className="flex items-center justify-between">
+          <div className="cn-serif text-[11px] tracking-[0.3em] text-[var(--ink-soft)]">
+            MY RECORD · 打卡回顾
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setEditing(true)} className="cn-serif text-[12px] text-[var(--ink-soft)] underline-offset-4 hover:underline">
+              编辑
+            </button>
+            <button onClick={undo} className="cn-serif text-[12px] text-[var(--ink-soft)] underline-offset-4 hover:underline">
+              取消打卡
+            </button>
+          </div>
+        </div>
+
+        {mood && <div className="text-[28px] mt-2 leading-none">{mood}</div>}
+
+        {photo && (
+          <div className="mt-3 overflow-hidden rounded-xl" style={{ boxShadow: "0 8px 24px -12px rgba(80,60,40,0.35)" }}>
+            <img src={photo} alt="打卡照片" className="block w-full h-auto" />
+          </div>
+        )}
+
+        {note ? (
+          <p className="cn-serif text-[14px] leading-[1.85] text-[var(--ink)] mt-3 whitespace-pre-wrap">
+            {note}
+          </p>
+        ) : !photo && !mood ? (
+          <p className="cn-serif text-[13px] text-[var(--ink-soft)] mt-2 italic">
+            只是来过一下，没留下什么。
+          </p>
+        ) : null}
+
+        <div className="cn-serif text-[10px] text-[var(--ink-soft)] mt-3 display tracking-[0.25em]">
+          {record?.completedAt ? new Date(record.completedAt).toLocaleString("zh-CN", { hour: "2-digit", minute: "2-digit", month: "short", day: "numeric" }) : ""}
+        </div>
+      </div>
+    );
+  }
+
+  // ============ Edit view ============
+  return (
+    <div className="mt-6 rounded-2xl border p-4"
+      style={{ background: "linear-gradient(160deg,#fffdf6 0%,#fdf3ea 100%)", borderColor: "#f0e1c8" }}>
+      <div className="cn-serif text-[11px] tracking-[0.3em] text-[var(--ink-soft)] mb-3">
+        {done ? "EDIT · 修改打卡" : "CHECK IN · 记录这一刻"}
+      </div>
+
+      {/* Mood */}
+      <div className="cn-serif text-[11px] text-[var(--ink-soft)] mb-1.5">心情</div>
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {MOODS.map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setMood(mood === m ? undefined : m)}
+            className={`w-9 h-9 rounded-full flex items-center justify-center text-[18px] transition ${
+              mood === m
+                ? "bg-[var(--card)] ring-2 ring-[oklch(0.85_0.1_60)] scale-110"
+                : "bg-white/70 hover:bg-white"
+            }`}
+            style={{ boxShadow: "0 2px 6px rgba(0,0,0,0.06)" }}
+          >
+            {m}
+          </button>
+        ))}
+      </div>
+
+      {/* Note */}
+      <div className="cn-serif text-[11px] text-[var(--ink-soft)] mb-1.5 flex justify-between">
+        <span>随笔</span>
+        <span className="display tracking-[0.2em] text-[10px]">{note.length}/{NOTE_MAX}</span>
+      </div>
+      <textarea
+        value={note}
+        onChange={(e) => setNote(e.target.value.slice(0, NOTE_MAX))}
+        placeholder="此刻看到的、闻到的、想到的……写一句也好。"
+        rows={3}
+        className="w-full px-3 py-2.5 rounded-xl bg-white/80 border cn-serif text-[14px] text-[var(--ink)] placeholder:text-[var(--ink-soft)] resize-none focus:bg-white"
+        style={{ borderColor: "#e8dcc4" }}
+      />
+
+      {/* Photo */}
+      <div className="cn-serif text-[11px] text-[var(--ink-soft)] mt-3 mb-1.5">照片</div>
+      {photo ? (
+        <div className="relative overflow-hidden rounded-xl" style={{ boxShadow: "0 8px 24px -12px rgba(80,60,40,0.35)" }}>
+          <img src={photo} alt="预览" className="block w-full h-auto" />
+          <button
+            type="button"
+            onClick={removePhoto}
+            className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center text-[12px] bg-black/55 text-white"
+            aria-label="移除照片"
+          >
+            ✕
+          </button>
+        </div>
+      ) : (
+        <label
+          className={`flex flex-col items-center justify-center gap-1 py-6 rounded-xl border-2 border-dashed cursor-pointer transition ${busy ? "opacity-60" : "hover:bg-white/60"}`}
+          style={{ borderColor: "#e0cfb0", background: "rgba(255,255,255,0.5)" }}
+        >
+          <span className="text-[22px]">📷</span>
+          <span className="cn-serif text-[12px] text-[var(--ink-soft)]">
+            {busy ? "处理中…" : "拍一张 / 选一张"}
+          </span>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handlePhoto}
+          />
+        </label>
+      )}
+
+      <div className="flex gap-2 mt-4">
+        {done && (
+          <button onClick={() => setEditing(false)} className="btn-ghost flex-1 justify-center">
+            取消
+          </button>
+        )}
+        <button onClick={save} disabled={busy} className="btn-soft flex-1 justify-center">
+          {done ? "保存修改 ✦" : "完成打卡 ✦"}
+        </button>
+      </div>
     </div>
   );
 }

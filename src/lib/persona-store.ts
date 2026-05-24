@@ -1,4 +1,4 @@
-import type { JourneyRunState, PersonaCard, Journey } from "./persona-types";
+import type { JourneyRunState, PersonaCard, Journey, SceneRecord } from "./persona-types";
 
 const KEY = "todaypersona:run:v1";
 const CARD_KEY = "todaypersona:card:v1";
@@ -49,4 +49,29 @@ export function completeScene(order: number) {
     run.completedSceneOrders.push(order);
     saveRun(run);
   }
+}
+
+export function recordScene(order: number, patch: Partial<Omit<SceneRecord, "completedAt">>) {
+  const run = loadRun();
+  if (!run) return;
+  const records = run.sceneRecords ?? {};
+  const prev = records[order];
+  records[order] = {
+    ...(prev ?? {}),
+    ...patch,
+    completedAt: prev?.completedAt ?? Date.now(),
+  };
+  run.sceneRecords = records;
+  if (!run.completedSceneOrders.includes(order)) {
+    run.completedSceneOrders.push(order);
+  }
+  saveRun(run);
+}
+
+export function clearSceneRecord(order: number) {
+  const run = loadRun();
+  if (!run) return;
+  if (run.sceneRecords) delete run.sceneRecords[order];
+  run.completedSceneOrders = run.completedSceneOrders.filter((o) => o !== order);
+  saveRun(run);
 }
