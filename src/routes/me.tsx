@@ -205,7 +205,7 @@ function ComicView({ sagas }: { sagas: ArchivedChapter[] }) {
                   <ComicPanel key={s.order} className="aspect-square" photo={rec?.photo} colors={ch.card.colors}>
                     {!rec?.photo && (
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <VenueIcon type={venue} size={72} />
+                        <VenueIcon kind={venue} size={72} />
                       </div>
                     )}
                     <div className="absolute top-1.5 left-1.5 display text-[9px] tracking-widest bg-white/85 rounded px-1.5 py-0.5">§{s.order}</div>
@@ -287,7 +287,7 @@ function LibCard({ entry, kind }: { entry: LibraryEntry; kind: "place" | "activi
     <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3 flex items-center gap-3">
       <div className="w-14 h-14 rounded-xl shrink-0 flex items-center justify-center bg-[var(--muted)] overflow-hidden">
         {kind === "place"
-          ? <VenueIcon type={detectVenue(entry.type, entry.name)} size={48} />
+          ? <VenueIcon kind={detectVenue(entry.type, entry.name)} size={48} />
           : <div className="text-2xl">✶</div>}
       </div>
       <div className="min-w-0 flex-1">
