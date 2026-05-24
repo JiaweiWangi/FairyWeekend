@@ -1,4 +1,4 @@
-import type { JourneyRunState, PersonaCard, Journey } from "./persona-types";
+import type { JourneyRunState, PersonaCard, Journey, SceneRecord } from "./persona-types";
 
 const KEY = "todaypersona:run:v1";
 const CARD_KEY = "todaypersona:card:v1";
