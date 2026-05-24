@@ -301,20 +301,29 @@ function FullCardFront({ card }: { card: PersonaCard }) {
   return (
     <div className="h-full w-full flex flex-col">
       <div
-        className="relative h-[40%] overflow-hidden"
-        style={{ background: `linear-gradient(160deg, ${a} 0%, ${b} 100%)` }}
+        className="relative h-[58%] overflow-hidden"
+        style={
+          card.cover
+            ? undefined
+            : { background: `linear-gradient(160deg, ${a} 0%, ${b} 100%)` }
+        }
       >
-        <div
-          className="absolute inset-0 opacity-70"
-          style={{
-            background:
-              `radial-gradient(circle at 25% 30%, ${c} 0%, transparent 45%), radial-gradient(circle at 75% 70%, ${a} 0%, transparent 50%)`,
-          }}
-        />
+        {card.cover ? (
+          <img src={card.cover} alt={card.identity} className="absolute inset-0 w-full h-full object-cover" />
+        ) : (
+          <div
+            className="absolute inset-0 opacity-70"
+            style={{
+              background:
+                `radial-gradient(circle at 25% 30%, ${c} 0%, transparent 45%), radial-gradient(circle at 75% 70%, ${a} 0%, transparent 50%)`,
+            }}
+          />
+        )}
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/35 to-transparent pointer-events-none" />
         <div className="absolute top-3 left-3 rarity-chip" data-rarity={card.rarity}>
           ✦ {card.rarity} · {RARITY_LABEL[card.rarity]}
         </div>
-        <div className="absolute bottom-3 right-3 display italic text-[13px] text-[var(--ink)] opacity-70">
+        <div className="absolute bottom-3 right-3 display italic text-[13px] text-white/90 drop-shadow">
           {card.id.replace("card_", "No.")}
         </div>
       </div>
