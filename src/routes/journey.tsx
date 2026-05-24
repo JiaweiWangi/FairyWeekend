@@ -2,6 +2,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { loadRun, completeScene } from "@/lib/persona-store";
 import type { JourneyRunState, JourneyScene } from "@/lib/persona-types";
+import { VenueIcon, detectVenue } from "@/components/VenueIcon";
+
 
 export const Route = createFileRoute("/journey")({ component: JourneyPage });
 
