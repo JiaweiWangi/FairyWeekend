@@ -285,49 +285,16 @@ function SceneSheet({
         style={{ maxHeight: "90vh", overflowY: "auto", boxShadow: "0 -20px 60px rgba(0,0,0,0.2)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Hero illustration */}
-        <div
-          className="relative h-44 flex items-center justify-center overflow-hidden"
-          style={{ background: heroBg[kind] || heroBg.default }}
-        >
-          {/* sun + clouds */}
-          <div
-            className="absolute"
-            style={{ top: 18, right: 32, width: 36, height: 36, borderRadius: "50%",
-              background: "radial-gradient(circle,#fff8e8 0%,#f5d68a 70%,transparent 100%)" }}
-          />
-          <svg className="absolute" style={{ top: 24, left: 24 }} width="60" height="20" viewBox="0 0 60 20">
-            <ellipse cx="15" cy="12" rx="12" ry="6" fill="#fff8e8" opacity="0.7" />
-            <ellipse cx="28" cy="10" rx="9" ry="5" fill="#fff8e8" opacity="0.85" />
-          </svg>
-          {/* ground */}
-          <div className="absolute bottom-0 left-0 right-0 h-12"
-            style={{ background: "linear-gradient(180deg, transparent, rgba(255,253,243,0.5))" }} />
-          {/* big venue icon */}
-          <div className="relative" style={{ transform: "translateY(8px)" }}>
-            <VenueIcon kind={kind} size={150} />
-          </div>
-          {/* drag handle */}
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-white/60" />
-          {/* close */}
-          <button
-            onClick={onClose}
-            className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center display text-[14px]"
-            style={{ background: "rgba(255,253,243,0.85)", color: "#3d3530", boxShadow: "0 2px 6px rgba(0,0,0,0.12)" }}
-          >
-            ✕
-          </button>
-          {/* scene chip */}
-          <div className="absolute top-3 left-4 scene-chip" style={{ background: "rgba(255,253,243,0.9)" }}>
-            SCENE 0{scene.order}
-          </div>
-          {done && (
-            <div className="absolute bottom-3 right-4 cn-serif text-[11px] px-2.5 py-1 rounded-full"
-              style={{ background: "linear-gradient(160deg,#f5b8c4,#e8c97a)", color: "#3d3530" }}>
-              ✓ 已打卡
-            </div>
-          )}
-        </div>
+        {/* Hero illustration with interactive hotspots */}
+        <SceneHero
+          kind={kind}
+          heroBg={heroBg[kind] || heroBg.default}
+          sceneOrder={scene.order}
+          onClose={onClose}
+          done={done}
+          sceneNo={scene.order}
+        />
+
 
         <div className="p-6 pt-5">
           <h3 className="cn-serif text-[22px] text-[var(--ink)] leading-snug">「{scene.scene_name}」</h3>
