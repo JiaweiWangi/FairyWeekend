@@ -79,16 +79,16 @@ function Index() {
 
       {/* Mode switch */}
       <div className="relative z-10 flex justify-center mb-8">
-        <div className="inline-flex rounded-full bg-[var(--paper-2)] border border-[var(--line)] p-1 text-[13px] cn-serif">
+        <div className="inline-flex rounded-full bg-[var(--muted)] border border-[var(--border)] p-1 text-[13px] cn-serif">
           <button
             onClick={() => { setMode("spread"); setSelected(null); }}
-            className={`px-5 py-2 rounded-full transition ${mode === "spread" ? "bg-[var(--paper)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"}`}
+            className={`px-5 py-2 rounded-full transition ${mode === "spread" ? "bg-[var(--card)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"}`}
           >
             我自己选
           </button>
           <button
             onClick={() => { setMode("tarot"); setTarotRevealed(null); }}
-            className={`px-5 py-2 rounded-full transition ${mode === "tarot" ? "bg-[var(--paper)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"}`}
+            className={`px-5 py-2 rounded-full transition ${mode === "tarot" ? "bg-[var(--card)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"}`}
           >
             让命运决定 ✶
           </button>
@@ -139,10 +139,10 @@ function SpreadView({
             <button
               key={card.id}
               onClick={() => onSelect(card)}
-              className={`group relative text-left rounded-2xl overflow-hidden border bg-[var(--paper)] transition-all duration-300 fade-up ${
+              className={`group relative text-left rounded-2xl overflow-hidden border bg-[var(--card)] transition-all duration-300 fade-up ${
                 isSel
                   ? "border-[var(--accent)] shadow-[0_18px_50px_-20px_rgba(0,0,0,0.25)] -translate-y-1"
-                  : "border-[var(--line)] hover:-translate-y-1 hover:shadow-[0_14px_36px_-20px_rgba(0,0,0,0.2)]"
+                  : "border-[var(--border)] hover:-translate-y-1 hover:shadow-[0_14px_36px_-20px_rgba(0,0,0,0.2)]"
               }`}
               style={{ animationDelay: `${idx * 50}ms` }}
             >
@@ -159,7 +159,7 @@ function SpreadView({
         }`}
       >
         {selected && (
-          <div className="mx-auto max-w-2xl rounded-2xl bg-[var(--paper)] border border-[var(--line)] shadow-[0_20px_60px_-30px_rgba(0,0,0,0.35)] p-4 flex items-center gap-4">
+          <div className="mx-auto max-w-2xl rounded-2xl bg-[var(--card)] border border-[var(--border)] shadow-[0_20px_60px_-30px_rgba(0,0,0,0.35)] p-4 flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl shrink-0"
               style={{
                 background: `linear-gradient(135deg, ${selected.colors[0]} 0%, ${selected.colors[1]} 100%)`,
