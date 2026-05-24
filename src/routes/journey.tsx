@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { loadRun, completeScene } from "@/lib/persona-store";
-import type { JourneyRunState, JourneyScene } from "@/lib/persona-types";
+import { loadRun, recordScene, clearSceneRecord } from "@/lib/persona-store";
+import type { JourneyRunState, JourneyScene, SceneRecord } from "@/lib/persona-types";
 import { VenueIcon, detectVenue } from "@/components/VenueIcon";
 import { toast } from "sonner";
 
