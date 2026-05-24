@@ -241,13 +241,14 @@ function JourneyMap({
 /* ============ Scene bottom sheet ============ */
 
 function SceneSheet({
-  scene, done, city, onClose, onToggle,
+  scene, done, record, city, onClose, onUpdated,
 }: {
   scene: JourneyScene;
   done: boolean;
+  record?: SceneRecord;
   city?: string;
   onClose: () => void;
-  onToggle: () => void;
+  onUpdated: () => void;
 }) {
   const mapHref = `https://uri.amap.com/marker?name=${encodeURIComponent(scene.location_name)}&src=todaypersona&coordinate=gaode&callnative=1`;
   const meituanHref = `https://i.meituan.com/s/${encodeURIComponent(scene.meituan_keyword || scene.location_name)}`;
