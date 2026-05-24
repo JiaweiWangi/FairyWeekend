@@ -66,8 +66,16 @@ function Index() {
 
       {/* Header */}
       <header className="text-center mb-6 relative z-10 fade-up">
-        <div className="display text-xs tracking-[0.4em] text-[var(--ink-soft)] mb-3">
-          TODAYPERSONA · v0.1
+        <div className="flex items-center justify-between mb-3">
+          <div className="display text-xs tracking-[0.4em] text-[var(--ink-soft)]">
+            TODAYPERSONA · v0.1
+          </div>
+          <button
+            onClick={() => navigate({ to: "/me" })}
+            className="display text-[10px] tracking-[0.3em] text-[var(--ink)] opacity-70 hover:opacity-100 border border-[var(--border)] rounded-full px-3 py-1"
+          >
+            我的连载 ❦
+          </button>
         </div>
         <h1 className="display text-5xl md:text-6xl text-[var(--ink)] leading-[1.05]">
           今日<span className="italic">人设</span>
@@ -76,6 +84,7 @@ function Index() {
           选一张卡，活进今天的故事里
         </p>
       </header>
+
 
       {/* Mode switch */}
       <div className="relative z-10 flex justify-center mb-8">
