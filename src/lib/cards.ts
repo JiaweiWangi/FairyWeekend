@@ -15,7 +15,7 @@ const COVERS: Record<string, string> = {
   card_006: cover006,
 };
 
-export const PERSONA_CARDS: PersonaCard[] = [
+const _PERSONA_CARDS_BASE: PersonaCard[] = [
   {
     id: "card_001",
     rarity: "SR",
