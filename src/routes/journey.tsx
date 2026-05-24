@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { loadRun, completeScene } from "@/lib/persona-store";
 import type { JourneyRunState, JourneyScene } from "@/lib/persona-types";
 import { VenueIcon, detectVenue } from "@/components/VenueIcon";
+import { toast } from "sonner";
 
 
 export const Route = createFileRoute("/journey")({ component: JourneyPage });
@@ -284,49 +285,16 @@ function SceneSheet({
         style={{ maxHeight: "90vh", overflowY: "auto", boxShadow: "0 -20px 60px rgba(0,0,0,0.2)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Hero illustration */}
-        <div
-          className="relative h-44 flex items-center justify-center overflow-hidden"
-          style={{ background: heroBg[kind] || heroBg.default }}
-        >
-          {/* sun + clouds */}
-          <div
-            className="absolute"
-            style={{ top: 18, right: 32, width: 36, height: 36, borderRadius: "50%",
-              background: "radial-gradient(circle,#fff8e8 0%,#f5d68a 70%,transparent 100%)" }}
-          />
-          <svg className="absolute" style={{ top: 24, left: 24 }} width="60" height="20" viewBox="0 0 60 20">
-            <ellipse cx="15" cy="12" rx="12" ry="6" fill="#fff8e8" opacity="0.7" />
-            <ellipse cx="28" cy="10" rx="9" ry="5" fill="#fff8e8" opacity="0.85" />
-          </svg>
-          {/* ground */}
-          <div className="absolute bottom-0 left-0 right-0 h-12"
-            style={{ background: "linear-gradient(180deg, transparent, rgba(255,253,243,0.5))" }} />
-          {/* big venue icon */}
-          <div className="relative" style={{ transform: "translateY(8px)" }}>
-            <VenueIcon kind={kind} size={150} />
-          </div>
-          {/* drag handle */}
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-white/60" />
-          {/* close */}
-          <button
-            onClick={onClose}
-            className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center display text-[14px]"
-            style={{ background: "rgba(255,253,243,0.85)", color: "#3d3530", boxShadow: "0 2px 6px rgba(0,0,0,0.12)" }}
-          >
-            ✕
-          </button>
-          {/* scene chip */}
-          <div className="absolute top-3 left-4 scene-chip" style={{ background: "rgba(255,253,243,0.9)" }}>
-            SCENE 0{scene.order}
-          </div>
-          {done && (
-            <div className="absolute bottom-3 right-4 cn-serif text-[11px] px-2.5 py-1 rounded-full"
-              style={{ background: "linear-gradient(160deg,#f5b8c4,#e8c97a)", color: "#3d3530" }}>
-              ✓ 已打卡
-            </div>
-          )}
-        </div>
+        {/* Hero illustration with interactive hotspots */}
+        <SceneHero
+          kind={kind}
+          heroBg={heroBg[kind] || heroBg.default}
+          sceneOrder={scene.order}
+          onClose={onClose}
+          done={done}
+          sceneNo={scene.order}
+        />
+
 
         <div className="p-6 pt-5">
           <h3 className="cn-serif text-[22px] text-[var(--ink)] leading-snug">「{scene.scene_name}」</h3>
@@ -390,5 +358,246 @@ function SceneSheet({
       </div>
     </div>
 
+  );
+}
+
+/* ============ Interactive hero with collectibles ============ */
+
+type Hotspot = {
+  x: number; // %
+  y: number; // %
+  emoji: string;
+  reward: string;
+  toastTitle: string;
+};
+
+const HOTSPOT_MAP: Record<string, Hotspot[]> = {
+  cafe: [
+    { x: 38, y: 32, emoji: "☁️", reward: "+ 一缕咖啡蒸汽", toastTitle: "蒸汽收集 ×1" },
+    { x: 52, y: 22, emoji: "☁️", reward: "+ 又一缕香气", toastTitle: "蒸汽收集 ×2" },
+    { x: 65, y: 38, emoji: "✦", reward: "+ 拿铁拉花", toastTitle: "拉花完成" },
+  ],
+  bakery: [
+    { x: 30, y: 30, emoji: "🥐", reward: "+ 黄油可颂", toastTitle: "刚出炉" },
+    { x: 70, y: 28, emoji: "☁️", reward: "+ 烤箱暖气", toastTitle: "暖气收集" },
+    { x: 50, y: 70, emoji: "✦", reward: "+ 第一口", toastTitle: "试吃 +1" },
+  ],
+  dessert: [
+    { x: 35, y: 35, emoji: "🍓", reward: "+ 草莓装饰", toastTitle: "甜品 +1" },
+    { x: 65, y: 30, emoji: "✦", reward: "+ 糖霜星点", toastTitle: "糖霜亮起" },
+    { x: 50, y: 65, emoji: "🍰", reward: "+ 切下一角", toastTitle: "记得拍照" },
+  ],
+  noodle: [
+    { x: 40, y: 28, emoji: "☁️", reward: "+ 热气一团", toastTitle: "蒸汽 ×1" },
+    { x: 60, y: 24, emoji: "☁️", reward: "+ 热气又一团", toastTitle: "蒸汽 ×2" },
+    { x: 50, y: 65, emoji: "🥢", reward: "+ 开动！", toastTitle: "开吃" },
+  ],
+  restaurant: [
+    { x: 35, y: 30, emoji: "☁️", reward: "+ 锅气", toastTitle: "锅气收集" },
+    { x: 65, y: 35, emoji: "🍷", reward: "+ 干杯", toastTitle: "举杯 +1" },
+    { x: 50, y: 70, emoji: "✦", reward: "+ 这一顿值得", toastTitle: "满足度 +1" },
+  ],
+  bar: [
+    { x: 30, y: 28, emoji: "✦", reward: "+ 灯光亮起", toastTitle: "霓虹点亮" },
+    { x: 70, y: 32, emoji: "🍸", reward: "+ 这杯归你", toastTitle: "鸡尾酒就位" },
+    { x: 50, y: 68, emoji: "🎵", reward: "+ 一段慢歌", toastTitle: "音符飘过" },
+  ],
+  market: [
+    { x: 28, y: 35, emoji: "🍅", reward: "+ 新鲜番茄", toastTitle: "市集 +1" },
+    { x: 70, y: 30, emoji: "🥬", reward: "+ 一把青菜", toastTitle: "市集 +2" },
+    { x: 50, y: 70, emoji: "✦", reward: "+ 烟火气", toastTitle: "采买完成" },
+  ],
+  bookstore: [
+    { x: 30, y: 30, emoji: "📖", reward: "+ 翻开一页", toastTitle: "书页翻动" },
+    { x: 70, y: 35, emoji: "✦", reward: "+ 一句喜欢的话", toastTitle: "记下来了" },
+    { x: 50, y: 68, emoji: "🕯️", reward: "+ 暖光", toastTitle: "灯光点亮" },
+  ],
+  gallery: [
+    { x: 30, y: 32, emoji: "🖼️", reward: "+ 驻足一幅", toastTitle: "凝视 +1" },
+    { x: 70, y: 32, emoji: "✦", reward: "+ 射灯打开", toastTitle: "灯亮了" },
+    { x: 50, y: 68, emoji: "💭", reward: "+ 一个念头", toastTitle: "灵感闪过" },
+  ],
+  museum: [
+    { x: 30, y: 32, emoji: "🏺", reward: "+ 一件展品", toastTitle: "凝视 +1" },
+    { x: 70, y: 32, emoji: "✦", reward: "+ 灯光亮起", toastTitle: "射灯打开" },
+    { x: 50, y: 68, emoji: "📜", reward: "+ 一段说明", toastTitle: "读完了" },
+  ],
+  cinema: [
+    { x: 30, y: 32, emoji: "✦", reward: "+ 灯光暗下", toastTitle: "影厅就绪" },
+    { x: 70, y: 32, emoji: "🎬", reward: "+ 开场了", toastTitle: "故事开始" },
+    { x: 50, y: 68, emoji: "🍿", reward: "+ 一桶爆米花", toastTitle: "零食 +1" },
+  ],
+  flower: [
+    { x: 30, y: 30, emoji: "🌸", reward: "+ 一束花", toastTitle: "花束 +1" },
+    { x: 70, y: 30, emoji: "🦋", reward: "+ 蝴蝶停驻", toastTitle: "蝴蝶飞来" },
+    { x: 50, y: 68, emoji: "✦", reward: "+ 花香一缕", toastTitle: "花香收集" },
+  ],
+  plant: [
+    { x: 30, y: 32, emoji: "🌿", reward: "+ 一片新叶", toastTitle: "绿意 +1" },
+    { x: 70, y: 35, emoji: "💧", reward: "+ 浇水一次", toastTitle: "照顾 +1" },
+    { x: 50, y: 68, emoji: "🦋", reward: "+ 蝴蝶停驻", toastTitle: "客人来了" },
+  ],
+  park: [
+    { x: 28, y: 32, emoji: "🦋", reward: "+ 蝴蝶飞过", toastTitle: "蝴蝶收集" },
+    { x: 70, y: 28, emoji: "🐦", reward: "+ 一声鸟鸣", toastTitle: "鸟鸣 +1" },
+    { x: 50, y: 70, emoji: "🍃", reward: "+ 一阵风", toastTitle: "风经过" },
+  ],
+  spa: [
+    { x: 30, y: 35, emoji: "☁️", reward: "+ 一团雾气", toastTitle: "雾气 +1" },
+    { x: 70, y: 32, emoji: "🕯️", reward: "+ 蜡烛点亮", toastTitle: "烛光亮起" },
+    { x: 50, y: 68, emoji: "✦", reward: "+ 放松一点", toastTitle: "肩膀松了" },
+  ],
+  temple: [
+    { x: 28, y: 30, emoji: "🏮", reward: "+ 灯笼点亮", toastTitle: "灯笼 ×1" },
+    { x: 72, y: 30, emoji: "🏮", reward: "+ 又一盏", toastTitle: "灯笼 ×2" },
+    { x: 50, y: 70, emoji: "🔔", reward: "+ 一声钟", toastTitle: "钟声响起" },
+  ],
+  river: [
+    { x: 25, y: 55, emoji: "⛵", reward: "+ 船只靠近", toastTitle: "船靠岸" },
+    { x: 70, y: 50, emoji: "💧", reward: "+ 涟漪一圈", toastTitle: "水波荡开" },
+    { x: 50, y: 30, emoji: "🐦", reward: "+ 海鸥一只", toastTitle: "海鸥飞过" },
+  ],
+  street: [
+    { x: 28, y: 32, emoji: "🏮", reward: "+ 灯笼点亮", toastTitle: "灯笼亮起" },
+    { x: 72, y: 30, emoji: "✦", reward: "+ 招牌亮了", toastTitle: "招牌点亮" },
+    { x: 50, y: 68, emoji: "🛵", reward: "+ 一辆经过", toastTitle: "市井 +1" },
+  ],
+  shop: [
+    { x: 30, y: 32, emoji: "🛍️", reward: "+ 一只袋子", toastTitle: "战利品 +1" },
+    { x: 70, y: 32, emoji: "✦", reward: "+ 橱窗灯亮", toastTitle: "灯亮了" },
+    { x: 50, y: 68, emoji: "🎁", reward: "+ 给自己的", toastTitle: "礼物 +1" },
+  ],
+  default: [
+    { x: 30, y: 30, emoji: "✦", reward: "+ 一点星光", toastTitle: "星光 +1" },
+    { x: 70, y: 32, emoji: "✦", reward: "+ 又一点", toastTitle: "星光 +2" },
+    { x: 50, y: 68, emoji: "✿", reward: "+ 这里值得", toastTitle: "记住了" },
+  ],
+};
+
+function SceneHero({
+  kind, heroBg, sceneOrder, onClose, done, sceneNo,
+}: {
+  kind: string;
+  heroBg: string;
+  sceneOrder: number;
+  onClose: () => void;
+  done: boolean;
+  sceneNo: number;
+}) {
+  const hotspots = HOTSPOT_MAP[kind] || HOTSPOT_MAP.default;
+  const [collected, setCollected] = useState<Set<number>>(new Set());
+  const [floats, setFloats] = useState<{ id: number; x: number; y: number; text: string }[]>([]);
+  const [bursts, setBursts] = useState<{ id: number; x: number; y: number }[]>([]);
+  const [flash, setFlash] = useState(false);
+  const idRef = useRef(0);
+
+  useEffect(() => {
+    setCollected(new Set());
+    setFloats([]);
+    setBursts([]);
+    setFlash(false);
+  }, [sceneOrder]);
+
+  function handleHotspot(i: number, h: Hotspot) {
+    if (collected.has(i)) return;
+    const next = new Set(collected);
+    next.add(i);
+    setCollected(next);
+
+    const fid = ++idRef.current;
+    setFloats((f) => [...f, { id: fid, x: h.x, y: h.y, text: h.reward }]);
+    setBursts((b) => [...b, { id: fid, x: h.x, y: h.y }]);
+    setTimeout(() => {
+      setFloats((f) => f.filter((x) => x.id !== fid));
+      setBursts((b) => b.filter((x) => x.id !== fid));
+    }, 1500);
+
+    toast(h.toastTitle, { description: h.reward });
+
+    if (next.size === hotspots.length) {
+      setTimeout(() => {
+        setFlash(true);
+        toast.success("场景探索完成 ✦", { description: "心情值 +1 · 可以去打卡了" });
+        setTimeout(() => setFlash(false), 1100);
+      }, 350);
+    }
+  }
+
+  const allFound = collected.size === hotspots.length;
+
+  return (
+    <div
+      className="relative h-56 flex items-center justify-center overflow-hidden select-none"
+      style={{ background: heroBg }}
+    >
+      <div
+        className="absolute"
+        style={{ top: 18, right: 32, width: 36, height: 36, borderRadius: "50%",
+          background: "radial-gradient(circle,#fff8e8 0%,#f5d68a 70%,transparent 100%)" }}
+      />
+      <svg className="absolute" style={{ top: 24, left: 24 }} width="60" height="20" viewBox="0 0 60 20">
+        <ellipse cx="15" cy="12" rx="12" ry="6" fill="#fff8e8" opacity="0.7" />
+        <ellipse cx="28" cy="10" rx="9" ry="5" fill="#fff8e8" opacity="0.85" />
+      </svg>
+      <div className="absolute bottom-0 left-0 right-0 h-12"
+        style={{ background: "linear-gradient(180deg, transparent, rgba(255,253,243,0.5))" }} />
+      <div className="relative" style={{ transform: "translateY(8px)" }}>
+        <VenueIcon kind={kind as never} size={150} />
+      </div>
+
+      <div className="absolute inset-0">
+        {hotspots.map((h, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => handleHotspot(i, h)}
+            className={`hotspot ${collected.has(i) ? "is-collected" : ""}`}
+            style={{ left: `${h.x}%`, top: `${h.y}%`, animationDelay: `${i * 0.4}s` }}
+            aria-label={h.toastTitle}
+          >
+            {h.emoji}
+          </button>
+        ))}
+
+        {bursts.map((b) => (
+          <div key={`b${b.id}`} className="pixel-burst" style={{ left: `${b.x}%`, top: `${b.y}%` }}>
+            <span /><span /><span /><span /><span /><span />
+          </div>
+        ))}
+
+        {floats.map((f) => (
+          <div key={`f${f.id}`} className="float-reward" style={{ left: `${f.x}%`, top: `${f.y}%` }}>
+            {f.text}
+          </div>
+        ))}
+
+        {flash && <div className="scene-complete-flash" />}
+      </div>
+
+      <div
+        className="absolute bottom-3 left-4 display text-[10px] tracking-[0.3em] px-2.5 py-1 rounded-full"
+        style={{ background: "rgba(255,253,243,0.9)", color: "#3d3530" }}
+      >
+        探索 {collected.size}/{hotspots.length}{allFound ? " ✦" : ""}
+      </div>
+
+      <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-white/60" />
+      <button
+        onClick={onClose}
+        className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center display text-[14px]"
+        style={{ background: "rgba(255,253,243,0.85)", color: "#3d3530", boxShadow: "0 2px 6px rgba(0,0,0,0.12)" }}
+      >
+        ✕
+      </button>
+      <div className="absolute top-3 left-4 scene-chip" style={{ background: "rgba(255,253,243,0.9)" }}>
+        SCENE 0{sceneNo}
+      </div>
+      {done && (
+        <div className="absolute bottom-3 right-4 cn-serif text-[11px] px-2.5 py-1 rounded-full"
+          style={{ background: "linear-gradient(160deg,#f5b8c4,#e8c97a)", color: "#3d3530" }}>
+          ✓ 已打卡
+        </div>
+      )}
+    </div>
   );
 }
