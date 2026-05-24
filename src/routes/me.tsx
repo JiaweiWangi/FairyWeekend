@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { loadSagas, buildLibrary, deleteChapter, type ArchivedChapter, type LibraryEntry } from "@/lib/persona-store";
 import { VenueIcon, detectVenue } from "@/components/VenueIcon";
-import { RARITY_LABEL } from "@/lib/cards";
+
 
 export const Route = createFileRoute("/me")({ component: MePage });
 
