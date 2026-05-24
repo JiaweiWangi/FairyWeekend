@@ -662,7 +662,7 @@ function CheckInPanel({
     setEditing(!done);
   }, [sceneOrder, done, record?.note, record?.photo, record?.mood]);
 
-  async function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handlePhoto(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
     setBusy(true);
