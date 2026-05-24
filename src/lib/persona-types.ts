@@ -31,10 +31,18 @@ export interface Journey {
   closing: string;
 }
 
+export interface SceneRecord {
+  note?: string;
+  photo?: string; // data URL
+  mood?: string;  // emoji
+  completedAt: number;
+}
+
 export interface JourneyRunState {
   card: PersonaCard;
   city?: string;
   journey: Journey;
   completedSceneOrders: number[];
+  sceneRecords?: Record<number, SceneRecord>;
   createdAt: number;
 }
