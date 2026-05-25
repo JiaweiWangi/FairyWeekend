@@ -1,8 +1,10 @@
 {
-  "name": "tanstack_start_ts",
+  "name": "todaypersona",
+  "description": "美团黑客松参赛作品 —— 周末活动规划创意应用：抽一张今日人设，让 AI 带你走一段有故事的城市旅程",
   "private": true,
   "sideEffects": false,
   "type": "module",
+
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
