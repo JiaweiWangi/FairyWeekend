@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { loadSagas, buildLibrary, deleteChapter, type ArchivedChapter, type LibraryEntry } from "@/lib/persona-store";
 import { VenueIcon, detectVenue } from "@/components/VenueIcon";
 
