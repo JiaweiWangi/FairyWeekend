@@ -157,14 +157,17 @@ function SpreadView({
         })}
       </div>
 
-      {/* 选中后的确认条 */}
+      {/* 给底部预留出确认条的高度，避免覆盖最后一行卡片 */}
+      <div aria-hidden className={selected ? "h-28" : "h-0"} />
+
+      {/* 选中后的确认条：固定在视口底部 */}
       <div
-        className={`sticky bottom-4 mt-8 transition-all duration-500 ${
+        className={`fixed left-0 right-0 bottom-4 z-40 px-4 transition-all duration-500 ${
           selected ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6 pointer-events-none"
         }`}
       >
         {selected && (
-          <div className="mx-auto max-w-2xl rounded-2xl bg-[var(--card)] border border-[var(--border)] shadow-[0_20px_60px_-30px_rgba(0,0,0,0.35)] p-4 flex items-center gap-4">
+          <div className="mx-auto max-w-2xl rounded-2xl bg-[var(--card)]/95 backdrop-blur border border-[var(--border)] shadow-[0_20px_60px_-30px_rgba(0,0,0,0.35)] p-4 flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl shrink-0"
               style={{
                 background: `linear-gradient(135deg, ${selected.colors[0]} 0%, ${selected.colors[1]} 100%)`,
