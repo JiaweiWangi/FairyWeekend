@@ -304,6 +304,10 @@
   100% { transform: translateX(0) rotate(0deg); }
 }
 
+.tarot-fly {
+  box-shadow: 0 30px 70px -20px rgba(0,0,0,0.55), 0 0 40px oklch(0.92 0.13 80 / 0.5) !important;
+}
+
 /* === Scene interactive hotspots === */
 .hotspot {
   position: absolute;
