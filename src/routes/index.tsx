@@ -11,7 +11,7 @@ type Mode = "agent" | "spread" | "tarot";
 
 function Index() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<Mode>("spread");
+  const [mode, setMode] = useState<Mode>("agent");
   const [selected, setSelected] = useState<PersonaCard | null>(null);
   const [tarotRevealed, setTarotRevealed] = useState<PersonaCard | null>(null);
   const [shuffling, setShuffling] = useState(false);
