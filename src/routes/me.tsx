@@ -8,11 +8,21 @@ import { elementToPdfBlob, downloadBlob, shareOrDownload } from "@/lib/export-pd
 export const Route = createFileRoute("/me")({ component: MePage });
 
 type Tab = "novel" | "comic" | "library";
+type SortKey = "recent" | "enhanced" | "order";
+export type MeFilters = {
+  sort: SortKey;
+  onlyPhoto: boolean;
+  onlyNote: boolean;
+  minLevel: number; // 0/1/2/3
+};
 
 function MePage() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>("novel");
+  const [tabs, setTabs] = useState<Set<Tab>>(new Set(["novel"]));
   const [reloadKey, setReloadKey] = useState(0);
+  const [filters, setFilters] = useState<MeFilters>({
+    sort: "recent", onlyPhoto: false, onlyNote: false, minLevel: 0,
+  });
 
   const sagas = useMemo(() => loadSagas(), [reloadKey]);
   const library = useMemo(() => buildLibrary(), [reloadKey]);
@@ -27,6 +37,20 @@ function MePage() {
     const rarities = new Set(sagas.map((c) => c.card.rarity));
     return { chapters, scenes, enhanced, rarities: rarities.size };
   }, [sagas]);
+
+  function toggleTab(t: Tab) {
+    setTabs((prev) => {
+      const next = new Set(prev);
+      if (next.has(t)) { if (next.size > 1) next.delete(t); }
+      else next.add(t);
+      return next;
+    });
+  }
+
+  const showNovel = tabs.has("novel");
+  const showComic = tabs.has("comic");
+  const showLibrary = tabs.has("library");
+  const showFilters = showNovel || showLibrary;
 
   return (
     <div className="min-h-screen pb-24" style={{ background: "linear-gradient(180deg, #fdfaf6 0%, #f6efe4 60%, #ede4d3 100%)" }}>
@@ -55,34 +79,111 @@ function MePage() {
         </div>
       </header>
 
-      {/* Tabs */}
+      {/* Tabs (multi-select) */}
       <div className="max-w-xl mx-auto px-5 mt-6 flex justify-center">
         <div className="inline-flex rounded-full bg-[var(--muted)] border border-[var(--border)] p-1 text-[12px] cn-serif">
           {([
             ["novel", "连载小说"],
             ["comic", "漫画分镜"],
             ["library", "收藏馆"],
-          ] as const).map(([k, l]) => (
-            <button
-              key={k}
-              onClick={() => setTab(k)}
-              className={`px-4 py-1.5 rounded-full transition ${tab === k ? "bg-[var(--card)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"}`}
-            >
-              {l}
-            </button>
-          ))}
+          ] as const).map(([k, l]) => {
+            const active = tabs.has(k);
+            return (
+              <button
+                key={k}
+                onClick={() => toggleTab(k)}
+                className={`px-4 py-1.5 rounded-full transition ${active ? "bg-[var(--card)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"}`}
+              >
+                {l}
+              </button>
+            );
+          })}
         </div>
       </div>
+      <div className="max-w-xl mx-auto px-5 mt-2 text-center">
+        <div className="cn-serif text-[10px] text-[var(--ink-soft)]">点选可同时切换多个视图</div>
+      </div>
 
-      <main className="max-w-xl mx-auto px-5 mt-6">
-        {sagas.length === 0 && tab !== "library" && <EmptyState onGo={() => navigate({ to: "/" })} />}
-        {tab === "novel" && sagas.length > 0 && <NovelView sagas={sagas} onDelete={(id) => { deleteChapter(id); setReloadKey(k => k + 1); }} />}
-        {tab === "comic" && sagas.length > 0 && <ComicView sagas={sagas} />}
-        {tab === "library" && <LibraryView library={library} sagas={sagas} empty={sagas.length === 0} onGo={() => navigate({ to: "/" })} />}
+      {/* Filter / Sort bar */}
+      {showFilters && sagas.length > 0 && (
+        <div className="max-w-xl mx-auto px-5 mt-4">
+          <FilterBar filters={filters} onChange={setFilters} />
+        </div>
+      )}
+
+      <main className="max-w-xl mx-auto px-5 mt-6 space-y-10">
+        {sagas.length === 0 && !showLibrary && <EmptyState onGo={() => navigate({ to: "/" })} />}
+        {showNovel && sagas.length > 0 && (
+          <NovelView
+            sagas={sagas}
+            filters={filters}
+            onDelete={(id) => { deleteChapter(id); setReloadKey(k => k + 1); }}
+          />
+        )}
+        {showComic && sagas.length > 0 && <ComicView sagas={sagas} />}
+        {showLibrary && (
+          <LibraryView
+            library={library}
+            sagas={sagas}
+            filters={filters}
+            empty={sagas.length === 0}
+            onGo={() => navigate({ to: "/" })}
+          />
+        )}
       </main>
     </div>
   );
 }
+
+function FilterBar({ filters, onChange }: { filters: MeFilters; onChange: (f: MeFilters) => void }) {
+  const f = filters;
+  const set = (patch: Partial<MeFilters>) => onChange({ ...f, ...patch });
+  const sorts: { k: SortKey; l: string }[] = [
+    { k: "recent", l: "最近访问" },
+    { k: "enhanced", l: "增强多" },
+    { k: "order", l: "章节顺序" },
+  ];
+  const Chip = ({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) => (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1 rounded-full cn-serif text-[11px] border transition ${
+        on
+          ? "bg-[var(--ink)] text-[var(--card)] border-[var(--ink)]"
+          : "bg-[var(--card)] text-[var(--ink-soft)] border-[var(--border)] hover:text-[var(--ink)]"
+      }`}
+    >
+      {children}
+    </button>
+  );
+  return (
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)]/80 backdrop-blur px-3 py-3 space-y-2.5">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="display text-[9px] tracking-[0.3em] text-[var(--ink-soft)] mr-1">SORT</span>
+        {sorts.map((s) => (
+          <Chip key={s.k} on={f.sort === s.k} onClick={() => set({ sort: s.k })}>{s.l}</Chip>
+        ))}
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="display text-[9px] tracking-[0.3em] text-[var(--ink-soft)] mr-1">FILTER</span>
+        <Chip on={f.onlyPhoto} onClick={() => set({ onlyPhoto: !f.onlyPhoto })}>📷 仅有照片</Chip>
+        <Chip on={f.onlyNote} onClick={() => set({ onlyNote: !f.onlyNote })}>✎ 仅有随笔</Chip>
+        <span className="display text-[9px] tracking-[0.3em] text-[var(--ink-soft)] ml-2 mr-1">增强 ≥</span>
+        {[0, 1, 2, 3].map((n) => (
+          <Chip key={n} on={f.minLevel === n} onClick={() => set({ minLevel: n })}>{n}</Chip>
+        ))}
+        {(f.onlyPhoto || f.onlyNote || f.minLevel > 0 || f.sort !== "recent") && (
+          <button
+            onClick={() => onChange({ sort: "recent", onlyPhoto: false, onlyNote: false, minLevel: 0 })}
+            className="ml-auto cn-serif text-[11px] text-[var(--ink-soft)] underline underline-offset-2"
+          >
+            重置
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 function StatChip({ n, label }: { n: number; label: string }) {
   return (
