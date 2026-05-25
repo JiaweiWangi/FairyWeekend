@@ -357,9 +357,26 @@ function ChapterDetail({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-5 mt-4 flex items-center justify-between border-t border-[var(--border)] sticky bottom-0 bg-[var(--card)]/95 backdrop-blur">
+        <div className="px-5 py-4 mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] sticky bottom-0 bg-[var(--card)]/95 backdrop-blur">
           <button onClick={onDelete} className="cn-serif text-[12px] text-[var(--ink-soft)] hover:text-red-600">删除这一章</button>
-          <button onClick={onClose} className="btn-soft">关闭</button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onExport("share")}
+              disabled={exporting}
+              className="cn-serif text-[12px] px-3 py-1.5 rounded-full border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--muted)] disabled:opacity-50"
+              title="分享 PDF（不支持时将自动下载）"
+            >
+              分享 ↗
+            </button>
+            <button
+              onClick={() => onExport("download")}
+              disabled={exporting}
+              className="cn-serif text-[12px] px-3 py-1.5 rounded-full border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--muted)] disabled:opacity-50"
+            >
+              {exporting ? "导出中…" : "导出 PDF ↓"}
+            </button>
+            <button onClick={onClose} className="btn-soft">关闭</button>
+          </div>
         </div>
       </div>
     </div>
