@@ -3,14 +3,15 @@ import { useMemo, useState } from "react";
 import { PERSONA_CARDS, drawCard, RARITY_LABEL } from "@/lib/cards";
 import { savePendingCard } from "@/lib/persona-store";
 import type { PersonaCard } from "@/lib/persona-types";
+import { AgentChatView } from "@/components/AgentChatView";
 
 export const Route = createFileRoute("/")({ component: Index });
 
-type Mode = "spread" | "tarot";
+type Mode = "agent" | "spread" | "tarot";
 
 function Index() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<Mode>("spread");
+  const [mode, setMode] = useState<Mode>("agent");
   const [selected, setSelected] = useState<PersonaCard | null>(null);
   const [tarotRevealed, setTarotRevealed] = useState<PersonaCard | null>(null);
   const [shuffling, setShuffling] = useState(false);
@@ -88,23 +89,31 @@ function Index() {
 
       {/* Mode switch */}
       <div className="relative z-10 flex justify-center mb-8">
-        <div className="inline-flex rounded-full bg-[var(--muted)] border border-[var(--border)] p-1 text-[13px] cn-serif">
+        <div className="inline-flex rounded-full bg-[var(--muted)] border border-[var(--border)] p-1 text-[13px] cn-serif flex-wrap gap-1">
+          <button
+            onClick={() => setMode("agent")}
+            className={`px-4 sm:px-5 py-2 rounded-full transition ${mode === "agent" ? "bg-[var(--card)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"}`}
+          >
+            AI 帮我挑 ❦
+          </button>
           <button
             onClick={() => { setMode("spread"); setSelected(null); }}
-            className={`px-5 py-2 rounded-full transition ${mode === "spread" ? "bg-[var(--card)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"}`}
+            className={`px-4 sm:px-5 py-2 rounded-full transition ${mode === "spread" ? "bg-[var(--card)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"}`}
           >
             我自己选
           </button>
           <button
             onClick={() => { setMode("tarot"); setTarotRevealed(null); }}
-            className={`px-5 py-2 rounded-full transition ${mode === "tarot" ? "bg-[var(--card)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"}`}
+            className={`px-4 sm:px-5 py-2 rounded-full transition ${mode === "tarot" ? "bg-[var(--card)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"}`}
           >
             让命运决定 ✶
           </button>
         </div>
       </div>
 
-      {mode === "spread" ? (
+      {mode === "agent" ? (
+        <AgentChatView onAccept={handleAccept} />
+      ) : mode === "spread" ? (
         <SpreadView
           selected={selected}
           onSelect={setSelected}
