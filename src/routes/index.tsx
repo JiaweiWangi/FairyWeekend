@@ -245,16 +245,19 @@ function TarotView({
   onAccept: (c: PersonaCard) => void;
   onReset: () => void;
 }) {
-  const CARD_COUNT = 21;
-  const SPREAD = 78;         // 总角度（度）
-  const RADIUS = 520;        // 弧半径（像素）
-  const FAN_W = 720;
-  const FAN_H = 360;
+  const CARD_COUNT = 28;
+  const SPREAD = 112;        // 总角度（度）
+  const RADIUS = 460;        // 弧半径（像素）
+  const CARD_W = 108;
+  const CARD_H = 162;
+  const FAN_W = 880;
+  const FAN_H = 420;
+  const PIVOT_Y = FAN_H + RADIUS - 80; // 圆心 y（容器下方）
 
   const [order, setOrder] = useState(() => Array.from({ length: CARD_COUNT }, (_, i) => i));
   const [hover, setHover] = useState<number | null>(null);
   const [picked, setPicked] = useState<number | null>(null);
-  const [dragOffset, setDragOffset] = useState(0);
+  const [dragShift, setDragShift] = useState(0); // 整扇旋转偏移（度）
   const [shuffling, setShuffling] = useState(false);
   const fanRef = useRef<HTMLDivElement>(null);
   const dragStartX = useRef<number | null>(null);
@@ -266,17 +269,23 @@ function TarotView({
     setHover(null);
     setTimeout(() => {
       setOrder((arr) => [...arr].sort(() => Math.random() - 0.5));
-      setTimeout(() => setShuffling(false), 600);
+      setTimeout(() => setShuffling(false), 700);
     }, 50);
   }
 
-  function pointerToIndex(clientX: number) {
+  function pointerToIndex(clientX: number, clientY: number) {
     const el = fanRef.current;
     if (!el) return null;
     const rect = el.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const ratio = Math.max(0, Math.min(1, x / rect.width));
-    return Math.round(ratio * (CARD_COUNT - 1));
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + PIVOT_Y;
+    const dx = clientX - cx;
+    const dy = cy - clientY;
+    if (dy <= 0) return null;
+    const angleDeg = (Math.atan2(dx, dy) * 180) / Math.PI - dragShift;
+    const t = (angleDeg + SPREAD / 2) / SPREAD;
+    if (t < -0.08 || t > 1.08) return null;
+    return Math.max(0, Math.min(CARD_COUNT - 1, Math.round(t * (CARD_COUNT - 1))));
   }
 
   function onPointerDown(e: React.PointerEvent) {
@@ -287,49 +296,41 @@ function TarotView({
   }
   function onPointerMove(e: React.PointerEvent) {
     if (picked !== null) return;
-    const idx = pointerToIndex(e.clientX);
+    const idx = pointerToIndex(e.clientX, e.clientY);
     if (idx !== null) setHover(idx);
     if (dragStartX.current !== null) {
       const dx = e.clientX - dragStartX.current;
       if (Math.abs(dx) > 4) movedRef.current = true;
-      setDragOffset(Math.max(-60, Math.min(60, dx * 0.4)));
+      setDragShift(Math.max(-9, Math.min(9, dx * 0.04)));
     }
   }
-  function onPointerUp(e: React.PointerEvent) {
+  function onPointerUp() {
     const wasDrag = movedRef.current;
+    const shift = dragShift;
     dragStartX.current = null;
-    setDragOffset(0);
-    if (wasDrag) {
-      // 拖动幅度大就重洗一次
-      if (Math.abs(e.clientX - (e.currentTarget.getBoundingClientRect().left + FAN_W / 2)) > 0) {
-        // 仅做轻微重排，让"被拨过"的感觉成立
-        setOrder((arr) => {
-          const a = [...arr];
-          const shift = Math.sign(dragOffset || 1);
-          if (shift > 0) a.push(a.shift()!); else a.unshift(a.pop()!);
-          return a;
-        });
-      }
+    setDragShift(0);
+    if (wasDrag && Math.abs(shift) > 2) {
+      setOrder((arr) => {
+        const a = [...arr];
+        if (shift > 0) a.push(a.shift()!); else a.unshift(a.pop()!);
+        return a;
+      });
     }
   }
   function onPointerLeave() {
     setHover(null);
-    setDragOffset(0);
+    setDragShift(0);
     dragStartX.current = null;
   }
 
   function handlePick(visualIdx: number) {
     if (picked !== null || shuffling || movedRef.current) return;
     setPicked(visualIdx);
-    // 等飞出动画后再翻牌
     setTimeout(() => onDraw(), 650);
   }
 
-  // 当 revealed 被重置（再抽一次），把扇形也复位
   useEffect(() => {
-    if (!revealed) {
-      setPicked(null);
-    }
+    if (!revealed) setPicked(null);
   }, [revealed]);
 
   return (
@@ -346,62 +347,62 @@ function TarotView({
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerLeave={onPointerLeave}
-            className="relative select-none touch-none"
-            style={{ width: FAN_W, height: FAN_H + 80, maxWidth: "100%" }}
+            className="relative select-none touch-none mx-auto"
+            style={{ width: FAN_W, height: FAN_H, maxWidth: "100%" }}
           >
             {order.map((cardId, i) => {
-              const t = i / (CARD_COUNT - 1);            // 0..1
-              const angle = -SPREAD / 2 + SPREAD * t;     // 角度
+              const t = i / (CARD_COUNT - 1);
+              const angle = -SPREAD / 2 + SPREAD * t + dragShift;
               const isHover = hover === i && picked === null;
               const isPicked = picked === i;
-              const dist = hover === null ? 0 : Math.abs(i - hover);
-              // 邻居推开
-              const push = hover === null || picked !== null
-                ? 0
-                : (i < hover ? -1 : i > hover ? 1 : 0) * Math.max(0, 18 - dist * 6);
-              const lift = isHover ? -28 : 0;
-              const scale = isHover ? 1.06 : 1;
+              const dist = hover === null ? 99 : Math.abs(i - hover);
+              const lift = isHover ? 46 : Math.max(0, 16 - dist * 5); // 沿径向抬起
+              const r = RADIUS - lift;
+              const rad = (angle * Math.PI) / 180;
+              const cx = FAN_W / 2 + r * Math.sin(rad);
+              const cy = PIVOT_Y - r * Math.cos(rad);
+              const scale = isHover ? 1.08 : 1;
 
-              const baseTransform = isPicked
-                ? `translate(-50%, -260px) rotate(0deg) scale(1.15)`
-                : `translate(-50%, 0) rotate(${angle}deg) translateY(${lift}px) translateX(${push + dragOffset * (0.6 + t * 0.4)}px) scale(${scale})`;
+              const transform = isPicked
+                ? `translate(-50%, -50%) rotate(0deg) scale(1.25)`
+                : `translate(-50%, -50%) rotate(${angle}deg) scale(${scale})`;
 
               return (
                 <div
                   key={cardId}
                   onClick={() => handlePick(i)}
-                  className={`absolute card-back rounded-2xl cursor-pointer ${shuffling ? "tarot-shuffle" : ""} ${isPicked ? "tarot-fly" : ""}`}
+                  className={`absolute card-back rounded-xl cursor-pointer ${shuffling ? "tarot-shuffle" : ""} ${isPicked ? "tarot-fly" : ""}`}
                   style={{
-                    left: "50%",
-                    bottom: 0,
-                    width: 130,
-                    height: 200,
-                    transformOrigin: `50% ${RADIUS}px`,
-                    transform: baseTransform,
+                    left: isPicked ? FAN_W / 2 : cx,
+                    top: isPicked ? FAN_H / 2 - 40 : cy,
+                    width: CARD_W,
+                    height: CARD_H,
+                    transform,
+                    transformOrigin: "50% 50%",
                     transition: shuffling
-                      ? "transform 0.5s cubic-bezier(.4,0,.2,1)"
+                      ? "left 0.55s cubic-bezier(.4,0,.2,1), top 0.55s cubic-bezier(.4,0,.2,1), transform 0.55s cubic-bezier(.4,0,.2,1)"
                       : isPicked
-                        ? "transform 0.65s cubic-bezier(.22,1,.36,1)"
-                        : "transform 0.35s cubic-bezier(.22,1,.36,1)",
-                    zIndex: isPicked ? 50 : isHover ? 40 : i,
+                        ? "left 0.6s cubic-bezier(.22,1,.36,1), top 0.6s cubic-bezier(.22,1,.36,1), transform 0.65s cubic-bezier(.22,1,.36,1)"
+                        : "left 0.32s cubic-bezier(.22,1,.36,1), top 0.32s cubic-bezier(.22,1,.36,1), transform 0.32s cubic-bezier(.22,1,.36,1)",
+                    zIndex: isPicked ? 99 : isHover ? 80 : i,
                     boxShadow: isHover
                       ? "0 26px 50px -18px rgba(0,0,0,0.45)"
                       : "0 14px 30px -18px rgba(0,0,0,0.35)",
-                    animationDelay: shuffling ? `${i * 0.025}s` : undefined,
+                    animationDelay: shuffling ? `${i * 0.02}s` : undefined,
                   }}
                 />
               );
             })}
 
-            {/* 桌面底部弧线提示 */}
             <div
-              className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-2 cn-serif text-[10px] tracking-[0.3em] text-[var(--ink-soft)]"
+              className="pointer-events-none absolute left-1/2 -translate-x-1/2 cn-serif text-[10px] tracking-[0.3em] text-[var(--ink-soft)]"
+              style={{ bottom: 6 }}
             >
               ← 拨动牌阵 · 点击抽取 →
             </div>
           </div>
 
-          <div className="mt-6 flex items-center gap-3">
+          <div className="mt-4 flex items-center gap-3">
             <button onClick={reshuffle} disabled={shuffling} className="btn-ghost">
               {shuffling ? "洗牌中…" : "重新洗牌 ✶"}
             </button>
