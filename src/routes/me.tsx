@@ -320,17 +320,17 @@ function NovelView({ sagas, filters, onDelete }: { sagas: ArchivedChapter[]; fil
       )}
 
 
-      {openChapter && (
+      {openEntry && (
         <ChapterDetail
-          ch={openChapter}
-          chapterNo={sagas.length - openIdx}
+          ch={openEntry.ch}
+          chapterNo={openEntry.chapterNo}
           onClose={() => setOpenId(null)}
-          onExport={(mode) => runChapterExport(openChapter, mode)}
-          exporting={exporting && exportJob?.kind === "chapter" && exportJob.ch.chapterId === openChapter.chapterId}
+          onExport={(mode) => runChapterExport(openEntry.ch, mode)}
+          exporting={exporting && exportJob?.kind === "chapter" && exportJob.ch.chapterId === openEntry.ch.chapterId}
           onDelete={() => {
             if (confirm("从连载中移除这一章？")) {
               setOpenId(null);
-              onDelete(openChapter.chapterId);
+              onDelete(openEntry.ch.chapterId);
             }
           }}
         />
