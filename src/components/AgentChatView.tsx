@@ -81,7 +81,11 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
 
   const nextId = () => ++idRef.current;
 
-  function push(msg: Omit<ChatMsg, "id">, delay = 600) {
+  function push(msg: Omit<ChatMsg, "id">, delay = 200) {
+    if (delay <= 0) {
+      setMsgs((m) => [...m, { id: nextId(), ...msg }]);
+      return;
+    }
     setTyping(true);
     setTimeout(() => {
       setMsgs((m) => [...m, { id: nextId(), ...msg }]);
@@ -89,14 +93,15 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
     }, delay);
   }
 
-  // 初始化：agent 欢迎 + 第一个问题（用 ref 守卫，避免 StrictMode 双触发）
+  // 初始化（用 ref 守卫，避免 StrictMode 双触发）
   const initedRef = useRef(false);
   useEffect(() => {
     if (initedRef.current) return;
     initedRef.current = true;
-    push({ who: "agent", text: "嗨，我是今日小说的策划助理 ❦" }, 200);
-    push({ who: "agent", text: "今天不知道想成为谁？我帮你想。先告诉我——你现在大概是什么状态？" }, 1100);
-    push({ who: "agent", chips: MOOD_CHIPS, step: "mood", freeInput: true }, 1900);
+    // 首屏立即给出全部初始内容，不让用户等
+    push({ who: "agent", text: "嗨，我是今日小说的策划助理 ❦" }, 0);
+    push({ who: "agent", text: "今天想成为谁？先告诉我——你现在大概是什么状态？" }, 0);
+    push({ who: "agent", chips: MOOD_CHIPS, step: "mood", freeInput: true }, 0);
   }, []);
 
   // 自动滚到底
@@ -135,36 +140,36 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
 
   function advance(fromStep: Step, curTags: string[], curText: string) {
     if (fromStep === "mood") {
-      push({ who: "agent", text: "好嘞。今天你大概有多少时间？" }, 700);
-      push({ who: "agent", chips: DURATION_CHIPS, step: "duration", freeInput: false }, 1400);
+      push({ who: "agent", text: "好嘞。今天大概有多少时间？" }, 250);
+      push({ who: "agent", chips: DURATION_CHIPS, step: "duration", freeInput: false }, 450);
     } else if (fromStep === "duration") {
-      push({ who: "agent", text: "想要的氛围是哪种？" }, 700);
-      push({ who: "agent", chips: VIBE_CHIPS, step: "vibe", freeInput: false }, 1400);
+      push({ who: "agent", text: "想要的氛围是哪种？" }, 250);
+      push({ who: "agent", chips: VIBE_CHIPS, step: "vibe", freeInput: false }, 450);
     } else if (fromStep === "vibe") {
-      push({ who: "agent", text: "最后——想再用一句话告诉我什么吗？（比如「想去一家从来没去过的咖啡馆」）" }, 700);
-      push({ who: "agent", chips: [{ label: "不用了，给我推荐吧 →", tag: "" }], step: "extra", freeInput: true }, 1400);
+      push({ who: "agent", text: "想再用一句话补充吗？（可选）" }, 250);
+      push({ who: "agent", chips: [{ label: "不用了，给我推荐吧 →", tag: "" }], step: "extra", freeInput: true }, 450);
     } else if (fromStep === "extra") {
       finalize(curTags, curText);
     }
   }
 
   function finalize(curTags: string[], curText: string) {
-    push({ who: "agent", text: "让我想想……" }, 600);
+    push({ who: "agent", text: "让我想想……" }, 200);
     setTimeout(() => {
       const ranked = scoreCards(curTags, curText);
       ranking.current = ranked;
       setRecIdx(0);
-      push({ who: "agent", text: "为你挑了这张卡 ✦" }, 800);
-      push({ who: "agent", card: ranked[0], step: "result" }, 1500);
-    }, 1500);
+      push({ who: "agent", text: "为你挑了这张卡 ✦" }, 250);
+      push({ who: "agent", card: ranked[0], step: "result" }, 500);
+    }, 600);
   }
 
   function reroll() {
     const next = (recIdx + 1) % ranking.current.length;
     setRecIdx(next);
     setMsgs((m) => [...m, { id: nextId(), who: "user", text: "再换一张" }]);
-    push({ who: "agent", text: "好，这张如何？" }, 600);
-    push({ who: "agent", card: ranking.current[next], step: "result" }, 1200);
+    push({ who: "agent", text: "好，这张如何？" }, 200);
+    push({ who: "agent", card: ranking.current[next], step: "result" }, 450);
   }
 
   // 找到最后一条等待输入的 agent 消息

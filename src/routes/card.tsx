@@ -14,12 +14,19 @@ const LOADING_LINES = [
   "把这一天写成一段小说……",
 ];
 
+const CITY_PRESETS = [
+  "上海", "北京", "广州", "深圳", "杭州", "成都",
+  "南京", "苏州", "重庆", "武汉", "西安", "厦门",
+];
+
 function CardPage() {
   const navigate = useNavigate();
   const [card, setCard] = useState<PersonaCard | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [city, setCity] = useState("");
+  const [locating, setLocating] = useState(false);
+  const [autoLocated, setAutoLocated] = useState(false);
   const [loadingIdx, setLoadingIdx] = useState(0);
   const coordsRef = useRef<{ lat: number; lng: number } | null>(null);
 
@@ -27,15 +34,25 @@ function CardPage() {
     const c = loadPendingCard();
     if (!c) { navigate({ to: "/" }); return; }
     setCard(c);
-    // 尝试拿一次定位（不强求）
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => { coordsRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude }; },
-        () => {},
-        { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 },
-      );
-    }
   }, [navigate]);
+
+  function handleAutoLocate() {
+    if (!navigator.geolocation) {
+      setError("浏览器不支持定位，挑一个城市吧");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        coordsRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setAutoLocated(true);
+        setCity(""); // 让 AI 根据经纬度反查
+        setLocating(false);
+      },
+      () => { setLocating(false); setError("定位失败，挑一个城市吧"); },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 },
+    );
+  }
 
   useEffect(() => {
     if (!generating) return;
@@ -132,21 +149,43 @@ function CardPage() {
         </div>
       </div>
 
-      {/* City input */}
+      {/* City picker */}
       <div className="mt-8">
-        <label className="cn-serif text-[11px] tracking-[0.3em] text-[var(--ink-soft)] block mb-2">
+        <label className="cn-serif text-[11px] tracking-[0.3em] text-[var(--ink-soft)] block mb-3">
           你今天在哪
         </label>
-        <input
-          value={city}
-          onChange={(e) => setCity(e.target.value)}
-          placeholder="例：上海·静安   /   北京·东城"
-          className="w-full px-4 py-3 rounded-2xl bg-[var(--input)] border border-[var(--border)] cn-serif text-[15px] text-[var(--ink)] placeholder:text-[var(--ink-soft)]"
-        />
-        <div className="text-[11px] cn-serif text-[var(--ink-soft)] mt-2">
-          留空也行，AI 会按城市猜——开启定位后会更准。
+
+        <button
+          onClick={handleAutoLocate}
+          disabled={locating}
+          className={`w-full mb-3 px-4 py-3 rounded-2xl border cn-serif text-[14px] flex items-center justify-center gap-2 transition ${
+            autoLocated
+              ? "bg-[var(--ink)] text-[var(--card)] border-[var(--ink)]"
+              : "bg-[var(--card)] border-[var(--border)] text-[var(--ink)] hover:bg-[var(--muted)]"
+          }`}
+        >
+          {locating ? "定位中…" : autoLocated ? "✓ 已用我当前的位置" : "📍 用我现在的位置"}
+        </button>
+
+        <div className="text-[11px] cn-serif text-[var(--ink-soft)] mb-2 text-center">
+          或挑一个城市
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {CITY_PRESETS.map((c) => {
+            const active = city === c && !autoLocated;
+            return (
+              <button
+                key={c}
+                onClick={() => { setCity(c); setAutoLocated(false); coordsRef.current = null; }}
+                className={`chip ${active ? "is-active" : ""}`}
+              >
+                {c}
+              </button>
+            );
+          })}
         </div>
       </div>
+
 
       {error && (
         <div className="mt-5 px-4 py-3 rounded-2xl bg-[oklch(0.95_0.05_25)] cn-serif text-sm text-[oklch(0.4_0.15_25)]">
