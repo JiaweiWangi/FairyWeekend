@@ -14,12 +14,19 @@ const LOADING_LINES = [
   "把这一天写成一段小说……",
 ];
 
+const CITY_PRESETS = [
+  "上海", "北京", "广州", "深圳", "杭州", "成都",
+  "南京", "苏州", "重庆", "武汉", "西安", "厦门",
+];
+
 function CardPage() {
   const navigate = useNavigate();
   const [card, setCard] = useState<PersonaCard | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [city, setCity] = useState("");
+  const [locating, setLocating] = useState(false);
+  const [autoLocated, setAutoLocated] = useState(false);
   const [loadingIdx, setLoadingIdx] = useState(0);
   const coordsRef = useRef<{ lat: number; lng: number } | null>(null);
 
@@ -27,15 +34,25 @@ function CardPage() {
     const c = loadPendingCard();
     if (!c) { navigate({ to: "/" }); return; }
     setCard(c);
-    // 尝试拿一次定位（不强求）
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => { coordsRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude }; },
-        () => {},
-        { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 },
-      );
-    }
   }, [navigate]);
+
+  function handleAutoLocate() {
+    if (!navigator.geolocation) {
+      setError("浏览器不支持定位，挑一个城市吧");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        coordsRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setAutoLocated(true);
+        setCity(""); // 让 AI 根据经纬度反查
+        setLocating(false);
+      },
+      () => { setLocating(false); setError("定位失败，挑一个城市吧"); },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 },
+    );
+  }
 
   useEffect(() => {
     if (!generating) return;
