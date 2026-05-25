@@ -217,12 +217,14 @@ function NovelView({ sagas, onDelete }: { sagas: ArchivedChapter[]; onDelete: (i
 }
 
 function ChapterDetail({
-  ch, chapterNo, onClose, onDelete,
+  ch, chapterNo, onClose, onDelete, onExport, exporting,
 }: {
   ch: ArchivedChapter;
   chapterNo: number;
   onClose: () => void;
   onDelete: () => void;
+  onExport: (mode: "download" | "share") => void;
+  exporting: boolean;
 }) {
   const date = new Date(ch.createdAt);
   const dateStr = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
