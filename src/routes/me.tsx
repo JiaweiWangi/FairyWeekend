@@ -105,13 +105,42 @@ function EmptyState({ onGo }: { onGo: () => void }) {
 }
 
 /* ============ 连载小说 ============ */
+type ExportJob =
+  | { kind: "chapter"; ch: ArchivedChapter; chapterNo: number; mode: "download" | "share" }
+  | { kind: "series"; chapters: ArchivedChapter[]; mode: "download" | "share" };
+
 function NovelView({ sagas, onDelete }: { sagas: ArchivedChapter[]; onDelete: (id: string) => void }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const [exportJob, setExportJob] = useState<ExportJob | null>(null);
+  const [exporting, setExporting] = useState(false);
   const openChapter = sagas.find((c) => c.chapterId === openId) ?? null;
   const openIdx = openChapter ? sagas.indexOf(openChapter) : -1;
 
+  function runChapterExport(ch: ArchivedChapter, mode: "download" | "share") {
+    const chapterNo = sagas.length - sagas.indexOf(ch);
+    setExportJob({ kind: "chapter", ch, chapterNo, mode });
+    setExporting(true);
+  }
+  function runSeriesExport(mode: "download" | "share") {
+    setExportJob({ kind: "series", chapters: sagas, mode });
+    setExporting(true);
+  }
+
   return (
     <>
+      <div className="flex items-center justify-between mb-3">
+        <div className="cn-serif text-[11px] text-[var(--ink-soft)]">
+          共 {sagas.length} 章 · 点击任一章查看详情
+        </div>
+        <button
+          onClick={() => runSeriesExport("download")}
+          disabled={exporting}
+          className="cn-serif text-[11px] px-3 py-1.5 rounded-full bg-[var(--card)] border border-[var(--border)] hover:bg-[var(--muted)] disabled:opacity-50"
+        >
+          {exporting && exportJob?.kind === "series" ? "导出中…" : "导出整部连载 PDF ↓"}
+        </button>
+      </div>
+
       <div className="space-y-4">
         {sagas.map((ch, idx) => {
           const date = new Date(ch.createdAt);
@@ -159,6 +188,8 @@ function NovelView({ sagas, onDelete }: { sagas: ArchivedChapter[]; onDelete: (i
           ch={openChapter}
           chapterNo={sagas.length - openIdx}
           onClose={() => setOpenId(null)}
+          onExport={(mode) => runChapterExport(openChapter, mode)}
+          exporting={exporting && exportJob?.kind === "chapter" && exportJob.ch.chapterId === openChapter.chapterId}
           onDelete={() => {
             if (confirm("从连载中移除这一章？")) {
               setOpenId(null);
@@ -166,6 +197,20 @@ function NovelView({ sagas, onDelete }: { sagas: ArchivedChapter[]; onDelete: (i
             }
           }}
         />
+      )}
+
+      {exportJob && (
+        <ExportRunner
+          job={exportJob}
+          onDone={() => { setExporting(false); setExportJob(null); }}
+        />
+      )}
+      {exporting && (
+        <div className="fixed inset-0 z-[80] bg-black/30 backdrop-blur-sm flex items-center justify-center">
+          <div className="rounded-2xl bg-[var(--card)] border border-[var(--border)] px-6 py-4 cn-serif text-[13px] text-[var(--ink)] shadow-lg">
+            正在生成 PDF…
+          </div>
+        </div>
       )}
     </>
   );
