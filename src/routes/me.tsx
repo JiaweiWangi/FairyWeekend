@@ -77,7 +77,7 @@ function MePage() {
         {sagas.length === 0 && tab !== "library" && <EmptyState onGo={() => navigate({ to: "/" })} />}
         {tab === "novel" && sagas.length > 0 && <NovelView sagas={sagas} onDelete={(id) => { deleteChapter(id); setReloadKey(k => k + 1); }} />}
         {tab === "comic" && sagas.length > 0 && <ComicView sagas={sagas} />}
-        {tab === "library" && <LibraryView library={library} empty={sagas.length === 0} onGo={() => navigate({ to: "/" })} />}
+        {tab === "library" && <LibraryView library={library} sagas={sagas} empty={sagas.length === 0} onGo={() => navigate({ to: "/" })} />}
       </main>
     </div>
   );
