@@ -81,7 +81,11 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
 
   const nextId = () => ++idRef.current;
 
-  function push(msg: Omit<ChatMsg, "id">, delay = 600) {
+  function push(msg: Omit<ChatMsg, "id">, delay = 200) {
+    if (delay <= 0) {
+      setMsgs((m) => [...m, { id: nextId(), ...msg }]);
+      return;
+    }
     setTyping(true);
     setTimeout(() => {
       setMsgs((m) => [...m, { id: nextId(), ...msg }]);
@@ -89,14 +93,15 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
     }, delay);
   }
 
-  // 初始化：agent 欢迎 + 第一个问题（用 ref 守卫，避免 StrictMode 双触发）
+  // 初始化（用 ref 守卫，避免 StrictMode 双触发）
   const initedRef = useRef(false);
   useEffect(() => {
     if (initedRef.current) return;
     initedRef.current = true;
-    push({ who: "agent", text: "嗨，我是今日小说的策划助理 ❦" }, 200);
-    push({ who: "agent", text: "今天不知道想成为谁？我帮你想。先告诉我——你现在大概是什么状态？" }, 1100);
-    push({ who: "agent", chips: MOOD_CHIPS, step: "mood", freeInput: true }, 1900);
+    // 首屏立即给出全部初始内容，不让用户等
+    push({ who: "agent", text: "嗨，我是今日小说的策划助理 ❦" }, 0);
+    push({ who: "agent", text: "今天想成为谁？先告诉我——你现在大概是什么状态？" }, 0);
+    push({ who: "agent", chips: MOOD_CHIPS, step: "mood", freeInput: true }, 0);
   }, []);
 
   // 自动滚到底
