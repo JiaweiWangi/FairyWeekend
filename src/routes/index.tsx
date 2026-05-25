@@ -3,10 +3,11 @@ import { useMemo, useState } from "react";
 import { PERSONA_CARDS, drawCard, RARITY_LABEL } from "@/lib/cards";
 import { savePendingCard } from "@/lib/persona-store";
 import type { PersonaCard } from "@/lib/persona-types";
+import { AgentChatView } from "@/components/AgentChatView";
 
 export const Route = createFileRoute("/")({ component: Index });
 
-type Mode = "spread" | "tarot";
+type Mode = "agent" | "spread" | "tarot";
 
 function Index() {
   const navigate = useNavigate();
