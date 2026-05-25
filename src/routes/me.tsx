@@ -607,30 +607,54 @@ function ComicPanel({
 /* ============ 收藏馆：地点 / 活动 ============ */
 type LibKind = "place" | "activity";
 
+function applyLibFilters(list: LibraryEntry[], filters: MeFilters): LibraryEntry[] {
+  let out = list.filter((e) => {
+    if (filters.onlyPhoto && !e.hasPhoto) return false;
+    if (filters.onlyNote && !e.hasNote) return false;
+    if (filters.minLevel > 0 && e.level < filters.minLevel) return false;
+    return true;
+  });
+  if (filters.sort === "recent") out = [...out].sort((a, b) => b.lastAt - a.lastAt);
+  else if (filters.sort === "enhanced") out = [...out].sort((a, b) => b.level - a.level || b.visits - a.visits);
+  // "order" keeps the default sort from buildLibrary (by level desc)
+  return out;
+}
+
 function LibraryView({
-  library, sagas, empty, onGo,
+  library, sagas, empty, onGo, filters,
 }: {
   library: ReturnType<typeof buildLibrary>;
   sagas: ArchivedChapter[];
   empty: boolean;
   onGo: () => void;
+  filters: MeFilters;
 }) {
   const [open, setOpen] = useState<{ entry: LibraryEntry; kind: LibKind } | null>(null);
+  const places = useMemo(() => applyLibFilters(library.places, filters), [library.places, filters]);
+  const activities = useMemo(() => applyLibFilters(library.activities, filters), [library.activities, filters]);
 
   if (empty) return <EmptyState onGo={onGo} />;
   return (
     <>
       <div className="space-y-7">
-        <Section title="地点收藏" subtitle="PLACES · 走过的真实角落">
+        <Section title="地点收藏" subtitle={`PLACES · ${places.length}/${library.places.length}`}>
           <div className="grid grid-cols-1 gap-2.5">
-            {library.places.map((p) => (
+            {places.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--card)]/60 p-4 text-center cn-serif text-[11px] text-[var(--ink-soft)]">
+                没有符合条件的地点
+              </div>
+            ) : places.map((p) => (
               <LibCard key={p.name} entry={p} kind="place" onOpen={() => setOpen({ entry: p, kind: "place" })} />
             ))}
           </div>
         </Section>
-        <Section title="活动收藏" subtitle="ACTIVITIES · 做过的具体小事">
+        <Section title="活动收藏" subtitle={`ACTIVITIES · ${activities.length}/${library.activities.length}`}>
           <div className="grid grid-cols-1 gap-2.5">
-            {library.activities.map((a) => (
+            {activities.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--card)]/60 p-4 text-center cn-serif text-[11px] text-[var(--ink-soft)]">
+                没有符合条件的活动
+              </div>
+            ) : activities.map((a) => (
               <LibCard key={a.name} entry={a} kind="activity" onOpen={() => setOpen({ entry: a, kind: "activity" })} />
             ))}
           </div>
