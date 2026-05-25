@@ -45,6 +45,8 @@ export interface LibraryEntry {
   visits: number;    // total times visited
   lastAt: number;
   emotions: string[];
+  hasPhoto: boolean;
+  hasNote: boolean;
 }
 
 export function buildLibrary(): { places: LibraryEntry[]; activities: LibraryEntry[] } {
