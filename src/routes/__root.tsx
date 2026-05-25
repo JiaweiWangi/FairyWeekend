@@ -71,6 +71,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
+      { httpEquiv: "Permissions-Policy", content: "geolocation=*" },
       {
         name: "viewport",
         content:
