@@ -47,6 +47,25 @@ export function downloadBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+export async function elementToImageBlob(el: HTMLElement): Promise<Blob> {
+  await new Promise((r) => requestAnimationFrame(() => r(null)));
+  await new Promise((r) => setTimeout(r, 80));
+
+  const canvas = await html2canvas(el, {
+    scale: 2,
+    backgroundColor: "#fdfaf6",
+    useCORS: true,
+    logging: false,
+    windowWidth: el.scrollWidth,
+  });
+
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, "image/png", 0.95),
+  );
+  if (!blob) throw new Error("image export failed");
+  return blob;
+}
+
 /** Try Web Share API with the PDF file. Falls back to download. */
 export async function shareOrDownload(
   blob: Blob,
