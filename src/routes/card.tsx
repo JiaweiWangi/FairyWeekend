@@ -149,21 +149,43 @@ function CardPage() {
         </div>
       </div>
 
-      {/* City input */}
+      {/* City picker */}
       <div className="mt-8">
-        <label className="cn-serif text-[11px] tracking-[0.3em] text-[var(--ink-soft)] block mb-2">
+        <label className="cn-serif text-[11px] tracking-[0.3em] text-[var(--ink-soft)] block mb-3">
           你今天在哪
         </label>
-        <input
-          value={city}
-          onChange={(e) => setCity(e.target.value)}
-          placeholder="例：上海·静安   /   北京·东城"
-          className="w-full px-4 py-3 rounded-2xl bg-[var(--input)] border border-[var(--border)] cn-serif text-[15px] text-[var(--ink)] placeholder:text-[var(--ink-soft)]"
-        />
-        <div className="text-[11px] cn-serif text-[var(--ink-soft)] mt-2">
-          留空也行，AI 会按城市猜——开启定位后会更准。
+
+        <button
+          onClick={handleAutoLocate}
+          disabled={locating}
+          className={`w-full mb-3 px-4 py-3 rounded-2xl border cn-serif text-[14px] flex items-center justify-center gap-2 transition ${
+            autoLocated
+              ? "bg-[var(--ink)] text-[var(--card)] border-[var(--ink)]"
+              : "bg-[var(--card)] border-[var(--border)] text-[var(--ink)] hover:bg-[var(--muted)]"
+          }`}
+        >
+          {locating ? "定位中…" : autoLocated ? "✓ 已用我当前的位置" : "📍 用我现在的位置"}
+        </button>
+
+        <div className="text-[11px] cn-serif text-[var(--ink-soft)] mb-2 text-center">
+          或挑一个城市
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {CITY_PRESETS.map((c) => {
+            const active = city === c && !autoLocated;
+            return (
+              <button
+                key={c}
+                onClick={() => { setCity(c); setAutoLocated(false); coordsRef.current = null; }}
+                className={`chip ${active ? "is-active" : ""}`}
+              >
+                {c}
+              </button>
+            );
+          })}
         </div>
       </div>
+
 
       {error && (
         <div className="mt-5 px-4 py-3 rounded-2xl bg-[oklch(0.95_0.05_25)] cn-serif text-sm text-[oklch(0.4_0.15_25)]">
