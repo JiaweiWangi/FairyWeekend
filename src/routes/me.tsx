@@ -403,21 +403,47 @@ function ComicPanel({
 }
 
 /* ============ 收藏馆：地点 / 活动 ============ */
-function LibraryView({ library, empty, onGo }: { library: ReturnType<typeof buildLibrary>; empty: boolean; onGo: () => void }) {
+type LibKind = "place" | "activity";
+
+function LibraryView({
+  library, sagas, empty, onGo,
+}: {
+  library: ReturnType<typeof buildLibrary>;
+  sagas: ArchivedChapter[];
+  empty: boolean;
+  onGo: () => void;
+}) {
+  const [open, setOpen] = useState<{ entry: LibraryEntry; kind: LibKind } | null>(null);
+
   if (empty) return <EmptyState onGo={onGo} />;
   return (
-    <div className="space-y-7">
-      <Section title="地点收藏" subtitle="PLACES · 走过的真实角落">
-        <div className="grid grid-cols-1 gap-2.5">
-          {library.places.map((p) => <LibCard key={p.name} entry={p} kind="place" />)}
-        </div>
-      </Section>
-      <Section title="活动收藏" subtitle="ACTIVITIES · 做过的具体小事">
-        <div className="grid grid-cols-1 gap-2.5">
-          {library.activities.map((a) => <LibCard key={a.name} entry={a} kind="activity" />)}
-        </div>
-      </Section>
-    </div>
+    <>
+      <div className="space-y-7">
+        <Section title="地点收藏" subtitle="PLACES · 走过的真实角落">
+          <div className="grid grid-cols-1 gap-2.5">
+            {library.places.map((p) => (
+              <LibCard key={p.name} entry={p} kind="place" onOpen={() => setOpen({ entry: p, kind: "place" })} />
+            ))}
+          </div>
+        </Section>
+        <Section title="活动收藏" subtitle="ACTIVITIES · 做过的具体小事">
+          <div className="grid grid-cols-1 gap-2.5">
+            {library.activities.map((a) => (
+              <LibCard key={a.name} entry={a} kind="activity" onOpen={() => setOpen({ entry: a, kind: "activity" })} />
+            ))}
+          </div>
+        </Section>
+      </div>
+
+      {open && (
+        <LibraryDetail
+          entry={open.entry}
+          kind={open.kind}
+          sagas={sagas}
+          onClose={() => setOpen(null)}
+        />
+      )}
+    </>
   );
 }
 
@@ -433,11 +459,14 @@ function Section({ title, subtitle, children }: { title: string; subtitle: strin
   );
 }
 
-function LibCard({ entry, kind }: { entry: LibraryEntry; kind: "place" | "activity" }) {
+function LibCard({ entry, kind, onOpen }: { entry: LibraryEntry; kind: LibKind; onOpen: () => void }) {
   const stars = Math.min(5, Math.max(1, entry.level || 1));
   const lit = entry.level > 0;
   return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3 flex items-center gap-3">
+    <button
+      onClick={onOpen}
+      className="w-full text-left rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3 flex items-center gap-3 transition-transform hover:-translate-y-0.5 hover:shadow-[0_14px_36px_-22px_rgba(0,0,0,0.3)]"
+    >
       <div className="w-14 h-14 rounded-xl shrink-0 flex items-center justify-center bg-[var(--muted)] overflow-hidden">
         {kind === "place"
           ? <VenueIcon kind={detectVenue(entry.type, entry.name)} size={48} />
@@ -456,10 +485,199 @@ function LibCard({ entry, kind }: { entry: LibraryEntry; kind: "place" | "activi
           </div>
         )}
       </div>
-      <div className="display text-[12px] tracking-widest" title={`Lv.${entry.level}`}>
-        {Array.from({ length: 5 }).map((_, i) => (
-          <span key={i} style={{ opacity: i < stars && lit ? 1 : 0.2 }}>✦</span>
-        ))}
+      <div className="flex flex-col items-end gap-1 shrink-0">
+        <div className="display text-[12px] tracking-widest" title={`Lv.${entry.level}`}>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <span key={i} style={{ opacity: i < stars && lit ? 1 : 0.2 }}>✦</span>
+          ))}
+        </div>
+        <span className="display text-[9px] tracking-[0.2em] text-[var(--ink-soft)]">详情 →</span>
+      </div>
+    </button>
+  );
+}
+
+interface Appearance {
+  chapterId: string;
+  chapterNo: number;
+  date: Date;
+  card: ArchivedChapter["card"];
+  city?: string;
+  scene: ArchivedChapter["journey"]["scenes"][number];
+  rec?: NonNullable<ArchivedChapter["sceneRecords"]>[number];
+  enhanced: boolean;
+}
+
+function LibraryDetail({
+  entry, kind, sagas, onClose,
+}: {
+  entry: LibraryEntry;
+  kind: LibKind;
+  sagas: ArchivedChapter[];
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  // 收集所有出现：按时间倒序
+  const appearances: Appearance[] = [];
+  sagas.forEach((ch, idx) => {
+    const chapterNo = sagas.length - idx;
+    for (const s of ch.journey.scenes) {
+      if (!ch.completedSceneOrders.includes(s.order)) continue;
+      const matched = kind === "place" ? s.location_name === entry.name : s.action_task === entry.name;
+      if (!matched) continue;
+      const rec = ch.sceneRecords?.[s.order];
+      appearances.push({
+        chapterId: ch.chapterId,
+        chapterNo,
+        date: new Date(rec?.completedAt ?? ch.archivedAt),
+        card: ch.card,
+        city: ch.city,
+        scene: s,
+        rec,
+        enhanced: !!(rec?.note || rec?.photo),
+      });
+    }
+  });
+  appearances.sort((a, b) => b.date.getTime() - a.date.getTime());
+
+  const photos = appearances.filter((a) => a.rec?.photo);
+  const lastStr = appearances.length
+    ? `${appearances[0].date.getFullYear()}.${String(appearances[0].date.getMonth() + 1).padStart(2, "0")}.${String(appearances[0].date.getDate()).padStart(2, "0")}`
+    : "-";
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/45 backdrop-blur-sm" onClick={onClose} />
+      <div
+        className="relative w-full sm:max-w-xl max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-[var(--card)] border border-[var(--border)] shadow-[0_30px_80px_-30px_rgba(0,0,0,0.5)] fade-up"
+        role="dialog"
+        aria-modal="true"
+      >
+        {/* Header */}
+        <div className="relative px-5 pt-6 pb-5 border-b border-[var(--border)]" style={{ background: "linear-gradient(180deg, var(--muted) 0%, transparent 100%)" }}>
+          <button onClick={onClose} aria-label="关闭" className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/85 text-[var(--ink)] flex items-center justify-center text-[14px]">✕</button>
+          <div className="flex items-center gap-3">
+            <div className="w-16 h-16 rounded-2xl shrink-0 flex items-center justify-center bg-[var(--card)] border border-[var(--border)] overflow-hidden">
+              {kind === "place"
+                ? <VenueIcon kind={detectVenue(entry.type, entry.name)} size={56} />
+                : <div className="text-3xl">✶</div>}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)]">
+                {kind === "place" ? "PLACE · 地点" : "ACTIVITY · 活动"}
+              </div>
+              <div className="cn-serif text-[18px] text-[var(--ink)] truncate">{entry.name}</div>
+              <div className="cn-serif text-[11px] text-[var(--ink-soft)] truncate">{entry.type}</div>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-4 gap-2">
+            <MiniStat n={entry.visits} label="访问" />
+            <MiniStat n={entry.level} label="增强" />
+            <MiniStat n={photos.length} label="照片" />
+            <MiniStat n={lastStr} label="最近" small />
+          </div>
+
+          {entry.emotions.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1">
+              {entry.emotions.map((e) => (
+                <span key={e} className="text-[10px] cn-serif px-2 py-0.5 rounded-full bg-[var(--card)] border border-[var(--border)] text-[var(--ink-soft)]">{e}</span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Photo strip */}
+        {photos.length > 0 && (
+          <div className="px-5 pt-4">
+            <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)] mb-2">PHOTOS · {photos.length}</div>
+            <div className="flex gap-2 overflow-x-auto pb-2 -mx-5 px-5 snap-x">
+              {photos.map((a, i) => (
+                <img
+                  key={`${a.chapterId}-${a.scene.order}-${i}`}
+                  src={a.rec!.photo!}
+                  alt=""
+                  className="h-28 w-28 object-cover rounded-xl border border-[var(--border)] shrink-0 snap-start"
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Appearances timeline */}
+        <div className="px-5 pt-5 pb-6">
+          <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)] mb-3">
+            APPEARANCES · 出现的章节 ({appearances.length})
+          </div>
+          <ol className="space-y-5">
+            {appearances.map((a, i) => {
+              const dateStr = `${a.date.getFullYear()}.${String(a.date.getMonth() + 1).padStart(2, "0")}.${String(a.date.getDate()).padStart(2, "0")}`;
+              const timeStr = `${String(a.date.getHours()).padStart(2, "0")}:${String(a.date.getMinutes()).padStart(2, "0")}`;
+              return (
+                <li key={`${a.chapterId}-${a.scene.order}-${i}`} className={`relative pl-7 border-l-2 ${a.enhanced ? "border-[var(--accent)]" : "border-[var(--border)]"}`}>
+                  <span
+                    className="absolute -left-[10px] top-0.5 w-[18px] h-[18px] rounded-full bg-[var(--card)] border-2 border-[var(--accent)] flex items-center justify-center text-[10px] text-[var(--accent)]"
+                    style={{ opacity: a.enhanced ? 1 : 0.45 }}
+                  >
+                    {a.enhanced ? "✦" : "·"}
+                  </span>
+
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <div
+                      className="w-9 h-9 rounded-lg overflow-hidden shrink-0 border border-[var(--border)]"
+                      style={a.card.cover ? undefined : { background: `linear-gradient(135deg, ${a.card.colors[0]}, ${a.card.colors[1]})` }}
+                    >
+                      {a.card.cover && <img src={a.card.cover} alt="" className="w-full h-full object-cover" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="display italic text-[10px] text-[var(--ink-soft)]">
+                        CH.{String(a.chapterNo).padStart(2, "0")} · {dateStr} {timeStr} {a.city && `· ${a.city}`}
+                      </div>
+                      <div className="cn-serif text-[13px] text-[var(--ink)] truncate">「{a.card.identity}」</div>
+                    </div>
+                    {a.rec?.mood && <span className="text-[16px] shrink-0">{a.rec.mood}</span>}
+                  </div>
+
+                  <div className="cn-serif text-[13px] text-[var(--ink)]">
+                    § {a.scene.order} {a.scene.scene_name}
+                  </div>
+                  {kind === "place" && (
+                    <div className="cn-serif text-[11px] text-[var(--ink-soft)] mt-0.5">→ {a.scene.action_task}</div>
+                  )}
+                  {kind === "activity" && (
+                    <div className="cn-serif text-[11px] text-[var(--ink-soft)] mt-0.5">@ {a.scene.location_name}</div>
+                  )}
+
+                  {a.rec?.photo && (
+                    <img src={a.rec.photo} alt="" className="mt-2 rounded-xl border border-[var(--border)] max-h-52 object-cover" />
+                  )}
+                  {a.rec?.note && (
+                    <blockquote className="mt-2 cn-serif text-[13px] text-[var(--ink)] italic border-l-2 border-[var(--accent)]/50 pl-3">
+                      "{a.rec.note}"
+                    </blockquote>
+                  )}
+                  {a.enhanced && (
+                    <div className="mt-1 display text-[10px] tracking-[0.2em] text-[var(--accent)]">+1 ENHANCE</div>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+
+        <div className="px-5 py-4 border-t border-[var(--border)] sticky bottom-0 bg-[var(--card)]/95 backdrop-blur flex justify-end">
+          <button onClick={onClose} className="btn-soft">关闭</button>
+        </div>
       </div>
     </div>
   );
