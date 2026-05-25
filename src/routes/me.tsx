@@ -8,11 +8,21 @@ import { elementToPdfBlob, downloadBlob, shareOrDownload } from "@/lib/export-pd
 export const Route = createFileRoute("/me")({ component: MePage });
 
 type Tab = "novel" | "comic" | "library";
+type SortKey = "recent" | "enhanced" | "order";
+export type MeFilters = {
+  sort: SortKey;
+  onlyPhoto: boolean;
+  onlyNote: boolean;
+  minLevel: number; // 0/1/2/3
+};
 
 function MePage() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>("novel");
+  const [tabs, setTabs] = useState<Set<Tab>>(new Set(["novel"]));
   const [reloadKey, setReloadKey] = useState(0);
+  const [filters, setFilters] = useState<MeFilters>({
+    sort: "recent", onlyPhoto: false, onlyNote: false, minLevel: 0,
+  });
 
   const sagas = useMemo(() => loadSagas(), [reloadKey]);
   const library = useMemo(() => buildLibrary(), [reloadKey]);
@@ -27,6 +37,20 @@ function MePage() {
     const rarities = new Set(sagas.map((c) => c.card.rarity));
     return { chapters, scenes, enhanced, rarities: rarities.size };
   }, [sagas]);
+
+  function toggleTab(t: Tab) {
+    setTabs((prev) => {
+      const next = new Set(prev);
+      if (next.has(t)) { if (next.size > 1) next.delete(t); }
+      else next.add(t);
+      return next;
+    });
+  }
+
+  const showNovel = tabs.has("novel");
+  const showComic = tabs.has("comic");
+  const showLibrary = tabs.has("library");
+  const showFilters = showNovel || showLibrary;
 
   return (
     <div className="min-h-screen pb-24" style={{ background: "linear-gradient(180deg, #fdfaf6 0%, #f6efe4 60%, #ede4d3 100%)" }}>
@@ -55,34 +79,111 @@ function MePage() {
         </div>
       </header>
 
-      {/* Tabs */}
+      {/* Tabs (multi-select) */}
       <div className="max-w-xl mx-auto px-5 mt-6 flex justify-center">
         <div className="inline-flex rounded-full bg-[var(--muted)] border border-[var(--border)] p-1 text-[12px] cn-serif">
           {([
             ["novel", "连载小说"],
             ["comic", "漫画分镜"],
             ["library", "收藏馆"],
-          ] as const).map(([k, l]) => (
-            <button
-              key={k}
-              onClick={() => setTab(k)}
-              className={`px-4 py-1.5 rounded-full transition ${tab === k ? "bg-[var(--card)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"}`}
-            >
-              {l}
-            </button>
-          ))}
+          ] as const).map(([k, l]) => {
+            const active = tabs.has(k);
+            return (
+              <button
+                key={k}
+                onClick={() => toggleTab(k)}
+                className={`px-4 py-1.5 rounded-full transition ${active ? "bg-[var(--card)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"}`}
+              >
+                {l}
+              </button>
+            );
+          })}
         </div>
       </div>
+      <div className="max-w-xl mx-auto px-5 mt-2 text-center">
+        <div className="cn-serif text-[10px] text-[var(--ink-soft)]">点选可同时切换多个视图</div>
+      </div>
 
-      <main className="max-w-xl mx-auto px-5 mt-6">
-        {sagas.length === 0 && tab !== "library" && <EmptyState onGo={() => navigate({ to: "/" })} />}
-        {tab === "novel" && sagas.length > 0 && <NovelView sagas={sagas} onDelete={(id) => { deleteChapter(id); setReloadKey(k => k + 1); }} />}
-        {tab === "comic" && sagas.length > 0 && <ComicView sagas={sagas} />}
-        {tab === "library" && <LibraryView library={library} sagas={sagas} empty={sagas.length === 0} onGo={() => navigate({ to: "/" })} />}
+      {/* Filter / Sort bar */}
+      {showFilters && sagas.length > 0 && (
+        <div className="max-w-xl mx-auto px-5 mt-4">
+          <FilterBar filters={filters} onChange={setFilters} />
+        </div>
+      )}
+
+      <main className="max-w-xl mx-auto px-5 mt-6 space-y-10">
+        {sagas.length === 0 && !showLibrary && <EmptyState onGo={() => navigate({ to: "/" })} />}
+        {showNovel && sagas.length > 0 && (
+          <NovelView
+            sagas={sagas}
+            filters={filters}
+            onDelete={(id) => { deleteChapter(id); setReloadKey(k => k + 1); }}
+          />
+        )}
+        {showComic && sagas.length > 0 && <ComicView sagas={sagas} />}
+        {showLibrary && (
+          <LibraryView
+            library={library}
+            sagas={sagas}
+            filters={filters}
+            empty={sagas.length === 0}
+            onGo={() => navigate({ to: "/" })}
+          />
+        )}
       </main>
     </div>
   );
 }
+
+function FilterBar({ filters, onChange }: { filters: MeFilters; onChange: (f: MeFilters) => void }) {
+  const f = filters;
+  const set = (patch: Partial<MeFilters>) => onChange({ ...f, ...patch });
+  const sorts: { k: SortKey; l: string }[] = [
+    { k: "recent", l: "最近访问" },
+    { k: "enhanced", l: "增强多" },
+    { k: "order", l: "章节顺序" },
+  ];
+  const Chip = ({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) => (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1 rounded-full cn-serif text-[11px] border transition ${
+        on
+          ? "bg-[var(--ink)] text-[var(--card)] border-[var(--ink)]"
+          : "bg-[var(--card)] text-[var(--ink-soft)] border-[var(--border)] hover:text-[var(--ink)]"
+      }`}
+    >
+      {children}
+    </button>
+  );
+  return (
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)]/80 backdrop-blur px-3 py-3 space-y-2.5">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="display text-[9px] tracking-[0.3em] text-[var(--ink-soft)] mr-1">SORT</span>
+        {sorts.map((s) => (
+          <Chip key={s.k} on={f.sort === s.k} onClick={() => set({ sort: s.k })}>{s.l}</Chip>
+        ))}
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="display text-[9px] tracking-[0.3em] text-[var(--ink-soft)] mr-1">FILTER</span>
+        <Chip on={f.onlyPhoto} onClick={() => set({ onlyPhoto: !f.onlyPhoto })}>📷 仅有照片</Chip>
+        <Chip on={f.onlyNote} onClick={() => set({ onlyNote: !f.onlyNote })}>✎ 仅有随笔</Chip>
+        <span className="display text-[9px] tracking-[0.3em] text-[var(--ink-soft)] ml-2 mr-1">增强 ≥</span>
+        {[0, 1, 2, 3].map((n) => (
+          <Chip key={n} on={f.minLevel === n} onClick={() => set({ minLevel: n })}>{n}</Chip>
+        ))}
+        {(f.onlyPhoto || f.onlyNote || f.minLevel > 0 || f.sort !== "recent") && (
+          <button
+            onClick={() => onChange({ sort: "recent", onlyPhoto: false, onlyNote: false, minLevel: 0 })}
+            className="ml-auto cn-serif text-[11px] text-[var(--ink-soft)] underline underline-offset-2"
+          >
+            重置
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 function StatChip({ n, label }: { n: number; label: string }) {
   return (
@@ -109,16 +210,43 @@ type ExportJob =
   | { kind: "chapter"; ch: ArchivedChapter; chapterNo: number; mode: "download" | "share" }
   | { kind: "series"; chapters: ArchivedChapter[]; mode: "download" | "share" };
 
-function NovelView({ sagas, onDelete }: { sagas: ArchivedChapter[]; onDelete: (id: string) => void }) {
+function chapterMeta(ch: ArchivedChapter) {
+  const recs = Object.values(ch.sceneRecords ?? {});
+  const enhanced = recs.filter((r) => r.note || r.photo).length;
+  const hasPhoto = recs.some((r) => !!r.photo);
+  const hasNote = recs.some((r) => !!r.note);
+  const lastAt = recs.reduce((m, r) => Math.max(m, r.completedAt ?? 0), ch.archivedAt ?? ch.createdAt);
+  return { enhanced, hasPhoto, hasNote, lastAt };
+}
+
+function NovelView({ sagas, filters, onDelete }: { sagas: ArchivedChapter[]; filters: MeFilters; onDelete: (id: string) => void }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [exportJob, setExportJob] = useState<ExportJob | null>(null);
   const [exporting, setExporting] = useState(false);
-  const openChapter = sagas.find((c) => c.chapterId === openId) ?? null;
-  const openIdx = openChapter ? sagas.indexOf(openChapter) : -1;
+
+  // Original chapter numbers come from original order (newest first)
+  const indexed = useMemo(
+    () => sagas.map((ch, idx) => ({ ch, chapterNo: sagas.length - idx, meta: chapterMeta(ch) })),
+    [sagas]
+  );
+  const visible = useMemo(() => {
+    let list = indexed.filter(({ meta }) => {
+      if (filters.onlyPhoto && !meta.hasPhoto) return false;
+      if (filters.onlyNote && !meta.hasNote) return false;
+      if (filters.minLevel > 0 && meta.enhanced < filters.minLevel) return false;
+      return true;
+    });
+    if (filters.sort === "enhanced") list = [...list].sort((a, b) => b.meta.enhanced - a.meta.enhanced || b.meta.lastAt - a.meta.lastAt);
+    else if (filters.sort === "recent") list = [...list].sort((a, b) => b.meta.lastAt - a.meta.lastAt);
+    // "order" keeps original (newest chapter first)
+    return list;
+  }, [indexed, filters]);
+
+  const openEntry = visible.find((v) => v.ch.chapterId === openId) ?? indexed.find((v) => v.ch.chapterId === openId) ?? null;
 
   function runChapterExport(ch: ArchivedChapter, mode: "download" | "share") {
-    const chapterNo = sagas.length - sagas.indexOf(ch);
-    setExportJob({ kind: "chapter", ch, chapterNo, mode });
+    const entry = indexed.find((v) => v.ch.chapterId === ch.chapterId);
+    setExportJob({ kind: "chapter", ch, chapterNo: entry?.chapterNo ?? 1, mode });
     setExporting(true);
   }
   function runSeriesExport(mode: "download" | "share") {
@@ -130,7 +258,7 @@ function NovelView({ sagas, onDelete }: { sagas: ArchivedChapter[]; onDelete: (i
     <>
       <div className="flex items-center justify-between mb-3">
         <div className="cn-serif text-[11px] text-[var(--ink-soft)]">
-          共 {sagas.length} 章 · 点击任一章查看详情
+          显示 {visible.length}/{sagas.length} 章 · 点击查看详情
         </div>
         <button
           onClick={() => runSeriesExport("download")}
@@ -141,14 +269,17 @@ function NovelView({ sagas, onDelete }: { sagas: ArchivedChapter[]; onDelete: (i
         </button>
       </div>
 
+      {visible.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--card)]/60 p-6 text-center cn-serif text-[12px] text-[var(--ink-soft)]">
+          没有符合筛选条件的章节
+        </div>
+      ) : (
       <div className="space-y-4">
-        {sagas.map((ch, idx) => {
+        {visible.map(({ ch, chapterNo, meta }) => {
           const date = new Date(ch.createdAt);
           const dateStr = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
-          const chapterNo = sagas.length - idx;
           const total = ch.journey.scenes.length;
           const done = ch.completedSceneOrders.length;
-          const enhanced = Object.values(ch.sceneRecords ?? {}).filter((r) => r.note || r.photo).length;
           const pct = total ? Math.round((done / total) * 100) : 0;
           return (
             <button
@@ -171,7 +302,11 @@ function NovelView({ sagas, onDelete }: { sagas: ArchivedChapter[]; onDelete: (i
               </div>
               <div className="px-4 py-3">
                 <div className="flex items-center justify-between text-[11px] cn-serif text-[var(--ink-soft)]">
-                  <span>{done}/{total} 已点亮 · 增强 {enhanced}</span>
+                  <span className="flex items-center gap-1.5">
+                    {done}/{total} 已点亮 · 增强 {meta.enhanced}
+                    {meta.hasPhoto && <span title="有照片">📷</span>}
+                    {meta.hasNote && <span title="有随笔">✎</span>}
+                  </span>
                   <span className="display tracking-[0.2em]">查看 →</span>
                 </div>
                 <div className="mt-2 h-1.5 rounded-full bg-[var(--muted)] overflow-hidden">
@@ -182,18 +317,20 @@ function NovelView({ sagas, onDelete }: { sagas: ArchivedChapter[]; onDelete: (i
           );
         })}
       </div>
+      )}
 
-      {openChapter && (
+
+      {openEntry && (
         <ChapterDetail
-          ch={openChapter}
-          chapterNo={sagas.length - openIdx}
+          ch={openEntry.ch}
+          chapterNo={openEntry.chapterNo}
           onClose={() => setOpenId(null)}
-          onExport={(mode) => runChapterExport(openChapter, mode)}
-          exporting={exporting && exportJob?.kind === "chapter" && exportJob.ch.chapterId === openChapter.chapterId}
+          onExport={(mode) => runChapterExport(openEntry.ch, mode)}
+          exporting={exporting && exportJob?.kind === "chapter" && exportJob.ch.chapterId === openEntry.ch.chapterId}
           onDelete={() => {
             if (confirm("从连载中移除这一章？")) {
               setOpenId(null);
-              onDelete(openChapter.chapterId);
+              onDelete(openEntry.ch.chapterId);
             }
           }}
         />
@@ -470,30 +607,54 @@ function ComicPanel({
 /* ============ 收藏馆：地点 / 活动 ============ */
 type LibKind = "place" | "activity";
 
+function applyLibFilters(list: LibraryEntry[], filters: MeFilters): LibraryEntry[] {
+  let out = list.filter((e) => {
+    if (filters.onlyPhoto && !e.hasPhoto) return false;
+    if (filters.onlyNote && !e.hasNote) return false;
+    if (filters.minLevel > 0 && e.level < filters.minLevel) return false;
+    return true;
+  });
+  if (filters.sort === "recent") out = [...out].sort((a, b) => b.lastAt - a.lastAt);
+  else if (filters.sort === "enhanced") out = [...out].sort((a, b) => b.level - a.level || b.visits - a.visits);
+  // "order" keeps the default sort from buildLibrary (by level desc)
+  return out;
+}
+
 function LibraryView({
-  library, sagas, empty, onGo,
+  library, sagas, empty, onGo, filters,
 }: {
   library: ReturnType<typeof buildLibrary>;
   sagas: ArchivedChapter[];
   empty: boolean;
   onGo: () => void;
+  filters: MeFilters;
 }) {
   const [open, setOpen] = useState<{ entry: LibraryEntry; kind: LibKind } | null>(null);
+  const places = useMemo(() => applyLibFilters(library.places, filters), [library.places, filters]);
+  const activities = useMemo(() => applyLibFilters(library.activities, filters), [library.activities, filters]);
 
   if (empty) return <EmptyState onGo={onGo} />;
   return (
     <>
       <div className="space-y-7">
-        <Section title="地点收藏" subtitle="PLACES · 走过的真实角落">
+        <Section title="地点收藏" subtitle={`PLACES · ${places.length}/${library.places.length}`}>
           <div className="grid grid-cols-1 gap-2.5">
-            {library.places.map((p) => (
+            {places.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--card)]/60 p-4 text-center cn-serif text-[11px] text-[var(--ink-soft)]">
+                没有符合条件的地点
+              </div>
+            ) : places.map((p) => (
               <LibCard key={p.name} entry={p} kind="place" onOpen={() => setOpen({ entry: p, kind: "place" })} />
             ))}
           </div>
         </Section>
-        <Section title="活动收藏" subtitle="ACTIVITIES · 做过的具体小事">
+        <Section title="活动收藏" subtitle={`ACTIVITIES · ${activities.length}/${library.activities.length}`}>
           <div className="grid grid-cols-1 gap-2.5">
-            {library.activities.map((a) => (
+            {activities.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--card)]/60 p-4 text-center cn-serif text-[11px] text-[var(--ink-soft)]">
+                没有符合条件的活动
+              </div>
+            ) : activities.map((a) => (
               <LibCard key={a.name} entry={a} kind="activity" onOpen={() => setOpen({ entry: a, kind: "activity" })} />
             ))}
           </div>

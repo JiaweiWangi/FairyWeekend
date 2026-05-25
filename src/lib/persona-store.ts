@@ -45,6 +45,8 @@ export interface LibraryEntry {
   visits: number;    // total times visited
   lastAt: number;
   emotions: string[];
+  hasPhoto: boolean;
+  hasNote: boolean;
 }
 
 export function buildLibrary(): { places: LibraryEntry[]; activities: LibraryEntry[] } {
@@ -57,17 +59,21 @@ export function buildLibrary(): { places: LibraryEntry[]; activities: LibraryEnt
       if (!ch.completedSceneOrders.includes(s.order)) continue;
       const enhanced = !!(rec?.note || rec?.photo);
       const pKey = s.location_name;
-      const p = places.get(pKey) ?? { name: pKey, type: s.location_type, level: 0, visits: 0, lastAt: 0, emotions: [] };
+      const p = places.get(pKey) ?? { name: pKey, type: s.location_type, level: 0, visits: 0, lastAt: 0, emotions: [] as string[], hasPhoto: false, hasNote: false };
       p.visits += 1;
       if (enhanced) p.level += 1;
+      if (rec?.photo) p.hasPhoto = true;
+      if (rec?.note) p.hasNote = true;
       p.lastAt = Math.max(p.lastAt, rec?.completedAt ?? ch.archivedAt);
       for (const e of s.emotion_tags) if (!p.emotions.includes(e)) p.emotions.push(e);
       places.set(pKey, p);
 
       const aKey = s.action_task;
-      const a = activities.get(aKey) ?? { name: aKey, type: s.scene_name, level: 0, visits: 0, lastAt: 0, emotions: [] };
+      const a = activities.get(aKey) ?? { name: aKey, type: s.scene_name, level: 0, visits: 0, lastAt: 0, emotions: [] as string[], hasPhoto: false, hasNote: false };
       a.visits += 1;
       if (enhanced) a.level += 1;
+      if (rec?.photo) a.hasPhoto = true;
+      if (rec?.note) a.hasNote = true;
       a.lastAt = Math.max(a.lastAt, rec?.completedAt ?? ch.archivedAt);
       for (const e of s.emotion_tags) if (!a.emotions.includes(e)) a.emotions.push(e);
       activities.set(aKey, a);
