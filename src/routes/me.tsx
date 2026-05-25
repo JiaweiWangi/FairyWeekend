@@ -210,16 +210,43 @@ type ExportJob =
   | { kind: "chapter"; ch: ArchivedChapter; chapterNo: number; mode: "download" | "share" }
   | { kind: "series"; chapters: ArchivedChapter[]; mode: "download" | "share" };
 
-function NovelView({ sagas, onDelete }: { sagas: ArchivedChapter[]; onDelete: (id: string) => void }) {
+function chapterMeta(ch: ArchivedChapter) {
+  const recs = Object.values(ch.sceneRecords ?? {});
+  const enhanced = recs.filter((r) => r.note || r.photo).length;
+  const hasPhoto = recs.some((r) => !!r.photo);
+  const hasNote = recs.some((r) => !!r.note);
+  const lastAt = recs.reduce((m, r) => Math.max(m, r.completedAt ?? 0), ch.archivedAt ?? ch.createdAt);
+  return { enhanced, hasPhoto, hasNote, lastAt };
+}
+
+function NovelView({ sagas, filters, onDelete }: { sagas: ArchivedChapter[]; filters: MeFilters; onDelete: (id: string) => void }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [exportJob, setExportJob] = useState<ExportJob | null>(null);
   const [exporting, setExporting] = useState(false);
-  const openChapter = sagas.find((c) => c.chapterId === openId) ?? null;
-  const openIdx = openChapter ? sagas.indexOf(openChapter) : -1;
+
+  // Original chapter numbers come from original order (newest first)
+  const indexed = useMemo(
+    () => sagas.map((ch, idx) => ({ ch, chapterNo: sagas.length - idx, meta: chapterMeta(ch) })),
+    [sagas]
+  );
+  const visible = useMemo(() => {
+    let list = indexed.filter(({ meta }) => {
+      if (filters.onlyPhoto && !meta.hasPhoto) return false;
+      if (filters.onlyNote && !meta.hasNote) return false;
+      if (filters.minLevel > 0 && meta.enhanced < filters.minLevel) return false;
+      return true;
+    });
+    if (filters.sort === "enhanced") list = [...list].sort((a, b) => b.meta.enhanced - a.meta.enhanced || b.meta.lastAt - a.meta.lastAt);
+    else if (filters.sort === "recent") list = [...list].sort((a, b) => b.meta.lastAt - a.meta.lastAt);
+    // "order" keeps original (newest chapter first)
+    return list;
+  }, [indexed, filters]);
+
+  const openEntry = visible.find((v) => v.ch.chapterId === openId) ?? indexed.find((v) => v.ch.chapterId === openId) ?? null;
 
   function runChapterExport(ch: ArchivedChapter, mode: "download" | "share") {
-    const chapterNo = sagas.length - sagas.indexOf(ch);
-    setExportJob({ kind: "chapter", ch, chapterNo, mode });
+    const entry = indexed.find((v) => v.ch.chapterId === ch.chapterId);
+    setExportJob({ kind: "chapter", ch, chapterNo: entry?.chapterNo ?? 1, mode });
     setExporting(true);
   }
   function runSeriesExport(mode: "download" | "share") {
@@ -231,7 +258,7 @@ function NovelView({ sagas, onDelete }: { sagas: ArchivedChapter[]; onDelete: (i
     <>
       <div className="flex items-center justify-between mb-3">
         <div className="cn-serif text-[11px] text-[var(--ink-soft)]">
-          共 {sagas.length} 章 · 点击任一章查看详情
+          显示 {visible.length}/{sagas.length} 章 · 点击查看详情
         </div>
         <button
           onClick={() => runSeriesExport("download")}
@@ -242,14 +269,17 @@ function NovelView({ sagas, onDelete }: { sagas: ArchivedChapter[]; onDelete: (i
         </button>
       </div>
 
+      {visible.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--card)]/60 p-6 text-center cn-serif text-[12px] text-[var(--ink-soft)]">
+          没有符合筛选条件的章节
+        </div>
+      ) : (
       <div className="space-y-4">
-        {sagas.map((ch, idx) => {
+        {visible.map(({ ch, chapterNo, meta }) => {
           const date = new Date(ch.createdAt);
           const dateStr = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
-          const chapterNo = sagas.length - idx;
           const total = ch.journey.scenes.length;
           const done = ch.completedSceneOrders.length;
-          const enhanced = Object.values(ch.sceneRecords ?? {}).filter((r) => r.note || r.photo).length;
           const pct = total ? Math.round((done / total) * 100) : 0;
           return (
             <button
@@ -272,7 +302,11 @@ function NovelView({ sagas, onDelete }: { sagas: ArchivedChapter[]; onDelete: (i
               </div>
               <div className="px-4 py-3">
                 <div className="flex items-center justify-between text-[11px] cn-serif text-[var(--ink-soft)]">
-                  <span>{done}/{total} 已点亮 · 增强 {enhanced}</span>
+                  <span className="flex items-center gap-1.5">
+                    {done}/{total} 已点亮 · 增强 {meta.enhanced}
+                    {meta.hasPhoto && <span title="有照片">📷</span>}
+                    {meta.hasNote && <span title="有随笔">✎</span>}
+                  </span>
                   <span className="display tracking-[0.2em]">查看 →</span>
                 </div>
                 <div className="mt-2 h-1.5 rounded-full bg-[var(--muted)] overflow-hidden">
@@ -283,6 +317,8 @@ function NovelView({ sagas, onDelete }: { sagas: ArchivedChapter[]; onDelete: (i
           );
         })}
       </div>
+      )}
+
 
       {openChapter && (
         <ChapterDetail
