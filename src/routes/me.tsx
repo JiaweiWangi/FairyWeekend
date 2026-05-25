@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { loadSagas, buildLibrary, deleteChapter, type ArchivedChapter, type LibraryEntry } from "@/lib/persona-store";
 import { VenueIcon, detectVenue } from "@/components/VenueIcon";
 
@@ -105,71 +105,224 @@ function EmptyState({ onGo }: { onGo: () => void }) {
 
 /* ============ 连载小说 ============ */
 function NovelView({ sagas, onDelete }: { sagas: ArchivedChapter[]; onDelete: (id: string) => void }) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const openChapter = sagas.find((c) => c.chapterId === openId) ?? null;
+  const openIdx = openChapter ? sagas.indexOf(openChapter) : -1;
+
   return (
-    <div className="space-y-6">
-      {sagas.map((ch, idx) => {
-        const date = new Date(ch.createdAt);
-        const dateStr = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
-        const chapterNo = sagas.length - idx;
-        return (
-          <article key={ch.chapterId} className="persona-card overflow-hidden" data-rarity={ch.card.rarity}>
-            {/* Cover */}
-            <div className="relative h-40 overflow-hidden" style={ch.card.cover ? undefined : { background: `linear-gradient(135deg, ${ch.card.colors[0]}, ${ch.card.colors[1]})` }}>
-              {ch.card.cover && <img src={ch.card.cover} alt={ch.card.identity} className="w-full h-full object-cover" />}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
-              <div className="absolute top-3 left-3 right-3 flex items-start justify-between">
-                <div className="rarity-chip" data-rarity={ch.card.rarity}>✦ {ch.card.rarity}</div>
-                <div className="display text-[10px] tracking-[0.3em] text-white/85">CH.{String(chapterNo).padStart(2, "0")}</div>
+    <>
+      <div className="space-y-4">
+        {sagas.map((ch, idx) => {
+          const date = new Date(ch.createdAt);
+          const dateStr = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+          const chapterNo = sagas.length - idx;
+          const total = ch.journey.scenes.length;
+          const done = ch.completedSceneOrders.length;
+          const enhanced = Object.values(ch.sceneRecords ?? {}).filter((r) => r.note || r.photo).length;
+          const pct = total ? Math.round((done / total) * 100) : 0;
+          return (
+            <button
+              key={ch.chapterId}
+              onClick={() => setOpenId(ch.chapterId)}
+              className="persona-card w-full text-left overflow-hidden block transition-transform hover:-translate-y-0.5 hover:shadow-[0_18px_40px_-22px_rgba(0,0,0,0.35)]"
+              data-rarity={ch.card.rarity}
+            >
+              <div className="relative h-36 overflow-hidden" style={ch.card.cover ? undefined : { background: `linear-gradient(135deg, ${ch.card.colors[0]}, ${ch.card.colors[1]})` }}>
+                {ch.card.cover && <img src={ch.card.cover} alt={ch.card.identity} className="w-full h-full object-cover" />}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/15 to-transparent" />
+                <div className="absolute top-3 left-3 right-3 flex items-start justify-between">
+                  <div className="rarity-chip" data-rarity={ch.card.rarity}>✦ {ch.card.rarity}</div>
+                  <div className="display text-[10px] tracking-[0.3em] text-white/90">CH.{String(chapterNo).padStart(2, "0")}</div>
+                </div>
+                <div className="absolute bottom-3 left-4 right-4 text-white">
+                  <div className="display italic text-[11px] opacity-80">{dateStr} {ch.city && `· ${ch.city}`}</div>
+                  <div className="cn-serif text-[17px] leading-snug mt-0.5 line-clamp-1">「{ch.card.identity}」</div>
+                </div>
               </div>
-              <div className="absolute bottom-3 left-4 right-4 text-white">
-                <div className="display italic text-[11px] opacity-80">{dateStr} {ch.city && `· ${ch.city}`}</div>
-                <div className="cn-serif text-[18px] leading-snug mt-0.5">「{ch.card.identity}」</div>
+              <div className="px-4 py-3">
+                <div className="flex items-center justify-between text-[11px] cn-serif text-[var(--ink-soft)]">
+                  <span>{done}/{total} 已点亮 · 增强 {enhanced}</span>
+                  <span className="display tracking-[0.2em]">查看 →</span>
+                </div>
+                <div className="mt-2 h-1.5 rounded-full bg-[var(--muted)] overflow-hidden">
+                  <div className="h-full bg-[var(--accent)] transition-all" style={{ width: `${pct}%` }} />
+                </div>
               </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {openChapter && (
+        <ChapterDetail
+          ch={openChapter}
+          chapterNo={sagas.length - openIdx}
+          onClose={() => setOpenId(null)}
+          onDelete={() => {
+            if (confirm("从连载中移除这一章？")) {
+              setOpenId(null);
+              onDelete(openChapter.chapterId);
+            }
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function ChapterDetail({
+  ch, chapterNo, onClose, onDelete,
+}: {
+  ch: ArchivedChapter;
+  chapterNo: number;
+  onClose: () => void;
+  onDelete: () => void;
+}) {
+  const date = new Date(ch.createdAt);
+  const dateStr = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+  const total = ch.journey.scenes.length;
+  const done = ch.completedSceneOrders.length;
+  const enhanced = Object.values(ch.sceneRecords ?? {}).filter((r) => r.note || r.photo).length;
+
+  // 奖励：本章点亮的地点 + 活动
+  const rewards = ch.journey.scenes
+    .filter((s) => ch.completedSceneOrders.includes(s.order))
+    .map((s) => ({ order: s.order, place: s.location_name, type: s.location_type, action: s.action_task }));
+
+  // 关闭：ESC + 锁滚动
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/45 backdrop-blur-sm animate-[fade-up_0.2s_ease-out]" onClick={onClose} />
+      <div
+        className="relative w-full sm:max-w-xl max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-[var(--card)] border border-[var(--border)] shadow-[0_30px_80px_-30px_rgba(0,0,0,0.5)] fade-up"
+        role="dialog"
+        aria-modal="true"
+      >
+        {/* Cover */}
+        <div className="relative h-44 overflow-hidden rounded-t-3xl" style={ch.card.cover ? undefined : { background: `linear-gradient(135deg, ${ch.card.colors[0]}, ${ch.card.colors[1]})` }}>
+          {ch.card.cover && <img src={ch.card.cover} alt={ch.card.identity} className="w-full h-full object-cover" />}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
+          <button onClick={onClose} aria-label="关闭" className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/85 text-[var(--ink)] flex items-center justify-center text-[14px]">✕</button>
+          <div className="absolute top-3 left-3 rarity-chip" data-rarity={ch.card.rarity}>✦ {ch.card.rarity} · CH.{String(chapterNo).padStart(2, "0")}</div>
+          <div className="absolute bottom-3 left-4 right-4 text-white">
+            <div className="display italic text-[11px] opacity-85">{dateStr} {ch.city && `· ${ch.city}`}</div>
+            <div className="cn-serif text-[19px] leading-snug mt-0.5">「{ch.card.identity}」</div>
+            <div className="cn-serif text-[12px] opacity-85 mt-0.5 italic">{ch.card.mood}</div>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="px-5 pt-4 grid grid-cols-3 gap-2">
+          <MiniStat n={`${done}/${total}`} label="点亮场景" />
+          <MiniStat n={enhanced} label="笔记/照片" />
+          <MiniStat n={`${ch.journey.emotion_arc.start} → ${ch.journey.emotion_arc.end}`} label="情绪弧" small />
+        </div>
+
+        {/* Rewards */}
+        {rewards.length > 0 && (
+          <div className="px-5 mt-5">
+            <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)] mb-2">REWARDS · 本章解锁</div>
+            <div className="flex flex-wrap gap-1.5">
+              {rewards.map((r) => (
+                <span
+                  key={r.order}
+                  className="inline-flex items-center gap-1 text-[11px] cn-serif px-2 py-1 rounded-full bg-[var(--muted)] border border-[var(--border)] text-[var(--ink)]"
+                  title={r.action}
+                >
+                  <VenueIcon kind={detectVenue(r.type, r.place)} size={14} />
+                  {r.place} <span className="text-[var(--accent)]">+1</span>
+                </span>
+              ))}
             </div>
+          </div>
+        )}
 
-            {/* Body */}
-            <div className="p-5">
-              <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)]">序章 · OPENING</div>
-              <p className="cn-serif text-[14px] leading-[1.95] text-[var(--ink)] mt-1.5">{ch.journey.story_opening}</p>
+        {/* Opening */}
+        <div className="px-5 mt-6">
+          <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)]">序章 · OPENING</div>
+          <p className="cn-serif text-[14px] leading-[1.95] text-[var(--ink)] mt-1.5">{ch.journey.story_opening}</p>
+        </div>
 
-              <ol className="mt-5 space-y-4">
-                {ch.journey.scenes.map((s) => {
-                  const rec = ch.sceneRecords?.[s.order];
-                  const done = ch.completedSceneOrders.includes(s.order);
-                  return (
-                    <li key={s.order} className={`relative pl-6 border-l-2 ${done ? "border-[var(--accent)]" : "border-[var(--border)]"}`}>
-                      <span className="absolute -left-[7px] top-1 w-3 h-3 rounded-full bg-[var(--card)] border-2 border-[var(--accent)]" style={{ opacity: done ? 1 : 0.35 }} />
-                      <div className="flex items-baseline gap-2">
-                        <span className="display italic text-[11px] text-[var(--ink-soft)]">§ {s.order}</span>
-                        <span className="cn-serif text-[14px] text-[var(--ink)]">{s.scene_name}</span>
-                        {rec?.mood && <span className="text-[14px]">{rec.mood}</span>}
-                      </div>
-                      <p className="cn-serif text-[13px] leading-[1.9] text-[var(--ink)] mt-1">{s.persona_narrative}</p>
-                      <div className="cn-serif text-[11px] text-[var(--ink-soft)] mt-1">@ {s.location_name} · {s.action_task}</div>
-                      {rec?.photo && (
-                        <img src={rec.photo} alt="" className="mt-2 rounded-xl border border-[var(--border)] max-h-56 object-cover" />
-                      )}
-                      {rec?.note && (
-                        <blockquote className="mt-2 cn-serif text-[13px] text-[var(--ink)] italic border-l-2 border-[var(--accent)]/50 pl-3">
-                          "{rec.note}"
-                        </blockquote>
-                      )}
-                    </li>
-                  );
-                })}
-              </ol>
+        {/* Timeline */}
+        <div className="px-5 mt-5">
+          <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)] mb-3">TIMELINE · 逐场景</div>
+          <ol className="space-y-5">
+            {ch.journey.scenes.map((s) => {
+              const rec = ch.sceneRecords?.[s.order];
+              const isDone = ch.completedSceneOrders.includes(s.order);
+              const time = rec?.completedAt ? new Date(rec.completedAt) : null;
+              const timeStr = time ? `${String(time.getHours()).padStart(2, "0")}:${String(time.getMinutes()).padStart(2, "0")}` : null;
+              return (
+                <li key={s.order} className={`relative pl-7 border-l-2 ${isDone ? "border-[var(--accent)]" : "border-[var(--border)]"}`}>
+                  <span
+                    className="absolute -left-[10px] top-0.5 w-[18px] h-[18px] rounded-full bg-[var(--card)] border-2 border-[var(--accent)] flex items-center justify-center text-[10px] text-[var(--accent)]"
+                    style={{ opacity: isDone ? 1 : 0.35 }}
+                  >
+                    {isDone ? "✓" : ""}
+                  </span>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <div className="flex items-baseline gap-2 min-w-0">
+                      <span className="display italic text-[11px] text-[var(--ink-soft)]">§ {s.order}</span>
+                      <span className="cn-serif text-[14px] text-[var(--ink)] truncate">{s.scene_name}</span>
+                      {rec?.mood && <span className="text-[14px]">{rec.mood}</span>}
+                    </div>
+                    {timeStr ? (
+                      <span className="display text-[10px] tracking-widest text-[var(--ink-soft)] shrink-0">{timeStr}</span>
+                    ) : (
+                      <span className="display text-[10px] tracking-widest text-[var(--ink-soft)] shrink-0 opacity-60">未点亮</span>
+                    )}
+                  </div>
+                  <p className="cn-serif text-[13px] leading-[1.9] text-[var(--ink)] mt-1">{s.persona_narrative}</p>
+                  <div className="cn-serif text-[11px] text-[var(--ink-soft)] mt-1 flex items-center gap-1.5">
+                    <VenueIcon kind={detectVenue(s.location_type, s.scene_name)} size={12} />
+                    {s.location_name} · {s.action_task}
+                  </div>
+                  {rec?.photo && (
+                    <img src={rec.photo} alt="" className="mt-2 rounded-xl border border-[var(--border)] max-h-56 object-cover" />
+                  )}
+                  {rec?.note && (
+                    <blockquote className="mt-2 cn-serif text-[13px] text-[var(--ink)] italic border-l-2 border-[var(--accent)]/50 pl-3">
+                      "{rec.note}"
+                    </blockquote>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </div>
 
-              <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)] mt-6">终章 · CLOSING</div>
-              <p className="cn-serif text-[14px] leading-[1.95] text-[var(--ink)] mt-1.5">{ch.journey.closing}</p>
+        {/* Closing */}
+        <div className="px-5 mt-6">
+          <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)]">终章 · CLOSING</div>
+          <p className="cn-serif text-[14px] leading-[1.95] text-[var(--ink)] mt-1.5">{ch.journey.closing}</p>
+        </div>
 
-              <div className="mt-5 flex items-center justify-between text-[11px] cn-serif text-[var(--ink-soft)]">
-                <span>{ch.journey.emotion_arc.start} → {ch.journey.emotion_arc.end}</span>
-                <button onClick={() => { if (confirm("从连载中移除这一章？")) onDelete(ch.chapterId); }} className="opacity-60 hover:opacity-100">删除</button>
-              </div>
-            </div>
-          </article>
-        );
-      })}
+        {/* Footer */}
+        <div className="px-5 py-5 mt-4 flex items-center justify-between border-t border-[var(--border)] sticky bottom-0 bg-[var(--card)]/95 backdrop-blur">
+          <button onClick={onDelete} className="cn-serif text-[12px] text-[var(--ink-soft)] hover:text-red-600">删除这一章</button>
+          <button onClick={onClose} className="btn-soft">关闭</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({ n, label, small }: { n: React.ReactNode; label: string; small?: boolean }) {
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--muted)]/40 py-2 px-2 text-center">
+      <div className={`cn-serif text-[var(--ink)] leading-tight ${small ? "text-[11px]" : "text-[14px]"}`}>{n}</div>
+      <div className="cn-serif text-[10px] text-[var(--ink-soft)] mt-0.5 tracking-widest">{label}</div>
     </div>
   );
 }
