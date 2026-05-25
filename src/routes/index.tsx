@@ -122,8 +122,7 @@ function Index() {
       ) : (
         <TarotView
           revealed={tarotRevealed}
-          shuffling={shuffling}
-          onDraw={handleTarotDraw}
+          onDraw={() => setTarotRevealed(drawCard())}
           onAccept={handleAccept}
           onReset={() => setTarotRevealed(null)}
         />
