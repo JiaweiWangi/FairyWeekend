@@ -89,23 +89,31 @@ function Index() {
 
       {/* Mode switch */}
       <div className="relative z-10 flex justify-center mb-8">
-        <div className="inline-flex rounded-full bg-[var(--muted)] border border-[var(--border)] p-1 text-[13px] cn-serif">
+        <div className="inline-flex rounded-full bg-[var(--muted)] border border-[var(--border)] p-1 text-[13px] cn-serif flex-wrap gap-1">
+          <button
+            onClick={() => setMode("agent")}
+            className={`px-4 sm:px-5 py-2 rounded-full transition ${mode === "agent" ? "bg-[var(--card)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"}`}
+          >
+            AI 帮我挑 ❦
+          </button>
           <button
             onClick={() => { setMode("spread"); setSelected(null); }}
-            className={`px-5 py-2 rounded-full transition ${mode === "spread" ? "bg-[var(--card)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"}`}
+            className={`px-4 sm:px-5 py-2 rounded-full transition ${mode === "spread" ? "bg-[var(--card)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"}`}
           >
             我自己选
           </button>
           <button
             onClick={() => { setMode("tarot"); setTarotRevealed(null); }}
-            className={`px-5 py-2 rounded-full transition ${mode === "tarot" ? "bg-[var(--card)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"}`}
+            className={`px-4 sm:px-5 py-2 rounded-full transition ${mode === "tarot" ? "bg-[var(--card)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"}`}
           >
             让命运决定 ✶
           </button>
         </div>
       </div>
 
-      {mode === "spread" ? (
+      {mode === "agent" ? (
+        <AgentChatView onAccept={handleAccept} />
+      ) : mode === "spread" ? (
         <SpreadView
           selected={selected}
           onSelect={setSelected}
