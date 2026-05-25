@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { PERSONA_CARDS, drawCard, RARITY_LABEL } from "@/lib/cards";
 import { savePendingCard } from "@/lib/persona-store";
 import type { PersonaCard } from "@/lib/persona-types";
@@ -14,7 +14,6 @@ function Index() {
   const [mode, setMode] = useState<Mode>("agent");
   const [selected, setSelected] = useState<PersonaCard | null>(null);
   const [tarotRevealed, setTarotRevealed] = useState<PersonaCard | null>(null);
-  const [shuffling, setShuffling] = useState(false);
 
   // 浮动花瓣
   const petals = useMemo(
@@ -32,17 +31,6 @@ function Index() {
   function handleAccept(card: PersonaCard) {
     savePendingCard(card);
     navigate({ to: "/card" });
-  }
-
-  function handleTarotDraw() {
-    if (shuffling) return;
-    setShuffling(true);
-    setTarotRevealed(null);
-    setTimeout(() => {
-      const card = drawCard();
-      setTarotRevealed(card);
-      setShuffling(false);
-    }, 1400);
   }
 
   return (
@@ -122,8 +110,7 @@ function Index() {
       ) : (
         <TarotView
           revealed={tarotRevealed}
-          shuffling={shuffling}
-          onDraw={handleTarotDraw}
+          onDraw={() => setTarotRevealed(drawCard())}
           onAccept={handleAccept}
           onReset={() => setTarotRevealed(null)}
         />
@@ -249,45 +236,176 @@ function MiniCardFront({ card }: { card: PersonaCard }) {
   );
 }
 
-/* -------- 塔罗模式：洗牌 + 翻一张 -------- */
+/* -------- 塔罗模式：扇形展开 + 手感拖动 -------- */
 function TarotView({
-  revealed, shuffling, onDraw, onAccept, onReset,
+  revealed, onDraw, onAccept, onReset,
 }: {
   revealed: PersonaCard | null;
-  shuffling: boolean;
   onDraw: () => void;
   onAccept: (c: PersonaCard) => void;
   onReset: () => void;
 }) {
-  // 扇形排列三张卡背
-  const fan = [-14, 0, 14];
+  const CARD_COUNT = 21;
+  const SPREAD = 78;         // 总角度（度）
+  const RADIUS = 520;        // 弧半径（像素）
+  const FAN_W = 720;
+  const FAN_H = 360;
+
+  const [order, setOrder] = useState(() => Array.from({ length: CARD_COUNT }, (_, i) => i));
+  const [hover, setHover] = useState<number | null>(null);
+  const [picked, setPicked] = useState<number | null>(null);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [shuffling, setShuffling] = useState(false);
+  const fanRef = useRef<HTMLDivElement>(null);
+  const dragStartX = useRef<number | null>(null);
+  const movedRef = useRef(false);
+
+  function reshuffle() {
+    setShuffling(true);
+    setPicked(null);
+    setHover(null);
+    setTimeout(() => {
+      setOrder((arr) => [...arr].sort(() => Math.random() - 0.5));
+      setTimeout(() => setShuffling(false), 600);
+    }, 50);
+  }
+
+  function pointerToIndex(clientX: number) {
+    const el = fanRef.current;
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const ratio = Math.max(0, Math.min(1, x / rect.width));
+    return Math.round(ratio * (CARD_COUNT - 1));
+  }
+
+  function onPointerDown(e: React.PointerEvent) {
+    if (picked !== null || shuffling) return;
+    dragStartX.current = e.clientX;
+    movedRef.current = false;
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+  }
+  function onPointerMove(e: React.PointerEvent) {
+    if (picked !== null) return;
+    const idx = pointerToIndex(e.clientX);
+    if (idx !== null) setHover(idx);
+    if (dragStartX.current !== null) {
+      const dx = e.clientX - dragStartX.current;
+      if (Math.abs(dx) > 4) movedRef.current = true;
+      setDragOffset(Math.max(-60, Math.min(60, dx * 0.4)));
+    }
+  }
+  function onPointerUp(e: React.PointerEvent) {
+    const wasDrag = movedRef.current;
+    dragStartX.current = null;
+    setDragOffset(0);
+    if (wasDrag) {
+      // 拖动幅度大就重洗一次
+      if (Math.abs(e.clientX - (e.currentTarget.getBoundingClientRect().left + FAN_W / 2)) > 0) {
+        // 仅做轻微重排，让"被拨过"的感觉成立
+        setOrder((arr) => {
+          const a = [...arr];
+          const shift = Math.sign(dragOffset || 1);
+          if (shift > 0) a.push(a.shift()!); else a.unshift(a.pop()!);
+          return a;
+        });
+      }
+    }
+  }
+  function onPointerLeave() {
+    setHover(null);
+    setDragOffset(0);
+    dragStartX.current = null;
+  }
+
+  function handlePick(visualIdx: number) {
+    if (picked !== null || shuffling || movedRef.current) return;
+    setPicked(visualIdx);
+    // 等飞出动画后再翻牌
+    setTimeout(() => onDraw(), 650);
+  }
+
+  // 当 revealed 被重置（再抽一次），把扇形也复位
+  useEffect(() => {
+    if (!revealed) {
+      setPicked(null);
+    }
+  }, [revealed]);
 
   return (
     <section className="relative z-10 flex flex-col items-center">
-      <p className="text-center cn-serif text-[13px] text-[var(--ink-soft)] mb-8 max-w-md">
-        说不清想成为谁？闭上眼，让今天的风替你选一张牌。
+      <p className="text-center cn-serif text-[13px] text-[var(--ink-soft)] mb-6 max-w-md">
+        说不清想成为谁？把手放上去，拨开牌阵，挑一张属于今天的牌。
       </p>
 
       {!revealed ? (
         <>
-          <div className="relative flex items-end justify-center" style={{ height: 360, width: 320 }}>
-            {fan.map((deg, i) => (
-              <div
-                key={i}
-                className={`absolute card-back rounded-2xl ${shuffling ? "tarot-shuffle" : ""}`}
-                style={{
-                  width: 180,
-                  height: 260,
-                  transform: `translateX(${deg * 4}px) rotate(${deg}deg)`,
-                  animationDelay: `${i * 0.12}s`,
-                  boxShadow: "0 18px 40px -20px rgba(0,0,0,0.35)",
-                }}
-              />
-            ))}
+          <div
+            ref={fanRef}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerLeave={onPointerLeave}
+            className="relative select-none touch-none"
+            style={{ width: FAN_W, height: FAN_H + 80, maxWidth: "100%" }}
+          >
+            {order.map((cardId, i) => {
+              const t = i / (CARD_COUNT - 1);            // 0..1
+              const angle = -SPREAD / 2 + SPREAD * t;     // 角度
+              const isHover = hover === i && picked === null;
+              const isPicked = picked === i;
+              const dist = hover === null ? 0 : Math.abs(i - hover);
+              // 邻居推开
+              const push = hover === null || picked !== null
+                ? 0
+                : (i < hover ? -1 : i > hover ? 1 : 0) * Math.max(0, 18 - dist * 6);
+              const lift = isHover ? -28 : 0;
+              const scale = isHover ? 1.06 : 1;
+
+              const baseTransform = isPicked
+                ? `translate(-50%, -260px) rotate(0deg) scale(1.15)`
+                : `translate(-50%, 0) rotate(${angle}deg) translateY(${lift}px) translateX(${push + dragOffset * (0.6 + t * 0.4)}px) scale(${scale})`;
+
+              return (
+                <div
+                  key={cardId}
+                  onClick={() => handlePick(i)}
+                  className={`absolute card-back rounded-2xl cursor-pointer ${shuffling ? "tarot-shuffle" : ""} ${isPicked ? "tarot-fly" : ""}`}
+                  style={{
+                    left: "50%",
+                    bottom: 0,
+                    width: 130,
+                    height: 200,
+                    transformOrigin: `50% ${RADIUS}px`,
+                    transform: baseTransform,
+                    transition: shuffling
+                      ? "transform 0.5s cubic-bezier(.4,0,.2,1)"
+                      : isPicked
+                        ? "transform 0.65s cubic-bezier(.22,1,.36,1)"
+                        : "transform 0.35s cubic-bezier(.22,1,.36,1)",
+                    zIndex: isPicked ? 50 : isHover ? 40 : i,
+                    boxShadow: isHover
+                      ? "0 26px 50px -18px rgba(0,0,0,0.45)"
+                      : "0 14px 30px -18px rgba(0,0,0,0.35)",
+                    animationDelay: shuffling ? `${i * 0.025}s` : undefined,
+                  }}
+                />
+              );
+            })}
+
+            {/* 桌面底部弧线提示 */}
+            <div
+              className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-2 cn-serif text-[10px] tracking-[0.3em] text-[var(--ink-soft)]"
+            >
+              ← 拨动牌阵 · 点击抽取 →
+            </div>
           </div>
-          <button onClick={onDraw} disabled={shuffling} className="btn-soft mt-6">
-            {shuffling ? "洗牌中…" : "为我抽一张 ✶"}
-          </button>
+
+          <div className="mt-6 flex items-center gap-3">
+            <button onClick={reshuffle} disabled={shuffling} className="btn-ghost">
+              {shuffling ? "洗牌中…" : "重新洗牌 ✶"}
+            </button>
+          </div>
         </>
       ) : (
         <>
