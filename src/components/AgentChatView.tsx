@@ -89,12 +89,14 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
     }, delay);
   }
 
-  // 初始化：agent 欢迎 + 第一个问题
+  // 初始化：agent 欢迎 + 第一个问题（用 ref 守卫，避免 StrictMode 双触发）
+  const initedRef = useRef(false);
   useEffect(() => {
+    if (initedRef.current) return;
+    initedRef.current = true;
     push({ who: "agent", text: "嗨，我是今日小说的策划助理 ❦" }, 200);
     push({ who: "agent", text: "今天不知道想成为谁？我帮你想。先告诉我——你现在大概是什么状态？" }, 1100);
     push({ who: "agent", chips: MOOD_CHIPS, step: "mood", freeInput: true }, 1900);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 自动滚到底
