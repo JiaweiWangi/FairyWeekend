@@ -41,15 +41,25 @@ function CardPage() {
       setError("浏览器不支持定位，挑一个城市吧");
       return;
     }
+    const inIframe = typeof window !== "undefined" && window.self !== window.top;
     setLocating(true);
+    setError(null);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         coordsRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setAutoLocated(true);
-        setCity(""); // 让 AI 根据经纬度反查
+        setCity("");
         setLocating(false);
       },
-      () => { setLocating(false); setError("定位失败，挑一个城市吧"); },
+      (err) => {
+        setLocating(false);
+        const reason =
+          err.code === 1 ? (inIframe ? "预览窗口禁止了定位权限（在新标签页打开后可用）" : "你拒绝了定位权限")
+          : err.code === 2 ? "暂时拿不到位置信号"
+          : err.code === 3 ? "定位超时"
+          : "定位失败";
+        setError(`${reason}，挑一个城市吧`);
+      },
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 },
     );
   }
