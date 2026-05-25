@@ -14,7 +14,6 @@ function Index() {
   const [mode, setMode] = useState<Mode>("agent");
   const [selected, setSelected] = useState<PersonaCard | null>(null);
   const [tarotRevealed, setTarotRevealed] = useState<PersonaCard | null>(null);
-  const [shuffling, setShuffling] = useState(false);
 
   // 浮动花瓣
   const petals = useMemo(
@@ -32,17 +31,6 @@ function Index() {
   function handleAccept(card: PersonaCard) {
     savePendingCard(card);
     navigate({ to: "/card" });
-  }
-
-  function handleTarotDraw() {
-    if (shuffling) return;
-    setShuffling(true);
-    setTarotRevealed(null);
-    setTimeout(() => {
-      const card = drawCard();
-      setTarotRevealed(card);
-      setShuffling(false);
-    }, 1400);
   }
 
   return (
