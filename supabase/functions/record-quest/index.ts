@@ -1,4 +1,7 @@
 // Edge function: store a completed quest run and update DM long-term memory.
+
+import { llm } from "../llmClient/client.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -18,7 +21,6 @@ interface Quest {
 }
 
 async function summarizeProfile(
-  apiKey: string,
   current: {
     profile: string;
     loved: string[];
@@ -60,45 +62,35 @@ async function summarizeProfile(
 - disliked_tags: 最多 5 个。
 保留有用旧信息，融合新观察，不要无脑覆盖。`;
 
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages: [{ role: "user", content: prompt }],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "profile",
-          strict: true,
-          schema: {
-            type: "object",
-            properties: {
-              profile: { type: "string" },
-              loved_tags: { type: "array", items: { type: "string" } },
-              disliked_tags: { type: "array", items: { type: "string" } },
-            },
-            required: ["profile", "loved_tags", "disliked_tags"],
-            additionalProperties: false,
-          },
-        },
-      },
-    }),
-  });
-  if (!res.ok) {
-    console.error("summarize failed", res.status, await res.text());
-    return { profile: current.profile, loved: current.loved, disliked: current.disliked };
-  }
-  const data = await res.json();
-  const content = data?.choices?.[0]?.message?.content ?? "{}";
   try {
-    const j = typeof content === "string" ? JSON.parse(content) : content;
+    const result = await llm.askJSON<{
+      profile: string;
+      loved_tags: string[];
+      disliked_tags: string[];
+    }>(
+      prompt,
+      {
+        name: "profile",
+        schema: {
+          type: "object",
+          properties: {
+            profile: { type: "string" },
+            loved_tags: { type: "array", items: { type: "string" } },
+            disliked_tags: { type: "array", items: { type: "string" } },
+          },
+          required: ["profile", "loved_tags", "disliked_tags"],
+          additionalProperties: false,
+        },
+      }
+    );
+
     return {
-      profile: j.profile ?? current.profile,
-      loved: (j.loved_tags ?? []).slice(0, 8),
-      disliked: (j.disliked_tags ?? []).slice(0, 5),
+      profile: result.profile ?? current.profile,
+      loved: (result.loved_tags ?? []).slice(0, 8),
+      disliked: (result.disliked_tags ?? []).slice(0, 5),
     };
-  } catch {
+  } catch (e) {
+    console.error("summarize failed:", e);
     return { profile: current.profile, loved: current.loved, disliked: current.disliked };
   }
 }
@@ -128,7 +120,6 @@ Deno.serve(async (req) => {
 
     const supaUrl = Deno.env.get("SUPABASE_URL");
     const supaKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const aiKey = Deno.env.get("LOVABLE_API_KEY");
     if (!supaUrl || !supaKey) {
       return new Response(JSON.stringify({ error: "supabase env missing" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -170,18 +161,10 @@ Deno.serve(async (req) => {
     const likedStages = (quest.stages ?? []).filter((s: { order: number }) => likedSet.has(s.order));
     const unlikedStages = (quest.stages ?? []).filter((s: { order: number }) => !likedSet.has(s.order));
 
-    let updated = {
-      profile: old.profile ?? "",
-      loved: old.loved_tags ?? [],
-      disliked: old.disliked_tags ?? [],
-    };
-    if (aiKey) {
-      updated = await summarizeProfile(
-        aiKey,
-        { profile: old.profile ?? "", loved: old.loved_tags ?? [], disliked: old.disliked_tags ?? [], totalRuns: old.total_runs ?? 0 },
-        { character_class, emotion, city, quest, rating, feedback, likedStages, unlikedStages },
-      );
-    }
+    const updated = await summarizeProfile(
+      { profile: old.profile ?? "", loved: old.loved_tags ?? [], disliked: old.disliked_tags ?? [], totalRuns: old.total_runs ?? 0 },
+      { character_class, emotion, city, quest, rating, feedback, likedStages, unlikedStages },
+    );
 
     // 5. upsert memory
     await fetch(`${supaUrl}/rest/v1/dm_memory?on_conflict=player_key`, {
