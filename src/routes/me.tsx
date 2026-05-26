@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   loadSagas,
+  hydrateSagasFromCloud,
   buildLibrary,
   deleteChapter,
   type ArchivedChapter,
@@ -12,18 +13,28 @@ import {
   elementToImageBlob,
   elementToPdfBlob,
   downloadBlob,
+  shareImageOrDownload,
   shareOrDownload,
 } from "@/lib/export-pdf";
 import {
   buildPostchainReport,
+  validatePostchainEditedReport,
+  validatePostchainShareText,
   type PostchainAuthLevel,
+  type PostchainPrivacySettings,
   type PostchainReport,
   type PostchainReportStyle,
 } from "@/lib/postchain-report";
+import { savePublicPostchainShareCloud } from "@/lib/postchain-share";
+import { loadPostchainConsentCloud, savePostchainConsentCloud } from "@/lib/postchain-consent";
+import { buildCityPreferenceProfile, type DmMemorySnapshot } from "@/lib/city-preference";
+import { supabase } from "@/integrations/supabase/client";
+import { qrSvgDataUrl } from "@/lib/qr";
+import { buildSerialInsights } from "@/lib/serial-insights";
 
 export const Route = createFileRoute("/me")({ component: MePage });
 
-type Tab = "novel" | "comic" | "poster" | "library";
+type Tab = "novel" | "comic" | "poster" | "library" | "profile";
 type SortKey = "recent" | "enhanced" | "order";
 export type MeFilters = {
   sort: SortKey;
@@ -32,9 +43,51 @@ export type MeFilters = {
   minLevel: number; // 0/1/2/3
 };
 
+type ReportEdits = Partial<
+  Pick<
+    PostchainReport,
+    "title" | "identityBadge" | "flexLine" | "bragLine" | "ending" | "nextHook" | "storyFragments"
+  >
+>;
+
+const POSTCHAIN_ENTRY_KEY = "todaypersona:open-postchain:v1";
+const POSTCHAIN_AUTH_KEY = "todaypersona:postchain-auth:v1";
+const POSTCHAIN_PRIVACY_KEY = "todaypersona:postchain-privacy:v1";
+
+const DEFAULT_POSTCHAIN_PRIVACY: PostchainPrivacySettings = {
+  showMerchantNames: true,
+  showVisitTime: false,
+  showLocation: true,
+  showPhotos: true,
+  showAmount: false,
+  showDiscount: false,
+};
+
+function loadPostchainAuth(): PostchainAuthLevel | null {
+  if (typeof window === "undefined") return null;
+  const value = localStorage.getItem(POSTCHAIN_AUTH_KEY);
+  return value === "basic" || value === "personal" || value === "full" ? value : null;
+}
+
+function loadPostchainPrivacy(): PostchainPrivacySettings {
+  if (typeof window === "undefined") return DEFAULT_POSTCHAIN_PRIVACY;
+  try {
+    const saved = JSON.parse(localStorage.getItem(POSTCHAIN_PRIVACY_KEY) || "{}");
+    return { ...DEFAULT_POSTCHAIN_PRIVACY, ...saved };
+  } catch {
+    return DEFAULT_POSTCHAIN_PRIVACY;
+  }
+}
+
 function MePage() {
   const navigate = useNavigate();
-  const [tabs, setTabs] = useState<Set<Tab>>(new Set(["novel"]));
+  const [tabs, setTabs] = useState<Set<Tab>>(() => {
+    if (typeof window !== "undefined" && localStorage.getItem(POSTCHAIN_ENTRY_KEY) === "1") {
+      localStorage.removeItem(POSTCHAIN_ENTRY_KEY);
+      return new Set(["poster"]);
+    }
+    return new Set(["novel"]);
+  });
   const [reloadKey, setReloadKey] = useState(0);
   const [filters, setFilters] = useState<MeFilters>({
     sort: "recent",
@@ -42,9 +95,47 @@ function MePage() {
     onlyNote: false,
     minLevel: 0,
   });
+  const [dmMemory, setDmMemory] = useState<DmMemorySnapshot | null>(null);
+  const [cloudStatus, setCloudStatus] = useState<"idle" | "syncing" | "synced" | "local">("idle");
 
   const sagas = loadSagas();
   const library = buildLibrary();
+  const preferenceProfile = useMemo(
+    () => buildCityPreferenceProfile(sagas, dmMemory),
+    [sagas, dmMemory],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    setCloudStatus("syncing");
+    hydrateSagasFromCloud()
+      .then(() => {
+        if (!cancelled) {
+          setCloudStatus("synced");
+          setReloadKey((key) => key + 1);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCloudStatus("local");
+      });
+
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("dm_memory")
+          .select("profile,loved_tags,disliked_tags,visited_pois,total_runs")
+          .eq("player_key", "default")
+          .maybeSingle();
+        if (!cancelled && !error && data) setDmMemory(data);
+      } catch {
+        if (!cancelled) setCloudStatus("local");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const stats = useMemo(() => {
     const chapters = sagas.length;
@@ -71,6 +162,7 @@ function MePage() {
   const showComic = tabs.has("comic");
   const showPoster = tabs.has("poster");
   const showLibrary = tabs.has("library");
+  const showProfile = tabs.has("profile");
   const showFilters = showNovel || showLibrary;
 
   return (
@@ -103,6 +195,13 @@ function MePage() {
           <StatChip n={stats.enhanced} label="增强" />
           <StatChip n={stats.rarities} label="稀有度" />
         </div>
+        <div className="mt-3 cn-serif text-[10px] text-[var(--ink-soft)]">
+          {cloudStatus === "syncing"
+            ? "正在同步云端连载…"
+            : cloudStatus === "synced"
+              ? "云端连载已同步"
+              : "当前使用本地连载"}
+        </div>
       </header>
 
       {/* Tabs (multi-select) */}
@@ -114,6 +213,7 @@ function MePage() {
               ["comic", "漫画分镜"],
               ["poster", "复盘海报"],
               ["library", "收藏馆"],
+              ["profile", "偏好档案"],
             ] as const
           ).map(([k, l]) => {
             const active = tabs.has(k);
@@ -141,7 +241,9 @@ function MePage() {
       )}
 
       <main className="max-w-xl mx-auto px-5 mt-6 space-y-10">
-        {sagas.length === 0 && !showLibrary && <EmptyState onGo={() => navigate({ to: "/" })} />}
+        {sagas.length === 0 && !showLibrary && !showProfile && (
+          <EmptyState onGo={() => navigate({ to: "/" })} />
+        )}
         {showNovel && sagas.length > 0 && (
           <NovelView
             sagas={sagas}
@@ -166,6 +268,14 @@ function MePage() {
             sagas={sagas}
             filters={filters}
             empty={sagas.length === 0}
+            onGo={() => navigate({ to: "/" })}
+          />
+        )}
+        {showProfile && (
+          <CityPreferenceView
+            profile={preferenceProfile}
+            memory={dmMemory}
+            empty={sagas.length === 0 && !dmMemory}
             onGo={() => navigate({ to: "/" })}
           />
         )}
@@ -308,6 +418,7 @@ function NovelView({
   const [openId, setOpenId] = useState<string | null>(null);
   const [exportJob, setExportJob] = useState<ExportJob | null>(null);
   const [exporting, setExporting] = useState(false);
+  const insights = useMemo(() => buildSerialInsights(sagas), [sagas]);
 
   // Original chapter numbers come from original order (newest first)
   const indexed = useMemo(
@@ -348,6 +459,38 @@ function NovelView({
 
   return (
     <>
+      <section className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-4 mb-5">
+        <div className="display text-[10px] tracking-[0.35em] text-[var(--ink-soft)]">
+          SERIAL ARC · 连载主线
+        </div>
+        <h2 className="cn-serif text-[20px] leading-snug text-[var(--ink)] mt-2">
+          {insights.autoTitle}
+        </h2>
+        <p className="cn-serif text-[13px] leading-relaxed text-[var(--ink-soft)] mt-2">
+          {insights.mainlineSummary}
+        </p>
+        <div className="mt-3 grid gap-2">
+          {[insights.personaShift, insights.cityProgress, insights.monthlyRecap].map((item) => (
+            <div
+              key={item}
+              className="rounded-2xl border border-[var(--border)] bg-[var(--muted)]/50 px-3 py-2 cn-serif text-[12px] leading-relaxed text-[var(--ink)]"
+            >
+              {item}
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {insights.timelineTags.map((tag) => (
+            <span
+              key={tag}
+              className="cn-serif text-[10px] px-2 py-1 rounded-full bg-[var(--card)] border border-[var(--border)] text-[var(--ink-soft)]"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      </section>
+
       <div className="flex items-center justify-between mb-3">
         <div className="cn-serif text-[11px] text-[var(--ink-soft)]">
           显示 {visible.length}/{sagas.length} 章 · 点击查看详情
@@ -411,7 +554,7 @@ function NovelView({
                       {dateStr} {ch.city && `· ${ch.city}`}
                     </div>
                     <div className="cn-serif text-[17px] leading-snug mt-0.5 line-clamp-1">
-                      「{ch.card.identity}」
+                      「{insights.chapterTitles[ch.chapterId] ?? ch.card.identity}」
                     </div>
                   </div>
                 </div>
@@ -864,31 +1007,80 @@ function PostchainView({
   onGo: () => void;
 }) {
   const [chapterId, setChapterId] = useState(sagas[0]?.chapterId ?? "");
-  const [authLevel, setAuthLevel] = useState<PostchainAuthLevel>("basic");
+  const [authLevel, setAuthLevel] = useState<PostchainAuthLevel>(() => loadPostchainAuth() ?? "basic");
+  const [draftAuthLevel, setDraftAuthLevel] = useState<PostchainAuthLevel>(authLevel);
+  const [authorized, setAuthorized] = useState(() => loadPostchainAuth() !== null);
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  const [privacy, setPrivacy] = useState<PostchainPrivacySettings>(loadPostchainPrivacy);
   const [reportStyle, setReportStyle] = useState<PostchainReportStyle>("moments");
   const [generated, setGenerated] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [editableShareText, setEditableShareText] = useState("");
+  const [reportEdits, setReportEdits] = useState<ReportEdits>({});
+  const [shareUrl, setShareUrl] = useState("");
   const [exporting, setExporting] = useState(false);
   const posterRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadPostchainConsentCloud().then((consent) => {
+      if (cancelled || !consent) return;
+      setAuthLevel(consent.authLevel);
+      setDraftAuthLevel(consent.authLevel);
+      setAuthorized(true);
+      setPrivacy((current) => ({ ...current, ...consent.privacy }));
+      localStorage.setItem(POSTCHAIN_AUTH_KEY, consent.authLevel);
+      localStorage.setItem(POSTCHAIN_PRIVACY_KEY, JSON.stringify({ ...DEFAULT_POSTCHAIN_PRIVACY, ...consent.privacy }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!chapterId && sagas[0]) setChapterId(sagas[0].chapterId);
   }, [chapterId, sagas]);
 
+  useEffect(() => {
+    localStorage.setItem(POSTCHAIN_PRIVACY_KEY, JSON.stringify(privacy));
+    if (authorized) void savePostchainConsentCloud(authLevel, privacy);
+    setGenerated(false);
+    setPreviewOpen(false);
+  }, [authLevel, authorized, privacy]);
+
   if (empty) return <EmptyState onGo={onGo} />;
 
   const chapter = sagas.find((item) => item.chapterId === chapterId) ?? sagas[0];
-  const report = buildPostchainReport(chapter, { authLevel, reportStyle });
+  const report = buildPostchainReport(chapter, { authLevel, reportStyle, privacy });
+  const reportDraft = {
+    ...report,
+    ...reportEdits,
+    storyFragments: reportEdits.storyFragments ?? report.storyFragments,
+  };
+  const editedReport: PostchainReport = {
+    ...reportDraft,
+    factCheck: validatePostchainEditedReport(chapter, privacy, reportDraft),
+  };
   const chapterNo = sagas.length - sagas.findIndex((item) => item.chapterId === chapter.chapterId);
   const date = new Date(chapter.createdAt);
   const dateStr = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
 
-  async function exportPoster() {
+  function openPreview(nextReport = report) {
+    setGenerated(true);
+    setPreviewOpen(true);
+    setEditableShareText(nextReport.shareText);
+    setReportEdits({});
+    setShareUrl("");
+  }
+
+  async function exportPoster(type: "image/png" | "image/jpeg" = "image/png") {
     const el = posterRef.current;
     if (!el) return;
     setExporting(true);
     try {
-      const blob = await elementToImageBlob(el);
-      downloadBlob(blob, `今日人设_复盘海报_CH${String(chapterNo).padStart(2, "0")}.png`);
+      const blob = await elementToImageBlob(el, type);
+      const suffix = type === "image/jpeg" ? "jpg" : "png";
+      downloadBlob(blob, `今日人设_复盘海报_CH${String(chapterNo).padStart(2, "0")}.${suffix}`);
     } catch (err) {
       console.error("[poster export]", err);
       alert("导出失败：" + (err as Error).message);
@@ -897,13 +1089,116 @@ function PostchainView({
     }
   }
 
+  async function nativeSharePoster() {
+    const el = posterRef.current;
+    if (!el) return;
+    setExporting(true);
+    try {
+      const blob = await elementToImageBlob(el, "image/png");
+      await shareImageOrDownload(
+        blob,
+        `今日人设_复盘海报_CH${String(chapterNo).padStart(2, "0")}.png`,
+        editedReport.title,
+        editableShareText || editedReport.shareText,
+      );
+    } catch (err) {
+      console.error("[poster share]", err);
+      alert("分享失败：" + (err as Error).message);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   async function copyShareText() {
     try {
-      await navigator.clipboard.writeText(report.shareText);
+      await navigator.clipboard.writeText(editableShareText || editedReport.shareText);
       alert("分享文案已复制。");
     } catch {
-      alert(report.shareText);
+      alert(editableShareText || editedReport.shareText);
     }
+  }
+
+  async function publishShare() {
+    if (!editedReport.factCheck.ok) {
+      alert(`事实校验未通过：${editedReport.factCheck.warnings.join("；")}`);
+      return;
+    }
+    const textWarnings = validatePostchainShareText(
+      chapter,
+      privacy,
+      editableShareText || editedReport.shareText,
+    );
+    if (textWarnings.length > 0) {
+      alert(`分享文案需要先处理：${textWarnings.join("；")}`);
+      return;
+    }
+    const share = await savePublicPostchainShareCloud({
+      chapter,
+      report: editedReport,
+      privacy,
+      shareText: editableShareText || editedReport.shareText,
+    });
+    const url = `${window.location.origin}/share?id=${share.id}`;
+    setShareUrl(url);
+    try {
+      await navigator.clipboard.writeText(url);
+      alert("分享链接已复制。");
+    } catch {
+      alert(url);
+    }
+    window.open(url, "_blank");
+  }
+
+  function openAuthDialog() {
+    setDraftAuthLevel(authLevel);
+    setAuthDialogOpen(true);
+  }
+
+  function confirmAuth() {
+    const nextReport = buildPostchainReport(chapter, {
+      authLevel: draftAuthLevel,
+      reportStyle,
+      privacy,
+    });
+    setAuthLevel(draftAuthLevel);
+    setAuthorized(true);
+    localStorage.setItem(POSTCHAIN_AUTH_KEY, draftAuthLevel);
+    void savePostchainConsentCloud(draftAuthLevel, privacy);
+    setAuthDialogOpen(false);
+    openPreview(nextReport);
+  }
+
+  if (generated && previewOpen) {
+    return (
+      <ReportPreviewFlow
+        chapter={chapter}
+        chapterNo={chapterNo}
+        dateStr={dateStr}
+        report={editedReport}
+        privacy={privacy}
+        posterRef={posterRef}
+        reportStyle={reportStyle}
+        onStyleChange={(value) => {
+          setReportStyle(value);
+          setReportEdits({});
+          setShareUrl("");
+          setEditableShareText(
+            buildPostchainReport(chapter, { authLevel, reportStyle: value, privacy }).shareText,
+          );
+        }}
+        shareText={editableShareText || editedReport.shareText}
+        onShareTextChange={setEditableShareText}
+        edits={reportEdits}
+        onEditsChange={setReportEdits}
+        shareUrl={shareUrl}
+        exporting={exporting}
+        onExport={exportPoster}
+        onNativeShare={nativeSharePoster}
+        onCopy={copyShareText}
+        onPublish={publishShare}
+        onBack={() => setPreviewOpen(false)}
+      />
+    );
   }
 
   return (
@@ -917,7 +1212,13 @@ function PostchainView({
             <h2 className="cn-serif text-[18px] text-[var(--ink)] mt-1">从真实连载生成分享资产</h2>
           </div>
           <button
-            onClick={() => setGenerated(true)}
+            onClick={() => {
+              if (authorized) {
+                openPreview();
+              } else {
+                openAuthDialog();
+              }
+            }}
             className="btn-soft shrink-0 px-4 py-2 text-[13px]"
           >
             生成复盘
@@ -939,6 +1240,7 @@ function PostchainView({
                     onClick={() => {
                       setChapterId(item.chapterId);
                       setGenerated(false);
+                      setPreviewOpen(false);
                     }}
                     className={`w-full text-left rounded-2xl border px-3 py-2.5 flex items-center gap-3 transition ${
                       active
@@ -961,19 +1263,35 @@ function PostchainView({
             </div>
           </div>
 
-          <SegmentedControl<PostchainAuthLevel>
-            label="DATA"
-            value={authLevel}
-            options={[
-              ["basic", "基础回顾"],
-              ["personal", "个性报告"],
-              ["full", "完整洞察"],
-            ]}
-            onChange={(v) => {
-              setAuthLevel(v);
-              setGenerated(false);
-            }}
-          />
+          <div>
+            <div className="display text-[9px] tracking-[0.3em] text-[var(--ink-soft)] mb-2">
+              DATA AUTH
+            </div>
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] px-3 py-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="cn-serif text-[13px] text-[var(--ink)]">
+                  {authLevel === "basic"
+                    ? "基础授权"
+                    : authLevel === "personal"
+                      ? "标准授权"
+                      : "高级授权"}
+                  <span className="ml-2 text-[11px] text-[var(--ink-soft)]">
+                    {authorized ? "已保存" : "待确认"}
+                  </span>
+                </div>
+                <div className="cn-serif text-[11px] text-[var(--ink-soft)] mt-0.5">
+                  {authLevel === "basic"
+                    ? "仅使用路线完成数据。"
+                    : authLevel === "personal"
+                      ? "使用点位、品类、照片/随笔等本次记录。"
+                      : "使用完整本次记录，并预留订单、优惠和历史偏好字段。"}
+                </div>
+              </div>
+              <button onClick={openAuthDialog} className="btn-ghost text-[12px] px-3 py-1.5">
+                调整授权
+              </button>
+            </div>
+          </div>
 
           <SegmentedControl<PostchainReportStyle>
             label="STYLE"
@@ -987,10 +1305,25 @@ function PostchainView({
             onChange={(v) => {
               setReportStyle(v);
               setGenerated(false);
+              setPreviewOpen(false);
             }}
+          />
+
+          <PrivacySettingsPanel
+            value={privacy}
+            onChange={(next) => setPrivacy(next)}
           />
         </div>
       </section>
+
+      {authDialogOpen && (
+        <PostchainAuthDialog
+          value={draftAuthLevel}
+          onChange={setDraftAuthLevel}
+          onCancel={() => setAuthDialogOpen(false)}
+          onConfirm={confirmAuth}
+        />
+      )}
 
       <section className="grid gap-4">
         <div className="rounded-3xl border border-[var(--border)] bg-[var(--card)]/80 p-4">
@@ -1006,6 +1339,81 @@ function PostchainView({
                 {fact}
               </div>
             ))}
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-[var(--border)] bg-[var(--card)]/80 p-4">
+          <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)] mb-2">
+            ROUTE STATUS · 路线状态
+          </div>
+          <div className="rounded-2xl bg-[var(--muted)]/60 border border-[var(--border)] px-3 py-3">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <div className="cn-serif text-[13px] text-[var(--ink)]">{report.completionText}</div>
+                <div className="cn-serif text-[11px] text-[var(--ink-soft)] mt-1">
+                  主题：{report.routeTheme}
+                </div>
+              </div>
+              <strong className="display text-[26px] leading-none text-[var(--accent)]">
+                {report.completionPercent}%
+              </strong>
+            </div>
+            <div className="mt-3 h-1.5 rounded-full bg-[var(--card)] overflow-hidden">
+              <div
+                className="h-full bg-[var(--accent)] transition-all"
+                style={{ width: `${report.completionPercent}%` }}
+              />
+            </div>
+          </div>
+
+          {report.incompleteNodes.length > 0 && (
+            <div className="mt-3">
+              <div className="display text-[9px] tracking-[0.28em] text-[var(--ink-soft)] mb-2">
+                TODO · 未完成节点
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {report.incompleteNodes.map((node) => (
+                  <span
+                    key={node.order}
+                    className="cn-serif text-[11px] px-2.5 py-1 rounded-full bg-[var(--muted)] text-[var(--ink-soft)] border border-[var(--border)]"
+                  >
+                    {node.order}. {node.displayName}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-3">
+            <div className="display text-[9px] tracking-[0.28em] text-[var(--ink-soft)] mb-2">
+              KEYWORDS · 路线关键词
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {report.routeKeywords.map((keyword) => (
+                <span
+                  key={keyword}
+                  className="cn-serif text-[11px] px-2.5 py-1 rounded-full bg-[var(--card)] text-[var(--ink-soft)] border border-[var(--border)]"
+                >
+                  {keyword}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <div className="display text-[9px] tracking-[0.28em] text-[var(--ink-soft)] mb-2">
+              TRAITS · 行为特征
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {report.behaviorTraits.map((trait) => (
+                <span
+                  key={trait}
+                  className="cn-serif text-[11px] px-2.5 py-1 rounded-full bg-[var(--ink)] text-[var(--card)]"
+                >
+                  {trait}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -1034,7 +1442,10 @@ function PostchainView({
           </div>
           <div className="flex gap-2">
             <button
-              onClick={copyShareText}
+              onClick={() => {
+                setEditableShareText(report.shareText);
+                copyShareText();
+              }}
               disabled={!generated}
               className="btn-ghost text-[12px] px-3 py-1.5 disabled:opacity-40"
             >
@@ -1057,6 +1468,7 @@ function PostchainView({
             chapterNo={chapterNo}
             dateStr={dateStr}
             report={report}
+            privacy={privacy}
           />
         ) : (
           <div className="rounded-3xl border border-dashed border-[var(--border)] bg-[var(--card)]/60 min-h-[360px] flex items-center justify-center text-center px-8">
@@ -1084,8 +1496,374 @@ function PostchainView({
           <button className="btn-soft mt-4 w-full justify-center">
             {report.primaryCta.action}
           </button>
+          <div className="mt-4 grid gap-2">
+            {report.recommendedNextActions.map((action) => (
+              <div
+                key={action.title}
+                className="rounded-2xl border border-[var(--border)] bg-[var(--muted)]/50 px-3 py-2"
+              >
+                <div className="cn-serif text-[13px] text-[var(--ink)]">{action.title}</div>
+                <div className="cn-serif text-[11px] text-[var(--ink-soft)] mt-0.5">
+                  {action.body}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--muted)]/50 px-3 py-2">
+            <div className="cn-serif text-[12px] text-[var(--ink)]">
+              事实校验：{report.factCheck.ok ? "通过" : "需复核"}
+            </div>
+            {!report.factCheck.ok && (
+              <ul className="mt-1 grid gap-1">
+                {report.factCheck.warnings.map((warning) => (
+                  <li key={warning} className="cn-serif text-[11px] text-[var(--ink-soft)]">
+                    {warning}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </section>
       )}
+    </div>
+  );
+}
+
+function ReportPreviewFlow({
+  chapter,
+  chapterNo,
+  dateStr,
+  report,
+  privacy,
+  posterRef,
+  reportStyle,
+  onStyleChange,
+  shareText,
+  onShareTextChange,
+  edits,
+  onEditsChange,
+  shareUrl,
+  exporting,
+  onExport,
+  onNativeShare,
+  onCopy,
+  onPublish,
+  onBack,
+}: {
+  chapter: ArchivedChapter;
+  chapterNo: number;
+  dateStr: string;
+  report: PostchainReport;
+  privacy: PostchainPrivacySettings;
+  posterRef: React.RefObject<HTMLDivElement | null>;
+  reportStyle: PostchainReportStyle;
+  onStyleChange: (value: PostchainReportStyle) => void;
+  shareText: string;
+  onShareTextChange: (value: string) => void;
+  edits: ReportEdits;
+  onEditsChange: (value: ReportEdits) => void;
+  shareUrl: string;
+  exporting: boolean;
+  onExport: (type?: "image/png" | "image/jpeg") => void;
+  onNativeShare: () => void;
+  onCopy: () => void;
+  onPublish: () => void;
+  onBack: () => void;
+}) {
+  const setEdit = <K extends keyof ReportEdits>(key: K, value: ReportEdits[K]) =>
+    onEditsChange({ ...edits, [key]: value });
+  const storyFragments = edits.storyFragments ?? report.storyFragments;
+  return (
+    <div className="space-y-5">
+      <section className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="display text-[10px] tracking-[0.35em] text-[var(--ink-soft)]">
+              REPORT PREVIEW · 报告预览
+            </div>
+            <h2 className="cn-serif text-[19px] text-[var(--ink)] mt-1">编辑并发布这份路线报告</h2>
+          </div>
+          <button onClick={onBack} className="btn-ghost text-[12px] px-3 py-1.5">
+            返回设置
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-3">
+          <SegmentedControl<PostchainReportStyle>
+            label="STYLE"
+            value={reportStyle}
+            options={[
+              ["moments", "朋友圈"],
+              ["literary", "文艺漫游"],
+              ["saving", "省心攻略"],
+              ["niche", "小众人格"],
+            ]}
+            onChange={onStyleChange}
+          />
+
+          <div className="grid gap-3">
+            <div>
+              <div className="display text-[9px] tracking-[0.3em] text-[var(--ink-soft)] mb-2">
+                EDIT · 报告字段
+              </div>
+              <div className="grid gap-2">
+                {(
+                  [
+                    ["title", "报告标题", report.title],
+                    ["identityBadge", "人设标签", report.identityBadge],
+                    ["flexLine", "态度短句", report.flexLine],
+                    ["bragLine", "炫耀句", report.bragLine],
+                    ["ending", "结尾总结", report.ending],
+                    ["nextHook", "后续钩子", report.nextHook],
+                  ] as const
+                ).map(([key, label, fallback]) => (
+                  <label key={key} className="grid gap-1">
+                    <span className="cn-serif text-[11px] text-[var(--ink-soft)]">{label}</span>
+                    <input
+                      value={(edits[key] as string | undefined) ?? fallback}
+                      onChange={(e) => setEdit(key, e.target.value)}
+                      className="w-full rounded-xl border border-[var(--border)] bg-[var(--muted)]/40 px-3 py-2 cn-serif text-[12px] text-[var(--ink)]"
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="display text-[9px] tracking-[0.3em] text-[var(--ink-soft)] mb-2">
+                EDIT · 节点故事
+              </div>
+              <div className="grid gap-2">
+                {storyFragments.map((fragment, index) => (
+                  <textarea
+                    key={`${index}-${report.completedNodes[index]?.order ?? index}`}
+                    value={fragment}
+                    rows={2}
+                    onChange={(e) => {
+                      const next = [...storyFragments];
+                      next[index] = e.target.value;
+                      setEdit("storyFragments", next);
+                    }}
+                    className="w-full rounded-xl border border-[var(--border)] bg-[var(--muted)]/40 px-3 py-2 cn-serif text-[12px] leading-relaxed text-[var(--ink)] resize-none"
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="display text-[9px] tracking-[0.3em] text-[var(--ink-soft)] mb-2">
+              COPY · 分享文案
+            </div>
+            <textarea
+              value={shareText}
+              onChange={(e) => onShareTextChange(e.target.value)}
+              rows={4}
+              className="w-full rounded-2xl border border-[var(--border)] bg-[var(--muted)]/40 px-3 py-2.5 cn-serif text-[13px] leading-relaxed text-[var(--ink)] resize-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={onCopy} className="btn-ghost justify-center text-[12px]">
+              复制文案
+            </button>
+            <button onClick={() => onExport("image/png")} disabled={exporting} className="btn-soft justify-center text-[12px]">
+              {exporting ? "导出中…" : "导出 PNG"}
+            </button>
+            <button onClick={() => onExport("image/jpeg")} disabled={exporting} className="btn-ghost justify-center text-[12px]">
+              导出 JPG
+            </button>
+            <button onClick={onNativeShare} disabled={exporting} className="btn-ghost justify-center text-[12px]">
+              系统分享
+            </button>
+            <button onClick={onPublish} className="btn-soft col-span-2 justify-center text-[12px]">
+              生成分享页
+            </button>
+          </div>
+          {shareUrl && (
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--muted)]/50 px-3 py-3 grid grid-cols-[88px_1fr] gap-3 items-center">
+              <img src={qrSvgDataUrl(shareUrl)} alt="分享二维码" className="w-[88px] h-[88px] rounded-xl border border-[var(--border)] bg-white" />
+              <div className="min-w-0">
+                <div className="display text-[9px] tracking-[0.3em] text-[var(--ink-soft)]">
+                  QR · 分享码
+                </div>
+                <div className="cn-serif text-[11px] text-[var(--ink)] mt-1 break-all">
+                  {shareUrl}
+                </div>
+              </div>
+            </div>
+          )}
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--muted)]/50 px-3 py-2">
+            <div className="cn-serif text-[12px] text-[var(--ink)]">
+              事实校验：{report.factCheck.ok ? "通过" : "需复核"}
+            </div>
+            {!report.factCheck.ok && (
+              <ul className="mt-1 grid gap-1">
+                {report.factCheck.warnings.map((warning) => (
+                  <li key={warning} className="cn-serif text-[11px] text-[var(--ink-soft)]">
+                    {warning}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <PostchainPoster
+        refEl={posterRef}
+        chapter={chapter}
+        chapterNo={chapterNo}
+        dateStr={dateStr}
+        report={report}
+        privacy={privacy}
+      />
+
+      <section className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-4">
+        <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)]">
+          ROUTE · 预览节点
+        </div>
+        <div className="mt-3 grid gap-2">
+          {report.completedNodes.concat(report.incompleteNodes).map((node) => (
+            <div
+              key={`${node.order}-${node.displayName}`}
+              className="rounded-2xl border border-[var(--border)] bg-[var(--muted)]/50 px-3 py-2"
+            >
+              <div className="cn-serif text-[13px] text-[var(--ink)]">
+                {node.order}. {node.displayName}
+              </div>
+              <div className="cn-serif text-[11px] text-[var(--ink-soft)] mt-0.5">
+                {node.locationType}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function PostchainAuthDialog({
+  value,
+  onChange,
+  onCancel,
+  onConfirm,
+}: {
+  value: PostchainAuthLevel;
+  onChange: (value: PostchainAuthLevel) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const options: Array<{
+    value: PostchainAuthLevel;
+    title: string;
+    desc: string;
+  }> = [
+    {
+      value: "basic",
+      title: "基础授权",
+      desc: "仅使用路线完成数据，生成基础路线回顾。",
+    },
+    {
+      value: "personal",
+      title: "标准授权",
+      desc: "使用本次点位、品类、照片、随笔和心情记录生成个性报告。",
+    },
+    {
+      value: "full",
+      title: "高级授权",
+      desc: "使用完整本次记录，并预留订单金额、优惠和历史偏好数据位。",
+    },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/45 backdrop-blur-sm" onClick={onCancel} />
+      <div
+        className="relative w-full sm:max-w-xl rounded-t-3xl sm:rounded-3xl bg-[var(--card)] border border-[var(--border)] p-5 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.5)] fade-up"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="display text-[10px] tracking-[0.35em] text-[var(--ink-soft)]">
+          DATA AUTH · 数据授权
+        </div>
+        <h3 className="cn-serif text-[20px] text-[var(--ink)] mt-1">生成今日出行总结</h3>
+        <p className="cn-serif text-[13px] leading-relaxed text-[var(--ink-soft)] mt-2">
+          为了生成更准确的路线总结，系统会按你选择的范围使用本次路线完成记录。订单金额等敏感信息默认隐藏，未授权的数据不会出现在分享内容中。
+        </p>
+
+        <div className="mt-4 grid gap-2">
+          {options.map((option) => {
+            const active = option.value === value;
+            return (
+              <button
+                key={option.value}
+                onClick={() => onChange(option.value)}
+                className={`text-left rounded-2xl border px-4 py-3 transition ${
+                  active
+                    ? "bg-[var(--ink)] text-[var(--card)] border-[var(--ink)]"
+                    : "bg-[var(--card)] text-[var(--ink)] border-[var(--border)] hover:bg-[var(--muted)]"
+                }`}
+              >
+                <div className="cn-serif text-[14px]">{option.title}</div>
+                <div className={`cn-serif text-[12px] mt-0.5 ${active ? "opacity-75" : "text-[var(--ink-soft)]"}`}>
+                  {option.desc}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-5 flex items-center justify-end gap-2">
+          <button onClick={onCancel} className="btn-ghost">
+            取消
+          </button>
+          <button onClick={onConfirm} className="btn-soft">
+            同意并生成
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PrivacySettingsPanel({
+  value,
+  onChange,
+}: {
+  value: PostchainPrivacySettings;
+  onChange: (value: PostchainPrivacySettings) => void;
+}) {
+  const items: Array<[keyof PostchainPrivacySettings, string, string]> = [
+    ["showMerchantNames", "展示商户名", "关闭后以节点名/品类替代。"],
+    ["showVisitTime", "展示具体时间", "关闭后不显示打卡时间。"],
+    ["showLocation", "展示城市/地点", "关闭后隐藏城市位置。"],
+    ["showPhotos", "展示照片", "关闭后海报不使用打卡照片。"],
+    ["showAmount", "展示金额", "订单未接入，先预留开关。"],
+    ["showDiscount", "展示优惠", "券包未接入，先预留开关。"],
+  ];
+
+  return (
+    <div>
+      <div className="display text-[9px] tracking-[0.3em] text-[var(--ink-soft)] mb-2">
+        PRIVACY
+      </div>
+      <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3 grid gap-2">
+        {items.map(([key, title, desc]) => (
+          <label key={key} className="flex items-start gap-3 cn-serif text-[12px] text-[var(--ink)]">
+            <input
+              type="checkbox"
+              checked={value[key]}
+              onChange={(e) => onChange({ ...value, [key]: e.target.checked })}
+              className="mt-1 accent-[var(--ink)]"
+            />
+            <span>
+              <span className="block text-[13px]">{title}</span>
+              <span className="block text-[11px] text-[var(--ink-soft)] mt-0.5">{desc}</span>
+            </span>
+          </label>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1129,12 +1907,14 @@ function PostchainPoster({
   chapterNo,
   dateStr,
   report,
+  privacy,
 }: {
   refEl: React.RefObject<HTMLDivElement | null>;
   chapter: ArchivedChapter;
   chapterNo: number;
   dateStr: string;
   report: PostchainReport;
+  privacy: PostchainPrivacySettings;
 }) {
   const coverPhoto = report.photoUrls[0] || chapter.card.cover;
   return (
@@ -1155,7 +1935,7 @@ function PostchainPoster({
             </div>
             <div className="cn-serif text-[12px] text-[var(--ink-soft)] mt-1">
               CH.{String(chapterNo).padStart(2, "0")} · {dateStr}{" "}
-              {chapter.city && `· ${chapter.city}`}
+              {privacy.showLocation && chapter.city && `· ${chapter.city}`}
             </div>
           </div>
           <div className="rarity-chip" data-rarity={chapter.card.rarity}>
@@ -1370,6 +2150,129 @@ function Section({
       </div>
       {children}
     </section>
+  );
+}
+
+function CityPreferenceView({
+  profile,
+  memory,
+  empty,
+  onGo,
+}: {
+  profile: ReturnType<typeof buildCityPreferenceProfile>;
+  memory: DmMemorySnapshot | null;
+  empty: boolean;
+  onGo: () => void;
+}) {
+  if (empty) return <EmptyState onGo={onGo} />;
+  const sourceLabel =
+    profile.memorySource === "mixed" ? "云端画像 + 本地连载" : profile.memorySource === "cloud" ? "云端画像" : "本地连载";
+  return (
+    <div className="space-y-5">
+      <section className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-5">
+        <div className="display text-[10px] tracking-[0.35em] text-[var(--ink-soft)]">
+          CITY PROFILE · 城市偏好档案
+        </div>
+        <h2 className="cn-serif text-[22px] leading-snug text-[var(--ink)] mt-2">
+          {profile.persona}
+        </h2>
+        <div className="cn-serif text-[11px] text-[var(--ink-soft)] mt-2">
+          来源：{sourceLabel}{memory ? ` · 累计 ${memory.total_runs} 次云端记录` : ""}
+        </div>
+      </section>
+
+      <section className="grid grid-cols-2 gap-2">
+        <PreferenceCard title="常去城市" items={profile.topCities} empty="暂无城市" />
+        <PreferenceCard title="常去商圈/区域" items={profile.topDistricts} empty="暂无区域" />
+        <PreferenceCard title="偏好品类" items={profile.topCategories} empty="暂无品类" />
+        <PreferenceCard title="路线节奏" items={[profile.pace]} empty="暂无节奏" />
+      </section>
+
+      <section className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-4">
+        <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)]">
+          TREND · 偏好变化
+        </div>
+        <p className="cn-serif text-[13px] leading-relaxed text-[var(--ink)] mt-2">
+          {profile.trendSummary}
+        </p>
+        <div className="mt-3 rounded-2xl border border-[var(--border)] bg-[var(--muted)]/50 px-3 py-2 cn-serif text-[12px] leading-relaxed text-[var(--ink-soft)]">
+          {profile.paceReason}
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-4">
+        <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)]">
+          TAGS · 情绪与关键词
+        </div>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {[...profile.emotionTags, ...profile.keywords].slice(0, 14).map((tag) => (
+            <span
+              key={tag}
+              className="cn-serif text-[11px] px-2.5 py-1 rounded-full bg-[var(--muted)] text-[var(--ink-soft)] border border-[var(--border)]"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-4">
+        <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)]">
+          NEXT ROUTE · 下一条推荐理由
+        </div>
+        <div className="mt-2 rounded-2xl border border-[var(--border)] bg-[var(--muted)]/50 px-3 py-2">
+          <div className="display text-[9px] tracking-[0.28em] text-[var(--ink-soft)]">
+            BRIEF
+          </div>
+          <div className="cn-serif text-[14px] text-[var(--ink)] mt-1">
+            {profile.nextRouteBrief}
+          </div>
+        </div>
+        <p className="cn-serif text-[14px] leading-relaxed text-[var(--ink)] mt-2">
+          {profile.nextRecommendationReason}
+        </p>
+        <div className="mt-3 grid gap-2">
+          {[...profile.recommendationProof, ...profile.categoryReasons.slice(0, 2), ...profile.districtReasons.slice(0, 1)].map((proof) => (
+            <div
+              key={proof}
+              className="rounded-2xl border border-[var(--border)] bg-[var(--muted)]/50 px-3 py-2 cn-serif text-[11px] leading-relaxed text-[var(--ink-soft)]"
+            >
+              {proof}
+            </div>
+          ))}
+        </div>
+        {memory?.disliked_tags?.length ? (
+          <div className="mt-3 cn-serif text-[11px] text-[var(--ink-soft)]">
+            会避开的标签：{memory.disliked_tags.join("、")}
+          </div>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
+function PreferenceCard({
+  title,
+  items,
+  empty,
+}: {
+  title: string;
+  items: string[];
+  empty: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3">
+      <div className="display text-[9px] tracking-[0.28em] text-[var(--ink-soft)]">
+        {title}
+      </div>
+      <div className="mt-2 space-y-1">
+        {(items.length ? items : [empty]).map((item) => (
+          <div key={item} className="cn-serif text-[13px] text-[var(--ink)]">
+            {item}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

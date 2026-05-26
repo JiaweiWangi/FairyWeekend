@@ -1,8 +1,11 @@
 import type { JourneyRunState, PersonaCard, Journey, SceneRecord } from "./persona-types";
+import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 
 const KEY = "todaypersona:run:v1";
 const CARD_KEY = "todaypersona:card:v1";
 const SAGA_KEY = "todaypersona:saga:v1"; // persistent archive across runs
+const PLAYER_KEY = "default";
 
 export interface ArchivedChapter extends JourneyRunState {
   chapterId: string;
@@ -21,6 +24,117 @@ function saveSagas(list: ArchivedChapter[]) {
   localStorage.setItem(SAGA_KEY, JSON.stringify(list));
 }
 
+function mergeSagas(local: ArchivedChapter[], remote: ArchivedChapter[]): ArchivedChapter[] {
+  const map = new Map<string, ArchivedChapter>();
+  for (const item of [...remote, ...local]) {
+    const existing = map.get(item.chapterId);
+    if (!existing || (item.archivedAt ?? 0) > (existing.archivedAt ?? 0)) {
+      map.set(item.chapterId, item);
+    }
+  }
+  return [...map.values()]
+    .sort((a, b) => (b.archivedAt ?? b.createdAt) - (a.archivedAt ?? a.createdAt))
+    .slice(0, 100);
+}
+
+export async function syncChapterToCloud(chapter: ArchivedChapter) {
+  try {
+    const { error } = await supabase.from("saga_archive").upsert(
+      {
+        chapter_id: chapter.chapterId,
+        player_key: PLAYER_KEY,
+        chapter: chapter as unknown as Json,
+        city: chapter.city ?? null,
+        card_identity: chapter.card.identity,
+        completed_count: chapter.completedSceneOrders.length,
+        total_count: chapter.journey.scenes.length,
+        archived_at: new Date(chapter.archivedAt).toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "chapter_id" },
+    );
+    if (error) console.warn("[saga cloud sync]", error.message);
+  } catch (error) {
+    console.warn("[saga cloud sync]", error);
+  }
+}
+
+export async function loadCloudSagas(): Promise<ArchivedChapter[]> {
+  try {
+    const { data, error } = await supabase
+      .from("saga_archive")
+      .select("chapter")
+      .eq("player_key", PLAYER_KEY)
+      .order("archived_at", { ascending: false })
+      .limit(100);
+    if (error) {
+      console.warn("[saga cloud load]", error.message);
+      return [];
+    }
+    return (data ?? [])
+      .map((row) => row.chapter as unknown as ArchivedChapter)
+      .filter((chapter) => chapter?.chapterId && chapter?.journey);
+  } catch (error) {
+    console.warn("[saga cloud load]", error);
+    return [];
+  }
+}
+
+export async function hydrateSagasFromCloud(): Promise<ArchivedChapter[]> {
+  const local = loadSagas();
+  const remote = await loadCloudSagas();
+  const merged = mergeSagas(local, remote);
+  saveSagas(merged);
+  return merged;
+}
+
+async function deleteCloudChapter(chapterId: string) {
+  try {
+    const { error } = await supabase.from("saga_archive").delete().eq("chapter_id", chapterId);
+    if (error) console.warn("[saga cloud delete]", error.message);
+  } catch (error) {
+    console.warn("[saga cloud delete]", error);
+  }
+}
+
+function chapterToQuestPayload(chapter: ArchivedChapter) {
+  return {
+    player_key: PLAYER_KEY,
+    character_class: chapter.card.identity,
+    emotion: chapter.card.mood,
+    city: chapter.city ?? "",
+    quest: {
+      quest_name: chapter.card.mission,
+      quest_brief: chapter.journey.story_opening,
+      stages: chapter.journey.scenes.map((scene) => ({
+        order: scene.order,
+        stage_name: scene.scene_name,
+        location_name: scene.location_name,
+        location_type: scene.location_type,
+        emotion_tags: scene.emotion_tags,
+      })),
+    },
+    stages_unlocked: chapter.completedSceneOrders.length,
+    liked_stage_orders: chapter.completedSceneOrders,
+    feedback: Object.values(chapter.sceneRecords ?? {})
+      .map((record) => record.note)
+      .filter(Boolean)
+      .join("；")
+      .slice(0, 500),
+  };
+}
+
+export async function recordChapterToMemory(chapter: ArchivedChapter) {
+  try {
+    const { error } = await supabase.functions.invoke("record-quest", {
+      body: chapterToQuestPayload(chapter),
+    });
+    if (error) console.warn("[record quest]", error.message);
+  } catch (error) {
+    console.warn("[record quest]", error);
+  }
+}
+
 export function archiveCurrentRun(): ArchivedChapter | null {
   const run = loadRun();
   if (!run) return null;
@@ -31,11 +145,14 @@ export function archiveCurrentRun(): ArchivedChapter | null {
   const chapter: ArchivedChapter = { ...run, chapterId, archivedAt: Date.now() };
   const next = [chapter, ...list].slice(0, 100);
   saveSagas(next);
+  void syncChapterToCloud(chapter);
+  void recordChapterToMemory(chapter);
   return chapter;
 }
 
 export function deleteChapter(chapterId: string) {
   saveSagas(loadSagas().filter((c) => c.chapterId !== chapterId));
+  void deleteCloudChapter(chapterId);
 }
 
 export interface LibraryEntry {

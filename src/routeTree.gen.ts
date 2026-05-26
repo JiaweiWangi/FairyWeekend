@@ -9,12 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ShareRouteImport } from './routes/share'
 import { Route as MeRouteImport } from './routes/me'
 import { Route as JourneyRouteImport } from './routes/journey'
 import { Route as FinaleRouteImport } from './routes/finale'
 import { Route as CardRouteImport } from './routes/card'
 import { Route as IndexRouteImport } from './routes/index'
 
+const ShareRoute = ShareRouteImport.update({
+  id: '/share',
+  path: '/share',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MeRoute = MeRouteImport.update({
   id: '/me',
   path: '/me',
@@ -47,6 +53,7 @@ export interface FileRoutesByFullPath {
   '/finale': typeof FinaleRoute
   '/journey': typeof JourneyRoute
   '/me': typeof MeRoute
+  '/share': typeof ShareRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -54,6 +61,7 @@ export interface FileRoutesByTo {
   '/finale': typeof FinaleRoute
   '/journey': typeof JourneyRoute
   '/me': typeof MeRoute
+  '/share': typeof ShareRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -62,13 +70,14 @@ export interface FileRoutesById {
   '/finale': typeof FinaleRoute
   '/journey': typeof JourneyRoute
   '/me': typeof MeRoute
+  '/share': typeof ShareRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/card' | '/finale' | '/journey' | '/me'
+  fullPaths: '/' | '/card' | '/finale' | '/journey' | '/me' | '/share'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/card' | '/finale' | '/journey' | '/me'
-  id: '__root__' | '/' | '/card' | '/finale' | '/journey' | '/me'
+  to: '/' | '/card' | '/finale' | '/journey' | '/me' | '/share'
+  id: '__root__' | '/' | '/card' | '/finale' | '/journey' | '/me' | '/share'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -77,10 +86,18 @@ export interface RootRouteChildren {
   FinaleRoute: typeof FinaleRoute
   JourneyRoute: typeof JourneyRoute
   MeRoute: typeof MeRoute
+  ShareRoute: typeof ShareRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/share': {
+      id: '/share'
+      path: '/share'
+      fullPath: '/share'
+      preLoaderRoute: typeof ShareRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/me': {
       id: '/me'
       path: '/me'
@@ -125,6 +142,7 @@ const rootRouteChildren: RootRouteChildren = {
   FinaleRoute: FinaleRoute,
   JourneyRoute: JourneyRoute,
   MeRoute: MeRoute,
+  ShareRoute: ShareRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -123,6 +123,15 @@ function FinalePage() {
           ❦ 收进我的连载
         </button>
         <button
+          onClick={() => {
+            localStorage.setItem("todaypersona:open-postchain:v1", "1");
+            navigate({ to: "/me" });
+          }}
+          className="btn-soft w-full justify-center"
+        >
+          生成今日出行总结
+        </button>
+        <button
           onClick={() => { clearRun(); navigate({ to: "/" }); }}
           className="btn-ghost"
         >

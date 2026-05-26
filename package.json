@@ -9,6 +9,7 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
+    "postchain:test": "node --test tests/postchain.test.mjs",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

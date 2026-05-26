@@ -4,9 +4,19 @@ import type { JourneyScene, SceneRecord } from "./persona-types";
 export type PostchainAuthLevel = "basic" | "personal" | "full";
 export type PostchainReportStyle = "moments" | "literary" | "saving" | "niche";
 
+export interface PostchainPrivacySettings {
+  showMerchantNames: boolean;
+  showVisitTime: boolean;
+  showLocation: boolean;
+  showPhotos: boolean;
+  showAmount: boolean;
+  showDiscount: boolean;
+}
+
 export interface PostchainReportOptions {
   authLevel: PostchainAuthLevel;
   reportStyle: PostchainReportStyle;
+  privacy?: PostchainPrivacySettings;
 }
 
 export interface PostchainCta {
@@ -15,8 +25,24 @@ export interface PostchainCta {
   action: string;
 }
 
+export interface PostchainNodeSummary {
+  order: number;
+  sceneName: string;
+  displayName: string;
+  locationType: string;
+}
+
+export interface PostchainFactCheck {
+  ok: boolean;
+  warnings: string[];
+  allowedPlaces: string[];
+  allowedCompletedOrders: number[];
+}
+
 export interface PostchainReport {
   title: string;
+  routeTheme: string;
+  routeSummary: string;
   identityBadge: string;
   personalityCore: string;
   hiddenDesire: string;
@@ -29,7 +55,17 @@ export interface PostchainReport {
   lifestyleInvestmentLabel: string;
   flexLine: string;
   completionRate: number;
+  completionPercent: number;
+  completionText: string;
+  completedNodes: PostchainNodeSummary[];
+  incompleteNodes: PostchainNodeSummary[];
   completedPlaces: string[];
+  incompletePlaces: string[];
+  routeKeywords: string[];
+  behaviorTraits: string[];
+  initialPersona: string;
+  recommendedNextActions: PostchainCta[];
+  factCheck: PostchainFactCheck;
   unlockedKeywords: string[];
   storyFragments: string[];
   factSummary: string[];
@@ -48,6 +84,10 @@ type CompletedScene = {
   record?: SceneRecord;
 };
 
+type SceneSummaryOptions = {
+  privacy: PostchainPrivacySettings;
+};
+
 function completedScenes(chapter: ArchivedChapter): CompletedScene[] {
   return chapter.journey.scenes
     .filter((scene) => chapter.completedSceneOrders.includes(scene.order))
@@ -56,6 +96,22 @@ function completedScenes(chapter: ArchivedChapter): CompletedScene[] {
 
 function unique<T>(items: T[]): T[] {
   return [...new Set(items)];
+}
+
+function sceneDisplayName(scene: JourneyScene, privacy: PostchainPrivacySettings): string {
+  return privacy.showMerchantNames ? scene.location_name : scene.scene_name;
+}
+
+function sceneSummary(
+  scene: JourneyScene,
+  options: SceneSummaryOptions,
+): PostchainNodeSummary {
+  return {
+    order: scene.order,
+    sceneName: scene.scene_name,
+    displayName: sceneDisplayName(scene, options.privacy),
+    locationType: scene.location_type,
+  };
 }
 
 function buildKeywords(chapter: ArchivedChapter, completed: CompletedScene[]): string[] {
@@ -73,6 +129,53 @@ function buildKeywords(chapter: ArchivedChapter, completed: CompletedScene[]): s
       ]),
     ].filter(Boolean) as string[],
   ).slice(0, 6);
+}
+
+function buildRouteKeywords(
+  chapter: ArchivedChapter,
+  completed: CompletedScene[],
+  privacy: PostchainPrivacySettings,
+): string[] {
+  return unique(
+    [
+      privacy.showLocation ? chapter.city : undefined,
+      chapter.card.rarity,
+      ...chapter.card.mood.split(/[，、\s]+/),
+      ...chapter.card.mission.split(/[，、\s]+/),
+      ...completed.flatMap(({ scene }) => [
+        scene.location_type,
+        ...scene.emotion_tags,
+        scene.meituan_keyword,
+      ]),
+    ]
+      .map((item) => item?.trim())
+      .filter(Boolean) as string[],
+  ).slice(0, 10);
+}
+
+function buildBehaviorTraits(
+  completed: CompletedScene[],
+  incomplete: JourneyScene[],
+  completionRate: number,
+): string[] {
+  const traits: string[] = [];
+  const typeCount = unique(completed.map(({ scene }) => scene.location_type)).length;
+  const noteCount = completed.filter(({ record }) => record?.note).length;
+  const photoCount = completed.filter(({ record }) => record?.photo).length;
+  const avgStay =
+    completed.reduce((sum, { scene }) => sum + (scene.stay_minutes || 0), 0) /
+    Math.max(completed.length, 1);
+
+  if (completionRate >= 1) traits.push("完整完成路线");
+  else if (completionRate >= 0.5) traits.push("完成核心节点");
+  else traits.push("轻量体验路线");
+  if (typeCount >= 3) traits.push("跨品类探索");
+  if (avgStay >= 45) traits.push("慢节奏停留");
+  if (noteCount > 0) traits.push("主动记录体验");
+  if (photoCount > 0) traits.push("有照片素材");
+  if (incomplete.length > 0) traits.push("存在可补完节点");
+
+  return traits.slice(0, 6);
 }
 
 function investmentScore(completed: CompletedScene[], base: number): number {
@@ -161,12 +264,21 @@ function inferInsight(chapter: ArchivedChapter, completed: CompletedScene[], key
 function buildFactSummary(
   chapter: ArchivedChapter,
   completed: CompletedScene[],
+  incomplete: JourneyScene[],
   options: PostchainReportOptions,
 ): string[] {
+  const privacy = resolvePrivacy(options.privacy);
+  const placeLabel = privacy.showMerchantNames ? "已完成地点" : "已完成节点";
+  const completedNames = completed
+    .map(({ scene }) => sceneDisplayName(scene, privacy))
+    .join("、");
+  const incompleteNames = incomplete.map((scene) => scene.scene_name).join("、");
   const facts = [
-    `路线城市：${chapter.city || "未知城市"}`,
+    privacy.showLocation ? `路线城市：${chapter.city || "未知城市"}` : "路线城市：已隐藏",
     `完成点位：${completed.length}/${chapter.journey.scenes.length}`,
-    `已完成地点：${completed.map(({ scene }) => scene.location_name).join("、") || "暂无"}`,
+    `路线完成度：${Math.round((completed.length / Math.max(chapter.journey.scenes.length, 1)) * 100)}%`,
+    `${placeLabel}：${completedNames || "暂无"}`,
+    `未完成节点：${incompleteNames || "无"}`,
   ];
   if (options.authLevel !== "basic") {
     facts.push(
@@ -177,7 +289,27 @@ function buildFactSummary(
     );
   }
   if (options.authLevel === "full") {
-    facts.push(`照片素材：${completed.filter(({ record }) => record?.photo).length} 张`);
+    if (privacy.showPhotos) {
+      facts.push(`照片素材：${completed.filter(({ record }) => record?.photo).length} 张`);
+    }
+    if (privacy.showVisitTime) {
+      const latest = completed
+        .map(({ record }) => record?.completedAt)
+        .filter(Boolean)
+        .sort((a, b) => Number(b) - Number(a))[0];
+      facts.push(
+        latest
+          ? `最近打卡：${new Date(latest).toLocaleString("zh-CN", {
+              month: "short",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}`
+          : "最近打卡：暂无",
+      );
+    }
+    facts.push(privacy.showAmount ? "消费金额：等待订单数据接入" : "消费金额：已隐藏");
+    facts.push(privacy.showDiscount ? "优惠使用：等待券包数据接入" : "优惠使用：已隐藏");
     facts.push(
       `情绪标签：${
         unique(completed.flatMap(({ scene }) => scene.emotion_tags))
@@ -189,17 +321,30 @@ function buildFactSummary(
   return facts;
 }
 
-function buildDataSignals(chapter: ArchivedChapter, completed: CompletedScene[]): string[] {
+function buildDataSignals(
+  chapter: ArchivedChapter,
+  completed: CompletedScene[],
+  authLevel: PostchainAuthLevel,
+  privacy: PostchainPrivacySettings,
+): string[] {
+  const canUsePersonalRecords = authLevel !== "basic";
   const enhanced = completed.filter(({ record }) => record?.note || record?.photo).length;
   const topTypes = unique(completed.map(({ scene }) => scene.location_type)).slice(0, 4);
-  return [
+  const signals = [
     `完成 ${completed.length}/${chapter.journey.scenes.length} 个剧情节点`,
-    `上传照片 ${completed.filter(({ record }) => record?.photo).length} 张`,
-    `留下随笔 ${completed.filter(({ record }) => record?.note).length} 条`,
-    `增强记录 ${enhanced} 个场景`,
+    canUsePersonalRecords && privacy.showPhotos
+      ? `上传照片 ${completed.filter(({ record }) => record?.photo).length} 张`
+      : "照片素材：未授权使用",
+    canUsePersonalRecords
+      ? `留下随笔 ${completed.filter(({ record }) => record?.note).length} 条`
+      : "随笔记录：未授权使用",
+    canUsePersonalRecords ? `增强记录 ${enhanced} 个场景` : "增强记录：未授权使用",
     topTypes.length ? `路线品类：${topTypes.join(" / ")}` : "路线品类：等待点亮",
     `情绪弧线：${chapter.journey.emotion_arc.start} → ${chapter.journey.emotion_arc.end}`,
   ];
+  if (!privacy.showMerchantNames) signals.push("商户名称：分享时隐藏");
+  if (!privacy.showVisitTime) signals.push("具体时间：分享时隐藏");
+  return signals;
 }
 
 function buildPoem(
@@ -207,10 +352,12 @@ function buildPoem(
   completed: CompletedScene[],
   identityBadge: string,
   style: PostchainReportStyle,
+  privacy: PostchainPrivacySettings,
 ): [string, string[]] {
   const categories = completed.map(({ scene }) => scene.location_type);
   const first = categories[0] || "城市";
   const second = categories[1] || "晚风";
+  const cityLabel = privacy.showLocation ? chapter.city || "这座城市" : "这座城市";
   if (style === "saving") {
     return [
       "打油诗",
@@ -222,7 +369,7 @@ function buildPoem(
       "三行诗",
       [
         `你把下午交给${first}和${second}，`,
-        `${chapter.city || "这座城市"}替你留下慢下来的证据，`,
+        `${cityLabel}替你留下慢下来的证据，`,
         `风经过时，悄悄叫出「${identityBadge}」。`,
       ],
     ];
@@ -255,28 +402,214 @@ function buildCta(completionRate: number, style: PostchainReportStyle): Postchai
   };
 }
 
+function buildRecommendedNextActions(
+  completionRate: number,
+  style: PostchainReportStyle,
+  incomplete: JourneyScene[],
+  routeKeywords: string[],
+): PostchainCta[] {
+  const actions: PostchainCta[] = [];
+
+  if (incomplete.length > 0) {
+    actions.push({
+      title: "补完未完成点位",
+      body: `还有 ${incomplete.length} 个节点没有点亮，可以从「${incomplete[0].scene_name}」继续这条路线。`,
+      action: "继续点亮",
+    });
+  }
+
+  actions.push({
+    title: "生成下一条相似路线",
+    body: `基于 ${routeKeywords.slice(0, 3).join("、") || "本次路线"} 继续推荐同气质路线。`,
+    action: "生成相似路线",
+  });
+
+  if (completionRate >= 1) {
+    actions.push({
+      title: "复刻这条路线",
+      body: "将本次路线整理成可分享版本，朋友可一键复刻或生成适合自己的版本。",
+      action: "生成复刻链接",
+    });
+  }
+
+  if (style === "saving") {
+    actions.push({
+      title: "领取同款券包",
+      body: "后续可接入券包数据，为同商圈路线承接优惠转化。",
+      action: "查看券包",
+    });
+  }
+
+  return actions.slice(0, 4);
+}
+
+function validatePostchainReportFacts(
+  chapter: ArchivedChapter,
+  completed: CompletedScene[],
+  privacy: PostchainPrivacySettings,
+  report: Pick<
+    PostchainReport,
+    | "completedNodes"
+    | "incompleteNodes"
+    | "completedPlaces"
+    | "incompletePlaces"
+    | "completionPercent"
+    | "storyFragments"
+  >,
+): PostchainFactCheck {
+  const warnings: string[] = [];
+  const allSceneNames = new Set(chapter.journey.scenes.map((scene) => scene.scene_name));
+  const allPlaceNames = new Set(chapter.journey.scenes.map((scene) => scene.location_name));
+  const allTypes = new Set(chapter.journey.scenes.map((scene) => scene.location_type));
+  const completedOrders = new Set(chapter.completedSceneOrders);
+  const realCompletionPercent = Math.round(
+    (completed.length / Math.max(chapter.journey.scenes.length, 1)) * 100,
+  );
+
+  for (const node of report.completedNodes) {
+    if (!completedOrders.has(node.order)) warnings.push(`完成节点未被真实点亮：${node.displayName}`);
+    if (!allSceneNames.has(node.sceneName)) warnings.push(`完成节点不在路线中：${node.sceneName}`);
+  }
+  for (const node of report.incompleteNodes) {
+    if (completedOrders.has(node.order)) warnings.push(`未完成节点实际已点亮：${node.displayName}`);
+    if (!allSceneNames.has(node.sceneName)) warnings.push(`未完成节点不在路线中：${node.sceneName}`);
+  }
+  for (const name of [...report.completedPlaces, ...report.incompletePlaces]) {
+    if (!allSceneNames.has(name) && !allPlaceNames.has(name) && !allTypes.has(name)) {
+      warnings.push(`报告出现路线外地点：${name}`);
+    }
+  }
+  if (report.completionPercent !== realCompletionPercent) {
+    warnings.push(`完成度不一致：${report.completionPercent}% / ${realCompletionPercent}%`);
+  }
+  if (report.storyFragments.some((item) => /¥|￥|\d+\s*元/.test(item))) {
+    warnings.push("故事片段出现未接入订单金额");
+  }
+  if (!privacy.showLocation && chapter.city) {
+    if (report.storyFragments.some((item) => item.includes(chapter.city || ""))) {
+      warnings.push("故事片段包含已隐藏的城市/地点信息");
+    }
+  }
+  if (!privacy.showMerchantNames) {
+    const leakedMerchant = chapter.journey.scenes.find((scene) =>
+      report.storyFragments.some((item) => item.includes(scene.location_name)),
+    );
+    if (leakedMerchant) warnings.push(`故事片段包含已隐藏商户名：${leakedMerchant.location_name}`);
+  }
+
+  return {
+    ok: warnings.length === 0,
+    warnings,
+    allowedPlaces: [...allPlaceNames],
+    allowedCompletedOrders: [...completedOrders],
+  };
+}
+
+export function validatePostchainEditedReport(
+  chapter: ArchivedChapter,
+  privacy: PostchainPrivacySettings,
+  report: Pick<
+    PostchainReport,
+    | "completedNodes"
+    | "incompleteNodes"
+    | "completedPlaces"
+    | "incompletePlaces"
+    | "completionPercent"
+    | "storyFragments"
+  >,
+): PostchainFactCheck {
+  return validatePostchainReportFacts(chapter, completedScenes(chapter), privacy, report);
+}
+
+export function validatePostchainShareText(
+  chapter: ArchivedChapter,
+  privacy: PostchainPrivacySettings,
+  text: string,
+): string[] {
+  const warnings: string[] = [];
+  if (/¥|￥|\d+\s*元/.test(text)) {
+    warnings.push("分享文案出现订单金额，但当前未接入订单金额事实。");
+  }
+  if (!privacy.showLocation && chapter.city && text.includes(chapter.city)) {
+    warnings.push("分享文案包含已隐藏的城市/地点信息。");
+  }
+  if (!privacy.showMerchantNames) {
+    const leakedMerchant = chapter.journey.scenes.find(
+      (scene) => scene.location_name && text.includes(scene.location_name),
+    );
+    if (leakedMerchant) warnings.push(`分享文案包含已隐藏商户名：${leakedMerchant.location_name}`);
+  }
+  return warnings;
+}
+
+const DEFAULT_PRIVACY: PostchainPrivacySettings = {
+  showMerchantNames: true,
+  showVisitTime: false,
+  showLocation: true,
+  showPhotos: true,
+  showAmount: false,
+  showDiscount: false,
+};
+
+function resolvePrivacy(privacy?: PostchainPrivacySettings): PostchainPrivacySettings {
+  return { ...DEFAULT_PRIVACY, ...privacy };
+}
+
 export function buildPostchainReport(
   chapter: ArchivedChapter,
   options: PostchainReportOptions,
 ): PostchainReport {
+  const privacy = resolvePrivacy(options.privacy);
+  const canUsePersonalRecords = options.authLevel !== "basic";
   const completed = completedScenes(chapter);
+  const incomplete = chapter.journey.scenes.filter(
+    (scene) => !chapter.completedSceneOrders.includes(scene.order),
+  );
+  const completedForGeneration: CompletedScene[] = canUsePersonalRecords
+    ? completed
+    : completed.map(({ scene }) => ({ scene }));
   const completionRate = completed.length / Math.max(chapter.journey.scenes.length, 1);
-  const unlockedKeywords = buildKeywords(chapter, completed);
-  const insight = inferInsight(chapter, completed, unlockedKeywords);
+  const completionPercent = Math.round(completionRate * 100);
+  const unlockedKeywords = buildKeywords(chapter, completedForGeneration);
+  const routeKeywords = buildRouteKeywords(chapter, completedForGeneration, privacy);
+  const behaviorTraits = canUsePersonalRecords
+    ? buildBehaviorTraits(completed, incomplete, completionRate)
+    : buildBehaviorTraits(completedForGeneration, incomplete, completionRate).filter(
+        (trait) => trait !== "主动记录体验" && trait !== "有照片素材",
+      );
+  const insight = inferInsight(chapter, completedForGeneration, unlockedKeywords);
   const [poemType, poemLines] = buildPoem(
     chapter,
-    completed,
+    completedForGeneration,
     insight.identityBadge,
     options.reportStyle,
+    privacy,
   );
-  const completedPlaces = completed.map(({ scene }) => scene.location_name);
-  const photoUrls = completed.map(({ record }) => record?.photo).filter(Boolean) as string[];
+  const completedPlaces = completed.map(({ scene }) =>
+    sceneDisplayName(scene, privacy),
+  );
+  const incompletePlaces = incomplete.map((scene) => scene.scene_name);
+  const completedNodes = completed.map(({ scene }) => sceneSummary(scene, { privacy }));
+  const incompleteNodes = incomplete.map((scene) => sceneSummary(scene, { privacy }));
+  const photoUrls = canUsePersonalRecords && privacy.showPhotos
+    ? (completed.map(({ record }) => record?.photo).filter(Boolean) as string[])
+    : [];
   const storyFragments = completed.map(({ scene, record }) =>
-    record?.note
-      ? `${scene.scene_name} ${scene.location_name}：${record.note}`
-      : `${scene.scene_name} ${scene.location_name}：你完成了「${scene.action_task}」`,
+    canUsePersonalRecords && record?.note
+      ? `${scene.scene_name} ${
+          privacy.showMerchantNames ? scene.location_name : scene.location_type
+        }：${record.note}`
+      : `${scene.scene_name} ${
+          privacy.showMerchantNames ? scene.location_name : scene.location_type
+        }：你完成了「${scene.action_task}」`,
   );
   const primaryCta = buildCta(completionRate, options.reportStyle);
+  const recommendedNextActions = buildRecommendedNextActions(
+    completionRate,
+    options.reportStyle,
+    incomplete,
+    routeKeywords,
+  );
   const ending =
     completionRate >= 1
       ? "你把这个下午从日常里偷了回来，并把它写成了自己的隐藏结局。"
@@ -284,15 +617,32 @@ export function buildPostchainReport(
         ? "你没有走完整条路线，但已经从城市手里拿回了一枚属于今天的线索。"
         : "故事刚刚亮起一角，城市还把后半段留给下一次见面。";
 
-  return {
+  const draftReport: PostchainReport = {
     title: `${insight.identityBadge}的今日结局`,
+    routeTheme: chapter.card.mission,
+    routeSummary: `${chapter.card.identity} · ${chapter.journey.emotion_arc.start} → ${chapter.journey.emotion_arc.end}`,
     ...insight,
     completionRate,
+    completionPercent,
+    completionText: `已完成 ${completed.length}/${chapter.journey.scenes.length} 个节点，完成度 ${completionPercent}%`,
+    completedNodes,
+    incompleteNodes,
     completedPlaces,
+    incompletePlaces,
+    routeKeywords,
+    behaviorTraits,
+    initialPersona: insight.identityBadge,
+    recommendedNextActions,
+    factCheck: {
+      ok: true,
+      warnings: [],
+      allowedPlaces: [],
+      allowedCompletedOrders: [],
+    },
     unlockedKeywords,
     storyFragments,
-    factSummary: buildFactSummary(chapter, completed, options),
-    dataSignals: buildDataSignals(chapter, completed),
+    factSummary: buildFactSummary(chapter, completed, incomplete, options),
+    dataSignals: buildDataSignals(chapter, completed, options.authLevel, privacy),
     photoUrls: photoUrls.slice(0, 4),
     poemType,
     poemLines,
@@ -302,5 +652,10 @@ export function buildPostchainReport(
       : "你似乎还欠这座城市一次夜晚散步。",
     primaryCta,
     shareText: `我今天测出来的城市人格是「${insight.identityBadge}」。据说只占城市玩家 ${insight.rarityPercent}%。${insight.flexLine} 完成度 ${Math.round(completionRate * 100)}%，关键词：${unlockedKeywords.slice(0, 4).join("、")}。`,
+  };
+
+  return {
+    ...draftReport,
+    factCheck: validatePostchainReportFacts(chapter, completed, privacy, draftReport),
   };
 }

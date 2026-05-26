@@ -47,7 +47,10 @@ export function downloadBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export async function elementToImageBlob(el: HTMLElement): Promise<Blob> {
+export async function elementToImageBlob(
+  el: HTMLElement,
+  type: "image/png" | "image/jpeg" = "image/png",
+): Promise<Blob> {
   await new Promise((r) => requestAnimationFrame(() => r(null)));
   await new Promise((r) => setTimeout(r, 80));
 
@@ -60,10 +63,33 @@ export async function elementToImageBlob(el: HTMLElement): Promise<Blob> {
   });
 
   const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, "image/png", 0.95),
+    canvas.toBlob(resolve, type, type === "image/jpeg" ? 0.9 : 0.95),
   );
   if (!blob) throw new Error("image export failed");
   return blob;
+}
+
+export async function shareImageOrDownload(
+  blob: Blob,
+  filename: string,
+  title: string,
+  text?: string,
+): Promise<"shared" | "downloaded" | "cancelled"> {
+  const file = new File([blob], filename, { type: blob.type || "image/png" });
+  const nav = navigator as Navigator & {
+    canShare?: (d: { files: File[] }) => boolean;
+    share?: (d: { files?: File[]; title?: string; text?: string }) => Promise<void>;
+  };
+  if (nav.canShare?.({ files: [file] }) && nav.share) {
+    try {
+      await nav.share({ files: [file], title, text });
+      return "shared";
+    } catch {
+      return "cancelled";
+    }
+  }
+  downloadBlob(blob, filename);
+  return "downloaded";
 }
 
 /** Try Web Share API with the PDF file. Falls back to download. */
