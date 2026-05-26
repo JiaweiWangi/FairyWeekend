@@ -9,24 +9,18 @@ import {
   type LibraryEntry,
 } from "@/lib/persona-store";
 import { VenueIcon, detectVenue } from "@/components/VenueIcon";
-import type {
-  elementToImageBlob as ElementToImageBlobFn,
-  elementToPdfBlob as ElementToPdfBlobFn,
-  downloadBlob as DownloadBlobFn,
-  shareImageOrDownload as ShareImageOrDownloadFn,
-  shareOrDownload as ShareOrDownloadFn,
-} from "@/lib/export-pdf";
+import type * as ExportPdf from "@/lib/export-pdf";
 const loadExportPdf = () => import("@/lib/export-pdf");
-const elementToImageBlob: typeof ElementToImageBlobFn = (...args) =>
+const elementToImageBlob: typeof ExportPdf.elementToImageBlob = (...args) =>
   loadExportPdf().then((m) => m.elementToImageBlob(...args));
-const elementToPdfBlob: typeof ElementToPdfBlobFn = (...args) =>
+const elementToPdfBlob: typeof ExportPdf.elementToPdfBlob = (...args) =>
   loadExportPdf().then((m) => m.elementToPdfBlob(...args));
-const downloadBlob: typeof DownloadBlobFn = (...args) => {
+const downloadBlob: typeof ExportPdf.downloadBlob = (...args) => {
   void loadExportPdf().then((m) => m.downloadBlob(...args));
 };
-const shareImageOrDownload: typeof ShareImageOrDownloadFn = (...args) =>
+const shareImageOrDownload: typeof ExportPdf.shareImageOrDownload = (...args) =>
   loadExportPdf().then((m) => m.shareImageOrDownload(...args));
-const shareOrDownload: typeof ShareOrDownloadFn = (...args) =>
+const shareOrDownload: typeof ExportPdf.shareOrDownload = (...args) =>
   loadExportPdf().then((m) => m.shareOrDownload(...args));
 import {
   buildPostchainReport,
