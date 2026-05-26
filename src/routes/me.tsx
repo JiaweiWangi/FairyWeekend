@@ -1452,7 +1452,7 @@ function PostchainView({
               复制文案
             </button>
             <button
-              onClick={exportPoster}
+              onClick={() => exportPoster()}
               disabled={!generated || exporting}
               className="btn-soft text-[12px] px-3 py-1.5"
             >

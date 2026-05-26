@@ -44,6 +44,57 @@ export type Database = {
         }
         Relationships: []
       }
+      postchain_consents: {
+        Row: {
+          auth_level: string
+          player_key: string
+          privacy: Json
+          updated_at: string
+        }
+        Insert: {
+          auth_level: string
+          player_key: string
+          privacy: Json
+          updated_at?: string
+        }
+        Update: {
+          auth_level?: string
+          player_key?: string
+          privacy?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      postchain_shares: {
+        Row: {
+          chapter_id: string
+          id: string
+          payload: Json
+          player_key: string
+          privacy: Json
+          share_text: string
+          updated_at: string
+        }
+        Insert: {
+          chapter_id: string
+          id: string
+          payload: Json
+          player_key?: string
+          privacy: Json
+          share_text: string
+          updated_at?: string
+        }
+        Update: {
+          chapter_id?: string
+          id?: string
+          payload?: Json
+          player_key?: string
+          privacy?: Json
+          share_text?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       quest_history: {
         Row: {
           character_class: string
@@ -89,7 +140,7 @@ export type Database = {
       saga_archive: {
         Row: {
           archived_at: string
-          card_identity: string | null
+          card_identity: string
           chapter: Json
           chapter_id: string
           city: string | null
@@ -100,7 +151,7 @@ export type Database = {
         }
         Insert: {
           archived_at?: string
-          card_identity?: string | null
+          card_identity: string
           chapter: Json
           chapter_id: string
           city?: string | null
@@ -111,67 +162,13 @@ export type Database = {
         }
         Update: {
           archived_at?: string
-          card_identity?: string | null
+          card_identity?: string
           chapter?: Json
           chapter_id?: string
           city?: string | null
           completed_count?: number
           player_key?: string
           total_count?: number
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      postchain_shares: {
-        Row: {
-          chapter_id: string | null
-          created_at: string
-          id: string
-          payload: Json
-          player_key: string
-          privacy: Json
-          share_text: string
-          updated_at: string
-        }
-        Insert: {
-          chapter_id?: string | null
-          created_at?: string
-          id: string
-          payload: Json
-          player_key?: string
-          privacy?: Json
-          share_text?: string
-          updated_at?: string
-        }
-        Update: {
-          chapter_id?: string | null
-          created_at?: string
-          id?: string
-          payload?: Json
-          player_key?: string
-          privacy?: Json
-          share_text?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      postchain_consents: {
-        Row: {
-          auth_level: string
-          player_key: string
-          privacy: Json
-          updated_at: string
-        }
-        Insert: {
-          auth_level?: string
-          player_key?: string
-          privacy?: Json
-          updated_at?: string
-        }
-        Update: {
-          auth_level?: string
-          player_key?: string
-          privacy?: Json
           updated_at?: string
         }
         Relationships: []
