@@ -85,7 +85,7 @@ export class LLMClient {
     messages: ChatMessage[],
     options: JSONOptions
   ): Promise<T> {
-    const { model = this.defaultModel, temperature = 0.7, schema } = options;
+    const { model = this.defaultModel, temperature = 0.7, maxTokens, schema } = options;
 
     const res = await fetch(`${this.baseUrl}/chat/completions`, {
       method: "POST",
@@ -105,6 +105,7 @@ export class LLMClient {
             schema: schema.schema,
           },
         },
+        ...(maxTokens && { max_tokens: maxTokens }),
       }),
     });
 
@@ -117,10 +118,31 @@ export class LLMClient {
     const content = data?.choices?.[0]?.message?.content || "";
 
     try {
-      return typeof content === "string" ? JSON.parse(content) : content;
+      // 清理 markdown 代码块标记
+      const cleaned = this.cleanJSON(content);
+      return typeof cleaned === "string" ? JSON.parse(cleaned) : cleaned;
     } catch (e) {
       throw new Error(`JSON 解析失败: ${content.slice(0, 100)}...`);
     }
+  }
+
+  /**
+   * 清理 LLM 返回的 JSON 字符串
+   * 移除 markdown 代码块标记 ```json ... ```
+   */
+  private cleanJSON(content: string): string {
+    let cleaned = content.trim();
+    // 移除开头的 ```json 或 ```
+    if (cleaned.startsWith("```json")) {
+      cleaned = cleaned.slice(7);
+    } else if (cleaned.startsWith("```")) {
+      cleaned = cleaned.slice(3);
+    }
+    // 移除结尾的 ```
+    if (cleaned.endsWith("```")) {
+      cleaned = cleaned.slice(0, -3);
+    }
+    return cleaned.trim();
   }
 
   /**

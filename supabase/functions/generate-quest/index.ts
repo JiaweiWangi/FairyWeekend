@@ -100,6 +100,7 @@ Deno.serve(async (req) => {
 
     console.log("[generate-quest] 完成，场景数:", journey.scenes.length);
     console.log("=".repeat(50));
+    console.group("[generated-quest]生成结果：",journey);
 
     // 返回结果（兼容原版格式）
     return new Response(
@@ -299,23 +300,46 @@ async function runStoryGenerator(input: {
 }): Promise<any> {
   const { card, poiCandidates, timePeriod, companion } = input;
 
-  const systemPrompt = `你是「今日人设」的故事生成引擎。
-输出 JSON，包含 story_opening、emotion_arc、scenes（3-4个）、closing。`;
+  const systemPrompt = `你是「今日人设 Todaypersona」的故事生成引擎。
 
-  const candidatesText = poiCandidates
-    .slice(0, 20)
-    .map((p, i) => `${i + 1}. ${p.name} | ${p.type} | ${p.address}`)
-    .join("\n");
+用户今天抽到一张「人设卡」，包含三个维度：身份、今日状态、今日使命。
+你要以这个人设的第一视角，为用户生成一段真实可走的城市剧情路线。
 
-  const userPrompt = `人设身份：${card.identity}
-人设状态：${card.mood}
-人设使命：${card.mission}
+输出三件事：
+① story_opening：今日故事开篇（30-50 字，小说式开头，第二/第三人称均可，要有画面感）
+② scenes：3-4 个城市场景节点
+③ closing：今日结语（60-100 字，像这个人设傍晚写下的日记最后一段，有余韵、不煽情）
 
-候选地点：
-${candidatesText}
+规则：
+1. 所有叙事必须从「这个人设」的视角出发——植物学家看咖啡馆和普通人看咖啡馆，描述完全不同。
+2. 场景要真实、有人情味，避免热门景点，偏爱有故事感的日常空间。
+3. action_task 必须具体可执行（不是"感受氛围"，而是"做一件具体的事"）。
+4. scene_name 是诗意命名 6-10 字（如「有阳光漏进来的角落」）。
+5. 如果提供了【真实候选 POI 列表】，location_name 必须严格使用候选里某个 POI 的 name（一字不差），location_hint 用候选 POI 的 address。
+6. 整条路线要有情绪弧线，从 emotion_arc.start 走到 emotion_arc.end。
+7. 相邻场景在地理上尽量能走通。
+8. 稀有度越高，路线越反直觉、越隐秘——SSR 要明显不同于 N。
+9. 严格输出 JSON，不输出任何额外文字。`;
 
+  // 构建候选 POI 文本
+  const candidateBlock = poiCandidates.length
+    ? `\n\n【真实候选 POI】（必须从中挑选 3-4 个；location_name 一字不差）:\n` +
+      poiCandidates.slice(0, 20).map((p, i) =>
+        `${i + 1}. ${p.name}｜${p.type}｜${p.address}`
+      ).join("\n")
+    : "\n\n（没有真实 POI 数据，请按你对该城市的了解生成可信地点）";
+
+  const userPrompt = `【今日人设卡】
+身份：${card.identity}
+今日状态：${card.mood}
+今日使命：${card.mission}
+稀有度：${card.rarity}
+
+城市/区域：上海
 时间段：${timePeriod}
-同伴：${companion}`;
+同伴：${companion}${candidateBlock}
+
+请以这个人设的视角生成今日剧情路线。`;
 
   try {
     return await llm.askJSON(
@@ -329,9 +353,13 @@ ${candidatesText}
             emotion_arc: {
               type: "object",
               properties: { start: { type: "string" }, end: { type: "string" } },
+              required: ["start", "end"],
+              additionalProperties: false,
             },
             scenes: {
               type: "array",
+              minItems: 3,
+              maxItems: 4,
               items: {
                 type: "object",
                 properties: {
@@ -346,14 +374,22 @@ ${candidatesText}
                   emotion_tags: { type: "array", items: { type: "string" } },
                   meituan_keyword: { type: "string" },
                 },
+                required: [
+                  "order", "scene_name", "location_name", "location_type",
+                  "location_hint", "persona_narrative", "action_task",
+                  "stay_minutes", "emotion_tags", "meituan_keyword",
+                ],
+                additionalProperties: false,
               },
             },
             closing: { type: "string" },
           },
           required: ["story_opening", "emotion_arc", "scenes", "closing"],
+          additionalProperties: false,
         },
       },
-      systemPrompt
+      systemPrompt,
+      { maxTokens: 4096 }
     );
   } catch (e) {
     console.error("LLM 路线生成失败:", e);
