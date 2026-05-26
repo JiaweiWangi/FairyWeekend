@@ -1,6 +1,6 @@
 // Edge function: store a completed quest run and update DM long-term memory.
 
-import { llm } from "../llmClient/client.ts";
+import { llm } from "llmClient/client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

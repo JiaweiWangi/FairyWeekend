@@ -6,7 +6,7 @@
  * 输入/输出格式与原版 generate-quest 完全相同
  */
 
-import { llm } from "../llmClient/client.ts";
+import { llm } from "llmClient/client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
