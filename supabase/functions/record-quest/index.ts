@@ -1,5 +1,6 @@
 // Edge function: store a completed quest run and update DM long-term memory.
 
+// 配置了deno.json 路径是正确的
 import { llm } from "llmClient/client.ts";
 
 const corsHeaders = {
