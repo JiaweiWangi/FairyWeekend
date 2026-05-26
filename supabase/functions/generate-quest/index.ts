@@ -1,7 +1,8 @@
 // Edge function: generate a "今日人设" persona-driven city journey.
 // Uses Lovable AI Gateway + Amap (高德) Web Service for real POI data.
 
-import { llm } from "../_shared/llmClient/client.ts";
+// 配置了deno.json 路径是正确的
+import { llm } from "llmClient/client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
