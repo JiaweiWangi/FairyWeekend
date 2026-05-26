@@ -6,6 +6,8 @@
  * 输入/输出格式与原版 generate-quest 完全相同
  */
 
+import { llm } from "../llmClient/client.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -214,7 +216,6 @@ async function runPOIPlanner(input: {
 }): Promise<{ keywords: string[]; candidates: any[] }> {
   const { card, city, timePeriod, playerProfile, gcjCoords } = input;
   const amapKey = Deno.env.get("AMAP_WEB_API_KEY");
-  const apiKey = Deno.env.get("LOVABLE_API_KEY");
 
   // Step 1: LLM 分析人设，输出关键词
   const systemPrompt = `你是一位城市探索规划师。
@@ -232,40 +233,22 @@ ${playerProfile ? `喜欢的标签：${(playerProfile.loved_tags || []).join("�
   let keywords: string[];
 
   try {
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "keywords",
-            strict: true,
-            schema: {
-              type: "object",
-              properties: {
-                keywords: { type: "array", items: { type: "string" } },
-                reasoning: { type: "string" },
-              },
-              required: ["keywords"],
-            },
+    const result = await llm.askJSON<{ keywords: string[]; reasoning?: string }>(
+      userPrompt,
+      {
+        name: "keywords",
+        schema: {
+          type: "object",
+          properties: {
+            keywords: { type: "array", items: { type: "string" } },
+            reasoning: { type: "string" },
           },
+          required: ["keywords"],
         },
-      }),
-    });
-
-    const data = await res.json();
-    const content = data?.choices?.[0]?.message?.content;
-    const parsed = typeof content === "string" ? JSON.parse(content) : content;
-    keywords = parsed.keywords || ["咖啡馆", "公园", "书店"];
+      },
+      systemPrompt
+    );
+    keywords = result.keywords || ["咖啡馆", "公园", "书店"];
   } catch (e) {
     console.warn("LLM 关键词生成失败:", e);
     keywords = ["咖啡馆", "公园", "书店"];
@@ -315,7 +298,6 @@ async function runStoryGenerator(input: {
   companion: string;
 }): Promise<any> {
   const { card, poiCandidates, timePeriod, companion } = input;
-  const apiKey = Deno.env.get("LOVABLE_API_KEY");
 
   const systemPrompt = `你是「今日人设」的故事生成引擎。
 输出 JSON，包含 story_opening、emotion_arc、scenes（3-4个）、closing。`;
@@ -336,61 +318,43 @@ ${candidatesText}
 同伴：${companion}`;
 
   try {
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "journey",
-            strict: true,
-            schema: {
+    return await llm.askJSON(
+      userPrompt,
+      {
+        name: "journey",
+        schema: {
+          type: "object",
+          properties: {
+            story_opening: { type: "string" },
+            emotion_arc: {
               type: "object",
-              properties: {
-                story_opening: { type: "string" },
-                emotion_arc: {
-                  type: "object",
-                  properties: { start: { type: "string" }, end: { type: "string" } },
-                },
-                scenes: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      order: { type: "number" },
-                      scene_name: { type: "string" },
-                      location_name: { type: "string" },
-                      location_type: { type: "string" },
-                      location_hint: { type: "string" },
-                      persona_narrative: { type: "string" },
-                      action_task: { type: "string" },
-                      stay_minutes: { type: "number" },
-                      emotion_tags: { type: "array", items: { type: "string" } },
-                      meituan_keyword: { type: "string" },
-                    },
-                  },
-                },
-                closing: { type: "string" },
-              },
-              required: ["story_opening", "emotion_arc", "scenes", "closing"],
+              properties: { start: { type: "string" }, end: { type: "string" } },
             },
+            scenes: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  order: { type: "number" },
+                  scene_name: { type: "string" },
+                  location_name: { type: "string" },
+                  location_type: { type: "string" },
+                  location_hint: { type: "string" },
+                  persona_narrative: { type: "string" },
+                  action_task: { type: "string" },
+                  stay_minutes: { type: "number" },
+                  emotion_tags: { type: "array", items: { type: "string" } },
+                  meituan_keyword: { type: "string" },
+                },
+              },
+            },
+            closing: { type: "string" },
           },
+          required: ["story_opening", "emotion_arc", "scenes", "closing"],
         },
-      }),
-    });
-
-    const data = await res.json();
-    const content = data?.choices?.[0]?.message?.content;
-    return typeof content === "string" ? JSON.parse(content) : content;
+      },
+      systemPrompt
+    );
   } catch (e) {
     console.error("LLM 路线生成失败:", e);
     return null;

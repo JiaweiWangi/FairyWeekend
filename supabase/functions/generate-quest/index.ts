@@ -1,6 +1,8 @@
 // Edge function: generate a "今日人设" persona-driven city journey.
 // Uses Lovable AI Gateway + Amap (高德) Web Service for real POI data.
 
+import { llm } from "../_shared/llmClient/client.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -127,7 +129,9 @@ async function searchPOIs(amapKey: string, keyword: string, opts: { lng?: number
     } else {
       url = `https://restapi.amap.com/v3/place/text?key=${amapKey}&keywords=${encodeURIComponent(keyword)}&city=${encodeURIComponent(opts.city || "上海")}&offset=8&extensions=base`;
     }
+    console.info("[amap] 请求 URL:", url.replace(amapKey, "***"));
     const j = await (await fetch(url)).json();
+    console.info("[amap] 返回状态:", j.status, "| POI数:", j.pois?.length ?? 0, "| info:", j.info);
     if (j.status !== "1" || !Array.isArray(j.pois)) return [];
     return j.pois.slice(0, 4).map((p: Record<string, unknown>) => ({
       name: String(p.name ?? ""),
@@ -158,13 +162,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    console.info("[generate-quest] 人设:", card.identity, "| 城市:", cityInput || "未指定");
+
     const amapKey = Deno.env.get("AMAP_WEB_API_KEY");
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    console.info("[generate-quest] 高德 Key:", amapKey ? `已配置 (${amapKey.slice(0, 8)}...)` : "未配置");
 
     let resolvedCity = cityInput || "";
     let candidates: POI[] = [];
@@ -191,6 +192,8 @@ Deno.serve(async (req) => {
     }
     if (!resolvedCity) resolvedCity = "上海";
 
+    console.info("[generate-quest] POI 候选数:", candidates.length, "| 解析城市:", resolvedCity);
+
     const candidateBlock = candidates.length
       ? `\n\n【真实候选 POI】（必须从中挑选 3-4 个；location_name 一字不差）:\n` +
         candidates.slice(0, 20).map((p, i) =>
@@ -210,41 +213,24 @@ Deno.serve(async (req) => {
 
 请以这个人设的视角生成今日剧情路线。`;
 
-    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userPrompt },
-        ],
-        response_format: {
-          type: "json_schema",
-          json_schema: { name: "journey", strict: true, schema: JOURNEY_SCHEMA },
-        },
-      }),
-    });
+    console.info("[generate-quest] 调用 LLM 生成路线...");
 
-    if (!aiRes.ok) {
-      const errText = await aiRes.text();
-      console.error("AI gateway error:", aiRes.status, errText);
-      const status = aiRes.status === 429 || aiRes.status === 402 ? aiRes.status : 500;
-      return new Response(JSON.stringify({ error: "ai_error", status, detail: errText }), {
-        status, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const data = await aiRes.json();
-    const content = data?.choices?.[0]?.message?.content ?? "{}";
+    // 使用 llm client 调用大模型
     let journey;
-    try { journey = typeof content === "string" ? JSON.parse(content) : content; }
-    catch (e) {
-      console.error("Parse error:", e, content);
-      return new Response(JSON.stringify({ error: "parse_error", raw: content }), {
+    try {
+      journey = await llm.askJSON(
+        userPrompt,
+        { name: "journey", strict: true, schema: JOURNEY_SCHEMA },
+        SYSTEM_PROMPT
+      );
+    } catch (e) {
+      console.error("[generate-quest] LLM 调用失败:", e);
+      return new Response(JSON.stringify({ error: "ai_error", detail: String(e) }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    console.info("[generate-quest] 生成完成，场景数:", journey?.scenes?.length ?? 0);
 
     return new Response(JSON.stringify({ journey, city: resolvedCity, poi_count: candidates.length }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
