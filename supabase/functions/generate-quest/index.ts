@@ -129,7 +129,9 @@ async function searchPOIs(amapKey: string, keyword: string, opts: { lng?: number
     } else {
       url = `https://restapi.amap.com/v3/place/text?key=${amapKey}&keywords=${encodeURIComponent(keyword)}&city=${encodeURIComponent(opts.city || "上海")}&offset=8&extensions=base`;
     }
+    console.info("[amap] 请求 URL:", url.replace(amapKey, "***"));
     const j = await (await fetch(url)).json();
+    console.info("[amap] 返回状态:", j.status, "| POI数:", j.pois?.length ?? 0, "| info:", j.info);
     if (j.status !== "1" || !Array.isArray(j.pois)) return [];
     return j.pois.slice(0, 4).map((p: Record<string, unknown>) => ({
       name: String(p.name ?? ""),
@@ -163,6 +165,7 @@ Deno.serve(async (req) => {
     console.info("[generate-quest] 人设:", card.identity, "| 城市:", cityInput || "未指定");
 
     const amapKey = Deno.env.get("AMAP_WEB_API_KEY");
+    console.info("[generate-quest] 高德 Key:", amapKey ? `已配置 (${amapKey.slice(0, 8)}...)` : "未配置");
 
     let resolvedCity = cityInput || "";
     let candidates: POI[] = [];
