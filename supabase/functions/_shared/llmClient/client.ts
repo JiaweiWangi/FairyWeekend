@@ -36,10 +36,12 @@ function createClient(): ILLMClient {
       return new LovableClient();
 
     case "openai":
+      console.log(`[LLM] OpenAI 配置 - Model: ${Deno.env.get("OPENAI_MODEL") || "gpt-4o-mini"}`);
       return new OpenAIClient({
         apiKey: Deno.env.get("OPENAI_API_KEY"),
         baseUrl: Deno.env.get("OPENAI_BASE_URL"),
         model: Deno.env.get("OPENAI_MODEL") || "gpt-4o-mini",
+        
       });
 
     case "deepseek":
