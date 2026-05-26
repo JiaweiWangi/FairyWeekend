@@ -9,13 +9,25 @@ import {
   type LibraryEntry,
 } from "@/lib/persona-store";
 import { VenueIcon, detectVenue } from "@/components/VenueIcon";
-import {
-  elementToImageBlob,
-  elementToPdfBlob,
-  downloadBlob,
-  shareImageOrDownload,
-  shareOrDownload,
+import type {
+  elementToImageBlob as ElementToImageBlobFn,
+  elementToPdfBlob as ElementToPdfBlobFn,
+  downloadBlob as DownloadBlobFn,
+  shareImageOrDownload as ShareImageOrDownloadFn,
+  shareOrDownload as ShareOrDownloadFn,
 } from "@/lib/export-pdf";
+const loadExportPdf = () => import("@/lib/export-pdf");
+const elementToImageBlob: typeof ElementToImageBlobFn = (...args) =>
+  loadExportPdf().then((m) => m.elementToImageBlob(...args));
+const elementToPdfBlob: typeof ElementToPdfBlobFn = (...args) =>
+  loadExportPdf().then((m) => m.elementToPdfBlob(...args));
+const downloadBlob: typeof DownloadBlobFn = (...args) => {
+  void loadExportPdf().then((m) => m.downloadBlob(...args));
+};
+const shareImageOrDownload: typeof ShareImageOrDownloadFn = (...args) =>
+  loadExportPdf().then((m) => m.shareImageOrDownload(...args));
+const shareOrDownload: typeof ShareOrDownloadFn = (...args) =>
+  loadExportPdf().then((m) => m.shareOrDownload(...args));
 import {
   buildPostchainReport,
   validatePostchainEditedReport,
