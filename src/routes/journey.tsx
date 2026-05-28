@@ -311,6 +311,15 @@ function SceneSheet({
             </div>
           )}
 
+          {/* ✦ 第一眼吸引：实景大图 + 卖点 hook */}
+          <AppealHook
+            kind={kind}
+            sceneName={scene.scene_name}
+            narrative={scene.persona_narrative}
+            emotionTags={scene.emotion_tags}
+            stayMinutes={scene.stay_minutes}
+          />
+
           {/* Decorative divider */}
           <div className="flex items-center gap-3 my-4">
             <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg,transparent,#d8c8b8,transparent)" }} />
@@ -619,10 +628,12 @@ function SceneHero({
   );
 }
 
-/* ============ Check-in panel: note + photo + mood ============ */
+/* ============ Check-in panel: note + photos + mood + rating + companion ============ */
 
 const MOODS = ["✨", "🌿", "☕", "🌊", "🌸", "🔥", "🌙", "🍃"];
+const COMPANIONS = ["独自", "朋友", "恋人", "家人", "同事", "宠物"];
 const NOTE_MAX = 240;
+const PHOTO_MAX = 3;
 
 async function fileToCompressedDataUrl(file: File, maxDim = 900, quality = 0.78): Promise<string> {
   const dataUrl = await new Promise<string>((res, rej) => {
@@ -650,6 +661,12 @@ async function fileToCompressedDataUrl(file: File, maxDim = 900, quality = 0.78)
   return canvas.toDataURL("image/jpeg", quality);
 }
 
+function initialPhotos(record?: SceneRecord): string[] {
+  if (record?.photos?.length) return record.photos.slice(0, PHOTO_MAX);
+  if (record?.photo) return [record.photo];
+  return [];
+}
+
 function CheckInPanel({
   sceneOrder, done, record, onUpdated,
 }: {
@@ -660,26 +677,35 @@ function CheckInPanel({
 }) {
   const [editing, setEditing] = useState(!done);
   const [note, setNote] = useState(record?.note ?? "");
-  const [photo, setPhoto] = useState<string | undefined>(record?.photo);
+  const [photos, setPhotos] = useState<string[]>(initialPhotos(record));
   const [mood, setMood] = useState<string | undefined>(record?.mood);
+  const [rating, setRating] = useState<number>(record?.rating ?? 0);
+  const [companion, setCompanion] = useState<string | undefined>(record?.companion);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Reset state when switching scenes
   useEffect(() => {
     setNote(record?.note ?? "");
-    setPhoto(record?.photo);
+    setPhotos(initialPhotos(record));
     setMood(record?.mood);
+    setRating(record?.rating ?? 0);
+    setCompanion(record?.companion);
     setEditing(!done);
-  }, [sceneOrder, done, record?.note, record?.photo, record?.mood]);
+  }, [sceneOrder, done, record?.note, record?.photo, record?.mood, record?.rating, record?.companion, record?.photos]);
 
   async function handlePhoto(e: ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    if (!f) return;
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
     setBusy(true);
     try {
-      const url = await fileToCompressedDataUrl(f);
-      setPhoto(url);
+      const slots = PHOTO_MAX - photos.length;
+      const picked = files.slice(0, slots);
+      const urls = await Promise.all(picked.map((f) => fileToCompressedDataUrl(f)));
+      setPhotos((p) => [...p, ...urls].slice(0, PHOTO_MAX));
+      if (files.length > slots) {
+        toast(`最多 ${PHOTO_MAX} 张哦`, { description: "已保留前几张" });
+      }
     } catch (err) {
       console.error(err);
       toast.error("照片读不出来，换一张试试？");
@@ -689,11 +715,18 @@ function CheckInPanel({
     }
   }
 
+  function removePhotoAt(i: number) {
+    setPhotos((p) => p.filter((_, idx) => idx !== i));
+  }
+
   function save() {
     recordScene(sceneOrder, {
       note: note.trim() || undefined,
-      photo,
+      photo: photos[0],            // 兼容旧字段
+      photos: photos.length ? photos : undefined,
       mood,
+      rating: rating || undefined,
+      companion,
     });
     toast.success(done ? "已更新这条记录 ✦" : "打卡完成 ✦", {
       description: note ? `「${note.slice(0, 24)}${note.length > 24 ? "…" : ""}」` : undefined,
@@ -702,11 +735,9 @@ function CheckInPanel({
     onUpdated();
   }
 
-  function removePhoto() { setPhoto(undefined); }
-
   function undo() {
     clearSceneRecord(sceneOrder);
-    setNote(""); setPhoto(undefined); setMood(undefined);
+    setNote(""); setPhotos([]); setMood(undefined); setRating(0); setCompanion(undefined);
     setEditing(true);
     onUpdated();
     toast("已取消打卡");
@@ -731,11 +762,27 @@ function CheckInPanel({
           </div>
         </div>
 
-        {mood && <div className="text-[28px] mt-2 leading-none">{mood}</div>}
+        <div className="flex items-center gap-3 mt-2">
+          {mood && <div className="text-[28px] leading-none">{mood}</div>}
+          {rating > 0 && (
+            <div className="display text-[13px] text-[oklch(0.72_0.15_60)] tracking-[0.1em]">
+              {"★".repeat(rating)}<span className="opacity-25">{"★".repeat(5 - rating)}</span>
+            </div>
+          )}
+          {companion && (
+            <span className="cn-serif text-[11px] px-2 py-0.5 rounded-full" style={{ background: "#fdf0d6", color: "#7a5a30" }}>
+              与{companion}
+            </span>
+          )}
+        </div>
 
-        {photo && (
-          <div className="mt-3 overflow-hidden rounded-xl" style={{ boxShadow: "0 8px 24px -12px rgba(80,60,40,0.35)" }}>
-            <img src={photo} alt="打卡照片" className="block w-full h-auto" />
+        {photos.length > 0 && (
+          <div className={`mt-3 grid gap-2 ${photos.length === 1 ? "grid-cols-1" : "grid-cols-3"}`}>
+            {photos.map((p, i) => (
+              <div key={i} className="overflow-hidden rounded-xl" style={{ boxShadow: "0 8px 24px -12px rgba(80,60,40,0.35)" }}>
+                <img src={p} alt={`打卡照片 ${i + 1}`} className={`block w-full ${photos.length === 1 ? "h-auto" : "h-24 object-cover"}`} />
+              </div>
+            ))}
           </div>
         )}
 
@@ -743,7 +790,7 @@ function CheckInPanel({
           <p className="cn-serif text-[14px] leading-[1.85] text-[var(--ink)] mt-3 whitespace-pre-wrap">
             {note}
           </p>
-        ) : !photo && !mood ? (
+        ) : !photos.length && !mood && !rating && !companion ? (
           <p className="cn-serif text-[13px] text-[var(--ink-soft)] mt-2 italic">
             只是来过一下，没留下什么。
           </p>
@@ -762,6 +809,23 @@ function CheckInPanel({
       style={{ background: "linear-gradient(160deg,#fffdf6 0%,#fdf3ea 100%)", borderColor: "#f0e1c8" }}>
       <div className="cn-serif text-[11px] tracking-[0.3em] text-[var(--ink-soft)] mb-3">
         {done ? "EDIT · 修改打卡" : "CHECK IN · 记录这一刻"}
+      </div>
+
+      {/* Rating */}
+      <div className="cn-serif text-[11px] text-[var(--ink-soft)] mb-1.5">值得几颗星</div>
+      <div className="flex gap-1 mb-3">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            onClick={() => setRating(rating === n ? 0 : n)}
+            className="text-[26px] leading-none transition-transform hover:scale-110"
+            style={{ color: n <= rating ? "oklch(0.78 0.17 65)" : "#dccdb4" }}
+            aria-label={`${n} 星`}
+          >
+            ★
+          </button>
+        ))}
       </div>
 
       {/* Mood */}
@@ -784,6 +848,25 @@ function CheckInPanel({
         ))}
       </div>
 
+      {/* Companion */}
+      <div className="cn-serif text-[11px] text-[var(--ink-soft)] mb-1.5">和谁一起</div>
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {COMPANIONS.map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => setCompanion(companion === c ? undefined : c)}
+            className={`cn-serif text-[12px] px-3 py-1.5 rounded-full transition ${
+              companion === c
+                ? "bg-[oklch(0.92_0.08_60)] text-[var(--ink)] ring-1 ring-[oklch(0.78_0.12_60)]"
+                : "bg-white/70 text-[var(--ink-soft)] hover:bg-white"
+            }`}
+          >
+            {c}
+          </button>
+        ))}
+      </div>
+
       {/* Note */}
       <div className="cn-serif text-[11px] text-[var(--ink-soft)] mb-1.5 flex justify-between">
         <span>随笔</span>
@@ -798,39 +881,46 @@ function CheckInPanel({
         style={{ borderColor: "#e8dcc4" }}
       />
 
-      {/* Photo */}
-      <div className="cn-serif text-[11px] text-[var(--ink-soft)] mt-3 mb-1.5">照片</div>
-      {photo ? (
-        <div className="relative overflow-hidden rounded-xl" style={{ boxShadow: "0 8px 24px -12px rgba(80,60,40,0.35)" }}>
-          <img src={photo} alt="预览" className="block w-full h-auto" />
-          <button
-            type="button"
-            onClick={removePhoto}
-            className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center text-[12px] bg-black/55 text-white"
-            aria-label="移除照片"
+      {/* Photos (multi) */}
+      <div className="cn-serif text-[11px] text-[var(--ink-soft)] mt-3 mb-1.5 flex justify-between">
+        <span>照片</span>
+        <span className="display tracking-[0.2em] text-[10px]">{photos.length}/{PHOTO_MAX}</span>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {photos.map((p, i) => (
+          <div key={i} className="relative aspect-square overflow-hidden rounded-xl" style={{ boxShadow: "0 6px 18px -10px rgba(80,60,40,0.35)" }}>
+            <img src={p} alt={`预览 ${i + 1}`} className="w-full h-full object-cover" />
+            <button
+              type="button"
+              onClick={() => removePhotoAt(i)}
+              className="absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center text-[11px] bg-black/55 text-white"
+              aria-label="移除照片"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        {photos.length < PHOTO_MAX && (
+          <label
+            className={`aspect-square flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed cursor-pointer transition ${busy ? "opacity-60" : "hover:bg-white/60"}`}
+            style={{ borderColor: "#e0cfb0", background: "rgba(255,255,255,0.5)" }}
           >
-            ✕
-          </button>
-        </div>
-      ) : (
-        <label
-          className={`flex flex-col items-center justify-center gap-1 py-6 rounded-xl border-2 border-dashed cursor-pointer transition ${busy ? "opacity-60" : "hover:bg-white/60"}`}
-          style={{ borderColor: "#e0cfb0", background: "rgba(255,255,255,0.5)" }}
-        >
-          <span className="text-[22px]">📷</span>
-          <span className="cn-serif text-[12px] text-[var(--ink-soft)]">
-            {busy ? "处理中…" : "拍一张 / 选一张"}
-          </span>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={handlePhoto}
-          />
-        </label>
-      )}
+            <span className="text-[20px]">📷</span>
+            <span className="cn-serif text-[11px] text-[var(--ink-soft)] text-center px-1">
+              {busy ? "处理中…" : "加一张"}
+            </span>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              capture="environment"
+              className="hidden"
+              onChange={handlePhoto}
+            />
+          </label>
+        )}
+      </div>
 
       <div className="flex gap-2 mt-4">
         {done && (
@@ -1002,4 +1092,125 @@ function SceneBuzz({
     </div>
   );
 }
+
+/* ============ AppealHook: 第一眼吸引 —— 实景大图 + 卖点 hook ============ */
+
+const APPEAL_PRESETS: Record<string, { hook: string; tags: string[] }> = {
+  cafe:       { hook: "光线、慢拍、一杯能坐很久的咖啡",   tags: ["手冲单品", "靠窗位",   "可久坐"] },
+  bakery:     { hook: "出炉那一刻，整条街都是麦香",       tags: ["现烤可颂",   "天然酵母", "外带方便"] },
+  dessert:    { hook: "为这一口糖分专程而来",             tags: ["招牌限定",   "适合拍照", "下午茶位"] },
+  noodle:     { hook: "一碗热汤把今天烫平",               tags: ["现熬高汤",   "本地老味",   "排队也值"] },
+  restaurant: { hook: "一顿正经饭，把心慢慢沉下来",       tags: ["主厨推荐",   "适合两人",   "氛围加分"] },
+  bar:        { hook: "灯一暗，世界就变小了",             tags: ["招牌特调", "live 现场", "适合夜聊"] },
+  market:     { hook: "新鲜、烟火气、活着的声音",         tags: ["当季食材", "本地小贩", "随手就买"] },
+  bookstore:  { hook: "一本书的距离，世界安静下来",       tags: ["独立选书", "可阅读区", "周末有讲座"] },
+  gallery:    { hook: "在一幅画前停三分钟",               tags: ["小型展览", "免费观展", "拍照友好"] },
+  museum:     { hook: "把今天放进更长的时间里",           tags: ["镇馆之宝", "讲解动线", "适合放空"] },
+  cinema:     { hook: "灯一灭，故事就开始了",             tags: ["IMAX 厅",   "靠后排位",   "饮料自由"] },
+  flower:     { hook: "捧一束回家，今天就温柔一点",       tags: ["当季花束", "可定制",     "小束起订"] },
+  plant:      { hook: "看一会儿绿色，眼睛就松了",         tags: ["稀有品种", "新手友好", "可托养"] },
+  park:       { hook: "脚踩在草上，时间就慢了",           tags: ["大片草坪", "适合发呆", "傍晚最美"] },
+  spa:        { hook: "把肩膀和今天，都放下来",           tags: ["招牌项目", "环境安静", "可预约"] },
+  temple:     { hook: "走进去，喧嚣自己就退后了",         tags: ["香火清净", "建筑细节", "免费入院"] },
+  river:      { hook: "看水流过，心事也跟着走一段",       tags: ["开阔视野", "拍照点位", "傍晚风好"] },
+  street:     { hook: "走一段路，把这座城闻一遍",         tags: ["市井烟火", "随手好拍", "适合慢逛"] },
+  shop:       { hook: "为自己挑一件小礼物",               tags: ["小众设计", "性价比高", "限定款"] },
+  default:    { hook: "来过这里的人，都说值得",           tags: ["氛围加分", "适合此刻", "拍照好看"] },
+};
+
+function AppealHook({
+  kind, sceneName, narrative, emotionTags, stayMinutes,
+}: {
+  kind: string;
+  sceneName: string;
+  narrative: string;
+  emotionTags?: string[];
+  stayMinutes?: number;
+}) {
+  const photos = useMemo(() => getVenuePhotos(kind), [kind]);
+  const preset = APPEAL_PRESETS[kind] || APPEAL_PRESETS.default;
+
+  const chips = useMemo(() => {
+    const fromScene = (emotionTags ?? []).slice(0, 2);
+    const fromPreset = preset.tags.filter((t) => !fromScene.includes(t));
+    return [...fromScene, ...fromPreset].slice(0, 3);
+  }, [emotionTags, preset.tags]);
+
+  const hook = useMemo(() => {
+    const first = (narrative || "").split(/[。！？\n]/)[0]?.trim();
+    if (first && first.length >= 8 && first.length <= 36) return first;
+    return preset.hook;
+  }, [narrative, preset.hook]);
+
+  const cover = photos[0];
+  const more = photos.slice(1, 3);
+
+  return (
+    <div className="mt-4 -mx-6">
+      <div className="relative overflow-hidden" style={{ height: 180 }}>
+        {cover ? (
+          <img
+            src={cover}
+            alt={`${sceneName} 参考实景`}
+            className="absolute inset-0 w-full h-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div className="absolute inset-0" style={{ background: "linear-gradient(160deg,#f3e6d2,#e8c2a0)" }} />
+        )}
+        <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(20,15,10,0.05) 0%, rgba(20,15,10,0.55) 75%, rgba(20,15,10,0.78) 100%)" }} />
+
+        <div
+          className="absolute top-3 right-4 cn-serif text-[10px] px-2 py-0.5 rounded-full"
+          style={{ background: "rgba(255,253,243,0.85)", color: "#5a4a3a" }}
+        >
+          参考实景
+        </div>
+
+        {more.length > 0 && (
+          <div className="absolute top-12 right-4 flex flex-col gap-1.5">
+            {more.map((src, i) => (
+              <div
+                key={i}
+                className="w-12 h-12 rounded-lg overflow-hidden"
+                style={{ boxShadow: "0 4px 12px rgba(0,0,0,0.25)", outline: "2px solid rgba(255,253,243,0.85)" }}
+              >
+                <img src={src} alt="" className="w-full h-full object-cover" loading="lazy" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="absolute left-5 right-5 bottom-3">
+          <div className="display text-[10px] tracking-[0.35em] mb-1" style={{ color: "rgba(255,253,243,0.8)" }}>
+            WHY HERE · 为什么来这里
+          </div>
+          <p className="cn-serif text-[15px] leading-snug" style={{ color: "#fffdf3", textShadow: "0 2px 8px rgba(0,0,0,0.5)" }}>
+            {hook}
+          </p>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {chips.map((t) => (
+              <span
+                key={t}
+                className="cn-serif text-[11px] px-2 py-0.5 rounded-full"
+                style={{ background: "rgba(255,253,243,0.92)", color: "#3d3530" }}
+              >
+                ✦ {t}
+              </span>
+            ))}
+            {stayMinutes ? (
+              <span
+                className="cn-serif text-[11px] px-2 py-0.5 rounded-full"
+                style={{ background: "rgba(0,0,0,0.35)", color: "#fffdf3", backdropFilter: "blur(4px)" }}
+              >
+                建议停留 ~{stayMinutes}min
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
