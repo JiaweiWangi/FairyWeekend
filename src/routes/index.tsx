@@ -118,6 +118,9 @@ function Index() {
         />
       )}
 
+      <PhotoOnboardingModal />
+
+
       <footer className="mt-16 text-center text-[11px] tracking-[0.3em] text-[var(--ink-soft)] display relative z-10">
         © 2026 · MEITUAN HACKATHON
       </footer>
