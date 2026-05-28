@@ -299,7 +299,7 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
                 })}
               </div>
               {lastInteractive.multi && (
-                <div className="flex items-center gap-2 mt-3">
+                <div className="flex flex-wrap items-center gap-2 mt-3">
                   <button
                     type="button"
                     disabled={picked.length === 0}
@@ -308,9 +308,10 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
                   >
                     确定（{picked.length}）
                   </button>
-                  <span className="cn-serif text-[11px] text-[var(--ink-soft)]">可以选多个，或者直接在下面打字也行</span>
+                  <span className="cn-serif text-[11px] text-[var(--ink-soft)] leading-snug">可以选多个，或者直接打字也行</span>
                 </div>
               )}
+
             </div>
           )}
 
@@ -336,7 +337,7 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
                       ? "听着呢…说吧"
                       : "想到哪说到哪～\n比如：今天加班到飞起，只想窝在沙发里看点轻松的；或者，想被夏天的海风吹一吹…"
                   }
-                  className="w-full px-4 py-3 pr-24 rounded-2xl bg-transparent cn-serif text-[15px] leading-relaxed text-[var(--ink)] placeholder:text-[var(--ink-soft)] placeholder:whitespace-pre-line resize-none outline-none min-h-[88px] max-h-[200px]"
+                  className="w-full px-4 py-3 pr-28 sm:pr-32 rounded-2xl bg-transparent cn-serif text-[15px] leading-relaxed text-[var(--ink)] placeholder:text-[var(--ink-soft)] placeholder:whitespace-pre-line resize-none outline-none min-h-[88px] max-h-[200px]"
                 />
                 <div className="absolute right-2 bottom-2 flex items-center gap-1.5">
                   {voiceSupported && (
@@ -414,7 +415,7 @@ function RecCard({
   const [a, b, c] = card.colors;
   return (
     <div
-      className="persona-card overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] w-[260px] shadow-[0_14px_36px_-20px_rgba(0,0,0,0.25)] fade-up"
+      className="persona-card overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] w-[min(260px,100%)] shadow-[0_14px_36px_-20px_rgba(0,0,0,0.25)] fade-up"
       data-rarity={card.rarity}
     >
       <div
