@@ -368,68 +368,7 @@ function CardPage() {
         </div>
       </div>
 
-      {/* 个性化卡面 */}
-      <div className="mt-6">
-        {!userPhoto ? (
-          <button
-            type="button"
-            onClick={() => navigate({ to: "/me" })}
-            className="w-full rounded-2xl border border-dashed border-[var(--border)] bg-[var(--card)]/60 p-4 text-left cn-serif text-[13px] text-[var(--ink-soft)] hover:border-[var(--primary)] transition"
-          >
-            <div className="cn-serif text-[14px] text-[var(--ink)] mb-1">
-              ✨ 让这张卡变成「你」
-            </div>
-            上传一张你的照片，AI 会把你画进这个人设。去「我的 → 我的照片」上传 →
-          </button>
-        ) : (
-          <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
-            <div className="flex items-start gap-3">
-              <div className="w-12 h-12 rounded-full overflow-hidden border border-[var(--border)] shrink-0">
-                <img src={userPhoto} alt="你" className="w-full h-full object-cover" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="cn-serif text-[14px] text-[var(--ink)]">
-                  {personalCover ? "已为你合成这张卡" : "用我的照片合成这张卡"}
-                </div>
-                <p className="cn-serif text-[12px] text-[var(--ink-soft)] mt-1 leading-relaxed">
-                  {personalCover
-                    ? "想换风格可以重新生成。"
-                    : "AI 会把你画成这个人设的样子，约 10-20 秒。"}
-                </p>
-              </div>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={handlePersonalize}
-                disabled={personalizing}
-                className="px-4 py-2 rounded-full bg-[var(--ink)] text-[var(--card)] cn-serif text-[13px] disabled:opacity-50"
-              >
-                {personalizing ? "AI 作画中…" : personalCover ? "重新生成" : "✨ 生成我的卡"}
-              </button>
-              {personalCover && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (card) {
-                      clearPersonalizedCard(card.id);
-                      setPersonalCover(null);
-                    }
-                  }}
-                  className="px-4 py-2 rounded-full border border-[var(--border)] cn-serif text-[13px] text-[var(--ink-soft)]"
-                >
-                  恢复原卡
-                </button>
-              )}
-            </div>
-            {personalizeErr && (
-              <p className="mt-2 cn-serif text-[12px] text-[oklch(0.55_0.18_25)]">
-                {personalizeErr}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
+      {/* 个性化入口已移至「开始今日剧情」按钮上方 */}
 
 
       {/* City picker */}
