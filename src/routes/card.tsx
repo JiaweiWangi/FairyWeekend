@@ -4,6 +4,13 @@ import { loadPendingCard, startRun } from "@/lib/persona-store";
 import { RARITY_LABEL } from "@/lib/cards";
 import type { PersonaCard, Journey } from "@/lib/persona-types";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  getUserPhoto,
+  subscribeUserPhoto,
+  getPersonalizedCard,
+  setPersonalizedCard,
+  clearPersonalizedCard,
+} from "@/lib/user-photo";
 
 export const Route = createFileRoute("/card")({ component: CardPage });
 
@@ -41,6 +48,62 @@ function CardPage() {
   const [locating, setLocating] = useState(false);
   const [autoLocated, setAutoLocated] = useState(false);
   const [loadingIdx, setLoadingIdx] = useState(0);
+  const [userPhoto, setUserPhotoState] = useState<string | null>(null);
+  const [personalCover, setPersonalCover] = useState<string | null>(null);
+  const [personalizing, setPersonalizing] = useState(false);
+  const [personalizeErr, setPersonalizeErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    setUserPhotoState(getUserPhoto());
+    return subscribeUserPhoto(setUserPhotoState);
+  }, []);
+
+  useEffect(() => {
+    if (card) setPersonalCover(getPersonalizedCard(card.id));
+  }, [card]);
+
+  async function urlToDataUrl(url: string): Promise<string> {
+    if (url.startsWith("data:")) return url;
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+  }
+
+  async function handlePersonalize() {
+    if (!card || !userPhoto) return;
+    setPersonalizing(true);
+    setPersonalizeErr(null);
+    try {
+      const coverDataUrl = card.cover ? await urlToDataUrl(card.cover) : "";
+      const res = await fetch("/api/personalize-card", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userPhoto,
+          cardCover: coverDataUrl,
+          identity: card.identity,
+          mood: card.mood,
+          illustration_keyword: card.illustration_keyword,
+        }),
+      });
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || `合成失败 (${res.status})`);
+      }
+      const { image } = (await res.json()) as { image: string };
+      setPersonalizedCard(card.id, image);
+      setPersonalCover(image);
+    } catch (e) {
+      setPersonalizeErr(e instanceof Error ? e.message : "合成失败");
+    } finally {
+      setPersonalizing(false);
+    }
+  }
   const coordsRef = useRef<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
@@ -131,7 +194,9 @@ function CardPage() {
               : { background: `linear-gradient(160deg, ${a} 0%, ${b} 100%)` }
           }
         >
-          {card.cover ? (
+          {personalCover ? (
+            <img src={personalCover} alt={card.identity} className="absolute inset-0 w-full h-full object-cover" />
+          ) : card.cover ? (
             <img src={card.cover} alt={card.identity} className="absolute inset-0 w-full h-full object-cover" />
           ) : (
             <div
@@ -145,10 +210,22 @@ function CardPage() {
           <div className="absolute top-4 left-4 rarity-chip" data-rarity={card.rarity}>
             ✦ {card.rarity} · {RARITY_LABEL[card.rarity]}
           </div>
+          {userPhoto && !personalCover && (
+            <div className="absolute top-4 right-4 w-12 h-12 rounded-full overflow-hidden border-2 border-white/85 shadow-md ring-1 ring-black/10">
+              <img src={userPhoto} alt="你" className="w-full h-full object-cover" />
+            </div>
+          )}
+          {personalCover && (
+            <div className="absolute top-4 right-4 display italic text-[10.5px] tracking-[0.25em] text-white/90 drop-shadow bg-black/30 rounded-full px-2.5 py-1">
+              ✦ YOU
+            </div>
+          )}
           <div className="absolute bottom-4 right-4 display italic text-sm text-white/90 drop-shadow">
             {card.id.replace("card_", "No.")}
           </div>
         </div>
+
+
 
         <div className="p-7">
           <div className="cn-serif text-[11px] tracking-[0.3em] text-[var(--ink-soft)]">
@@ -242,6 +319,70 @@ function CardPage() {
           )}
         </div>
       </div>
+
+      {/* 个性化卡面 */}
+      <div className="mt-6">
+        {!userPhoto ? (
+          <button
+            type="button"
+            onClick={() => navigate({ to: "/me" })}
+            className="w-full rounded-2xl border border-dashed border-[var(--border)] bg-[var(--card)]/60 p-4 text-left cn-serif text-[13px] text-[var(--ink-soft)] hover:border-[var(--primary)] transition"
+          >
+            <div className="cn-serif text-[14px] text-[var(--ink)] mb-1">
+              ✨ 让这张卡变成「你」
+            </div>
+            上传一张你的照片，AI 会把你画进这个人设。去「我的 → 我的照片」上传 →
+          </button>
+        ) : (
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
+            <div className="flex items-start gap-3">
+              <div className="w-12 h-12 rounded-full overflow-hidden border border-[var(--border)] shrink-0">
+                <img src={userPhoto} alt="你" className="w-full h-full object-cover" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="cn-serif text-[14px] text-[var(--ink)]">
+                  {personalCover ? "已为你合成这张卡" : "用我的照片合成这张卡"}
+                </div>
+                <p className="cn-serif text-[12px] text-[var(--ink-soft)] mt-1 leading-relaxed">
+                  {personalCover
+                    ? "想换风格可以重新生成。"
+                    : "AI 会把你画成这个人设的样子，约 10-20 秒。"}
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handlePersonalize}
+                disabled={personalizing}
+                className="px-4 py-2 rounded-full bg-[var(--ink)] text-[var(--card)] cn-serif text-[13px] disabled:opacity-50"
+              >
+                {personalizing ? "AI 作画中…" : personalCover ? "重新生成" : "✨ 生成我的卡"}
+              </button>
+              {personalCover && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (card) {
+                      clearPersonalizedCard(card.id);
+                      setPersonalCover(null);
+                    }
+                  }}
+                  className="px-4 py-2 rounded-full border border-[var(--border)] cn-serif text-[13px] text-[var(--ink-soft)]"
+                >
+                  恢复原卡
+                </button>
+              )}
+            </div>
+            {personalizeErr && (
+              <p className="mt-2 cn-serif text-[12px] text-[oklch(0.55_0.18_25)]">
+                {personalizeErr}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
 
       {/* City picker */}
       <div className="mt-8">

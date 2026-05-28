@@ -9,6 +9,7 @@ import {
   type LibraryEntry,
 } from "@/lib/persona-store";
 import { VenueIcon, detectVenue } from "@/components/VenueIcon";
+import { UserPhotoCard } from "@/components/UserPhotoCard";
 import type * as ExportPdf from "@/lib/export-pdf";
 const loadExportPdf = () => import("@/lib/export-pdf");
 const elementToImageBlob: typeof ExportPdf.elementToImageBlob = (...args) =>
@@ -227,6 +228,15 @@ function MePage() {
               : "当前使用本地连载"}
         </div>
       </header>
+
+      {/* 我的照片 */}
+      <section className="max-w-xl mx-auto px-5 mt-6">
+        <div className="display text-[10.5px] tracking-[0.35em] text-[var(--ink-soft)] mb-2">
+          MY · PHOTO
+        </div>
+        <UserPhotoCard />
+      </section>
+
 
       {/* Tabs (multi-select) */}
       <div className="max-w-xl mx-auto px-5 mt-6 flex justify-center">
