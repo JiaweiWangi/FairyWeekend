@@ -4,6 +4,7 @@ import { loadRun, recordScene, clearSceneRecord } from "@/lib/persona-store";
 import type { JourneyRunState, JourneyScene, SceneRecord } from "@/lib/persona-types";
 import { VenueIcon, detectVenue } from "@/components/VenueIcon";
 import { getVenuePhotos } from "@/lib/venue-gallery";
+import { buildBundle, isBundlePurchased, markBundlePurchased, type JourneyBundle } from "@/lib/bundle";
 import { toast } from "sonner";
 
 
