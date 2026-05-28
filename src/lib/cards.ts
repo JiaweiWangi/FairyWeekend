@@ -96,6 +96,24 @@ const _PERSONA_CARDS_BASE: PersonaCard[] = [
     colors: ["#e0f2f1", "#80cbc4", "#e8f5e9"],
     illustration_keyword: "local_pretender",
   },
+  {
+    id: "card_009",
+    rarity: "R",
+    identity: "想被朋友包围的人",
+    mood: "今天不想一个人，想笑得大声一点",
+    mission: "约一个许久没见的朋友，吃顿饭再散散步",
+    colors: ["#ffe0d6", "#ffb38a", "#fff1ea"],
+    illustration_keyword: "friends_gathering",
+  },
+  {
+    id: "card_010",
+    rarity: "SR",
+    identity: "想钻进旧时光里的人",
+    mood: "想被慢一点的东西包住",
+    mission: "找一家旧唱片店或老书店，待到天黑",
+    colors: ["#dfe7f3", "#4f6d99", "#f3d8a8"],
+    illustration_keyword: "vintage_seeker",
+  },
 ];
 
 export const PERSONA_CARDS: PersonaCard[] = _PERSONA_CARDS_BASE.map((c) => ({
