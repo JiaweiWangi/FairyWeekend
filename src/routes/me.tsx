@@ -31,8 +31,18 @@ import {
   type PostchainReport,
   type PostchainReportStyle,
 } from "@/lib/postchain-report";
-import { savePublicPostchainShareCloud } from "@/lib/postchain-share";
-import { loadPostchainConsentCloud, savePostchainConsentCloud } from "@/lib/postchain-consent";
+// postchain-share / postchain-consent 只在分享/授权流程用，动态加载避免进 me.tsx 首屏 chunk
+import type * as PostchainShareModule from "@/lib/postchain-share";
+import type * as PostchainConsentModule from "@/lib/postchain-consent";
+const loadPostchainShare = () => import("@/lib/postchain-share");
+const loadPostchainConsent = () => import("@/lib/postchain-consent");
+const savePublicPostchainShareCloud: typeof PostchainShareModule.savePublicPostchainShareCloud =
+  (...args) => loadPostchainShare().then((m) => m.savePublicPostchainShareCloud(...args));
+const loadPostchainConsentCloud: typeof PostchainConsentModule.loadPostchainConsentCloud =
+  (...args) => loadPostchainConsent().then((m) => m.loadPostchainConsentCloud(...args));
+const savePostchainConsentCloud: typeof PostchainConsentModule.savePostchainConsentCloud =
+  (...args) => loadPostchainConsent().then((m) => m.savePostchainConsentCloud(...args));
+
 import { buildCityPreferenceProfile, type DmMemorySnapshot } from "@/lib/city-preference";
 import { supabase } from "@/integrations/supabase/client";
 import { qrSvgDataUrl } from "@/lib/qr";
