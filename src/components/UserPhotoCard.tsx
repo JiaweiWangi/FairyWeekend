@@ -288,6 +288,43 @@ export function UserPhotoCard({ variant = "inline", onDone }: Props) {
             )}
           </div>
 
+          {/* 缩略图网格：实时显示每张卡的生成结果 */}
+          <div className="mt-4 grid grid-cols-5 gap-2">
+            {PERSONA_CARDS.map((c) => {
+              const img = thumbs[c.id];
+              const isCurrent = currentId === c.id;
+              return (
+                <div
+                  key={c.id}
+                  className="relative aspect-[3/4] rounded-md overflow-hidden border border-[var(--border)] bg-[var(--muted)]"
+                  title={c.identity}
+                >
+                  {img ? (
+                    <img src={img} alt={c.identity} className="w-full h-full object-cover" />
+                  ) : c.cover ? (
+                    <img
+                      src={c.cover}
+                      alt={c.identity}
+                      className="w-full h-full object-cover opacity-30 grayscale"
+                    />
+                  ) : null}
+                  {isCurrent && (
+                    <div className="absolute inset-0 bg-[var(--ink)]/40 flex items-center justify-center">
+                      <span className="display text-[9px] tracking-[0.2em] text-white animate-pulse">
+                        生成中
+                      </span>
+                    </div>
+                  )}
+                  {img && !isCurrent && (
+                    <div className="absolute bottom-0 right-0 m-0.5 w-3 h-3 rounded-full bg-[var(--ink)] flex items-center justify-center">
+                      <span className="text-[8px] text-[var(--card)]">✓</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
           {batchFailed.length > 0 && !batchRunning && (
             <p className="mt-2 cn-serif text-[12px] text-[oklch(0.55_0.18_25)]">
               {batchFailed.length} 张生成失败：{batchFailed.slice(0, 3).join("、")}
