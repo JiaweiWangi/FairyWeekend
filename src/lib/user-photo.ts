@@ -108,6 +108,3 @@ export async function fileToCompressedDataUrl(file: File, maxSide = 768): Promis
   }
 }
 
-export function useUserPhotoSync() {
-  // 占位（避免再开一个 hook 文件），具体在组件里用 useEffect + subscribeUserPhoto
-}
