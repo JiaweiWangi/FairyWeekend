@@ -82,6 +82,8 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [picked, setPicked] = useState<number[]>([]);
   const recognitionRef = useRef<any>(null);
+  const manualStopRef = useRef(false);
+  const baselineRef = useRef("");
   const ranking = useRef<PersonaCard[]>([]);
   const idRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -96,6 +98,7 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
       return;
     }
     if (listening) {
+      manualStopRef.current = true;
       recognitionRef.current?.stop();
       return;
     }
@@ -104,17 +107,42 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
       const rec = new SR();
       rec.lang = "zh-CN";
       rec.interimResults = true;
-      rec.continuous = false;
+      rec.continuous = true;
+      // 以当前输入框内容为基线，新识别的内容追加在后面
+      baselineRef.current = input ? input.replace(/\s+$/, "") + " " : "";
+      manualStopRef.current = false;
       rec.onresult = (e: any) => {
         let text = "";
         for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
-        setInput(text);
+        setInput(baselineRef.current + text);
       };
       rec.onerror = (e: any) => {
+        if (e.error === "no-speech" || e.error === "aborted") return; // 忽略静音/中断，让 onend 自动重启
         setVoiceError(e.error === "not-allowed" ? "麦克风权限被拒绝" : "语音识别失败");
+        manualStopRef.current = true;
         setListening(false);
       };
-      rec.onend = () => setListening(false);
+      rec.onend = () => {
+        // 把刚才识别到的最终文本固化进基线，下次继续追加
+        baselineRef.current = (document.activeElement as HTMLInputElement)?.value
+          ? baselineRef.current // 占位，下面用 setInput 的最新值更可靠
+          : baselineRef.current;
+        // 用回调拿最新 input 作为新的基线
+        setInput((cur) => {
+          baselineRef.current = cur ? cur.replace(/\s+$/, "") + " " : "";
+          return cur;
+        });
+        if (manualStopRef.current) {
+          setListening(false);
+          return;
+        }
+        // 用户没手动停止 —— 自动重启，扛住停顿
+        try {
+          rec.start();
+        } catch {
+          setListening(false);
+        }
+      };
       recognitionRef.current = rec;
       setVoiceError(null);
       setListening(true);
