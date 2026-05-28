@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { loadRun, recordScene, clearSceneRecord } from "@/lib/persona-store";
 import type { JourneyRunState, JourneyScene, SceneRecord } from "@/lib/persona-types";
 import { VenueIcon, detectVenue } from "@/components/VenueIcon";
+import { getVenuePhotos } from "@/lib/venue-gallery";
 import { toast } from "sonner";
 
 
@@ -320,6 +321,16 @@ function SceneSheet({
           <p className="cn-serif text-[15px] leading-[1.95] text-[var(--ink)] first-letter:text-[26px] first-letter:font-serif first-letter:mr-1">
             {scene.persona_narrative}
           </p>
+
+          <SceneBuzz
+            sceneName={scene.scene_name}
+            locationName={scene.location_name}
+            locationType={scene.location_type}
+            kind={kind}
+            city={city}
+          />
+
+
 
           {/* Task card */}
           <div
@@ -834,3 +845,161 @@ function CheckInPanel({
     </div>
   );
 }
+
+/* ============ Scene buzz: 实景画廊 + AI 生成的食客短评 ============ */
+
+type SceneReview = { name: string; rating: number; tag: string; text: string };
+
+const BUZZ_CACHE_KEY = "todaypersona.scene_buzz_v1";
+
+function readBuzzCache(): Record<string, SceneReview[]> {
+  if (typeof window === "undefined") return {};
+  try { return JSON.parse(localStorage.getItem(BUZZ_CACHE_KEY) || "{}"); } catch { return {}; }
+}
+function writeBuzzCache(map: Record<string, SceneReview[]>) {
+  if (typeof window === "undefined") return;
+  try { localStorage.setItem(BUZZ_CACHE_KEY, JSON.stringify(map)); } catch { /* quota */ }
+}
+
+function SceneBuzz({
+  sceneName, locationName, locationType, kind, city,
+}: {
+  sceneName: string;
+  locationName: string;
+  locationType: string;
+  kind: string;
+  city?: string;
+}) {
+  const photos = useMemo(() => getVenuePhotos(kind), [kind]);
+  const cacheKey = `${locationName}|${sceneName}`;
+  const [reviews, setReviews] = useState<SceneReview[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const cache = readBuzzCache();
+    if (cache[cacheKey]?.length) {
+      setReviews(cache[cacheKey]);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    fetch("/api/public/scene-buzz", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scene_name: sceneName,
+        location_name: locationName,
+        location_type: locationType,
+        city,
+      }),
+    })
+      .then((r) => r.ok ? r.json() : Promise.reject(r.statusText))
+      .then((j: { reviews?: SceneReview[] }) => {
+        if (cancelled) return;
+        const list = (j.reviews ?? []).filter((r) => r?.text);
+        setReviews(list);
+        if (list.length) {
+          const next = { ...readBuzzCache(), [cacheKey]: list };
+          writeBuzzCache(next);
+        }
+      })
+      .catch(() => { if (!cancelled) setReviews([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [cacheKey, sceneName, locationName, locationType, city]);
+
+  return (
+    <div className="mt-5">
+      {/* 实景画廊 */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="display text-[10px] tracking-[0.35em] text-[var(--ink-soft)]">
+          实景一瞥 · GLIMPSE
+        </div>
+        <div className="cn-serif text-[10px] text-[var(--ink-soft)] opacity-70">
+          参考实景，非该店实拍
+        </div>
+      </div>
+      <div className="flex gap-2 overflow-x-auto -mx-1 px-1 pb-1 snap-x snap-mandatory">
+        {photos.map((src, i) => (
+          <div
+            key={i}
+            className="relative shrink-0 rounded-2xl overflow-hidden snap-start"
+            style={{ width: 168, height: 124, boxShadow: "0 8px 22px -14px rgba(60,50,40,0.45)" }}
+          >
+            <img
+              src={src}
+              alt={`${locationName} 参考实景 ${i + 1}`}
+              loading="lazy"
+              className="w-full h-full object-cover"
+              onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = "none"; }}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* 食客说 */}
+      <div className="mt-4 flex items-center justify-between mb-2">
+        <div className="display text-[10px] tracking-[0.35em] text-[var(--ink-soft)]">
+          大家说 · WORD OF MOUTH
+        </div>
+        {reviews && reviews.length > 0 && (
+          <div className="cn-serif text-[11px] text-[var(--ink-soft)]">
+            {(reviews.reduce((s, r) => s + (r.rating || 0), 0) / reviews.length).toFixed(1)} ★
+          </div>
+        )}
+      </div>
+
+      {loading && !reviews && (
+        <div className="space-y-2">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-16 rounded-xl bg-white/60 animate-pulse" />
+          ))}
+        </div>
+      )}
+
+      {reviews && reviews.length === 0 && !loading && (
+        <div className="cn-serif text-[12px] text-[var(--ink-soft)] italic">
+          暂时没有声音，去成为第一个留言的人。
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {reviews?.map((r, i) => (
+          <div
+            key={i}
+            className="rounded-xl p-3 border bg-white/70"
+            style={{ borderColor: "#ece1c8" }}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center cn-serif text-[12px]"
+                  style={{
+                    background: `linear-gradient(135deg, hsl(${(i * 97) % 360} 55% 80%), hsl(${(i * 97 + 60) % 360} 55% 70%))`,
+                    color: "#3d3530",
+                  }}
+                >
+                  {r.name?.slice(-1) || "?"}
+                </div>
+                <div className="cn-serif text-[13px] text-[var(--ink)]">{r.name}</div>
+                <span
+                  className="cn-serif text-[10px] px-1.5 py-0.5 rounded-full"
+                  style={{ background: "#fdf0d6", color: "#7a5a30" }}
+                >
+                  {r.tag}
+                </span>
+              </div>
+              <div className="display text-[11px] text-[oklch(0.72_0.15_60)]">
+                {"★".repeat(Math.max(1, Math.min(5, r.rating || 5)))}
+              </div>
+            </div>
+            <p className="cn-serif text-[13px] leading-[1.7] text-[var(--ink)] mt-1.5">
+              {r.text}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
