@@ -11,6 +11,7 @@ import {
   setPersonalizedCard,
   clearPersonalizedCard,
 } from "@/lib/user-photo";
+import { toSimplified } from "@/lib/zh-simplify";
 
 export const Route = createFileRoute("/card")({ component: CardPage });
 
