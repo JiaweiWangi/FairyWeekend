@@ -386,8 +386,8 @@ function TarotView({
           transition: "height 0.6s cubic-bezier(.22,1,.36,1)",
         }}
       >
-        {(() => null)()}
         {order.map((cardId, i) => {
+
           const t = i / (CARD_COUNT - 1);
           const angle = -SPREAD / 2 + SPREAD * t + dragShift;
           const isHover = hover === i && picked === null && !shuffling;
