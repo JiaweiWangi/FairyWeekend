@@ -75,9 +75,51 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
   const [recIdx, setRecIdx] = useState(0);
+  const [listening, setListening] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const recognitionRef = useRef<any>(null);
   const ranking = useRef<PersonaCard[]>([]);
   const idRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const voiceSupported =
+    typeof window !== "undefined" &&
+    ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+
+  function toggleVoice() {
+    if (!voiceSupported) {
+      setVoiceError("当前浏览器不支持语音输入");
+      return;
+    }
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    try {
+      const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const rec = new SR();
+      rec.lang = "zh-CN";
+      rec.interimResults = true;
+      rec.continuous = false;
+      rec.onresult = (e: any) => {
+        let text = "";
+        for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
+        setInput(text);
+      };
+      rec.onerror = (e: any) => {
+        setVoiceError(e.error === "not-allowed" ? "麦克风权限被拒绝" : "语音识别失败");
+        setListening(false);
+      };
+      rec.onend = () => setListening(false);
+      recognitionRef.current = rec;
+      setVoiceError(null);
+      setListening(true);
+      rec.start();
+    } catch {
+      setVoiceError("无法开启语音输入");
+      setListening(false);
+    }
+  }
 
   const nextId = () => ++idRef.current;
 
