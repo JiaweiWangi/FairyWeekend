@@ -415,7 +415,7 @@ function RecCard({
   const [a, b, c] = card.colors;
   return (
     <div
-      className="persona-card overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] w-[260px] shadow-[0_14px_36px_-20px_rgba(0,0,0,0.25)] fade-up"
+      className="persona-card overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] w-[min(260px,100%)] shadow-[0_14px_36px_-20px_rgba(0,0,0,0.25)] fade-up"
       data-rarity={card.rarity}
     >
       <div
