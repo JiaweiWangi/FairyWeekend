@@ -311,6 +311,15 @@ function SceneSheet({
             </div>
           )}
 
+          {/* ✦ 第一眼吸引：实景大图 + 卖点 hook */}
+          <AppealHook
+            kind={kind}
+            sceneName={scene.scene_name}
+            narrative={scene.persona_narrative}
+            emotionTags={scene.emotion_tags}
+            stayMinutes={scene.stay_minutes}
+          />
+
           {/* Decorative divider */}
           <div className="flex items-center gap-3 my-4">
             <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg,transparent,#d8c8b8,transparent)" }} />
