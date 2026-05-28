@@ -47,6 +47,7 @@ function CardPage() {
   const [city, setCity] = useState("");
   const [locating, setLocating] = useState(false);
   const [autoLocated, setAutoLocated] = useState(false);
+  const [locatedName, setLocatedName] = useState<string | null>(null);
   const [loadingIdx, setLoadingIdx] = useState(0);
   const [userPhoto, setUserPhotoState] = useState<string | null>(null);
   const [personalCover, setPersonalCover] = useState<string | null>(null);
@@ -121,11 +122,32 @@ function CardPage() {
     setLocating(true);
     setError(null);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        coordsRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        coordsRef.current = { lat, lng };
         setAutoLocated(true);
         setCity("");
         setLocating(false);
+        setLocatedName("正在识别…");
+        // 反向地理编码：BigDataCloud 免费、无需 Key、支持中文
+        try {
+          const r = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=zh`,
+          );
+          const j = await r.json();
+          const parts = [
+            j.principalSubdivision, // 省/直辖市
+            j.city || j.locality,    // 市
+            j.localityInfo?.administrative?.find((a: any) => a.adminLevel === 6)?.name, // 区/县
+          ].filter(Boolean);
+          const name = parts.length ? Array.from(new Set(parts)).join(" · ") : (j.locality || j.city || "未知位置");
+          setLocatedName(name);
+          // 同步给后端用作 city 字段（保留坐标）
+          if (j.city || j.locality) setCity(j.city || j.locality);
+        } catch {
+          setLocatedName(`约 ${lat.toFixed(3)}, ${lng.toFixed(3)}`);
+        }
       },
       (err) => {
         setLocating(false);
@@ -399,7 +421,7 @@ function CardPage() {
               : "bg-[var(--card)] border-[var(--border)] text-[var(--ink)] hover:bg-[var(--muted)]"
           }`}
         >
-          {locating ? "定位中…" : autoLocated ? "✓ 已用我当前的位置" : "📍 用我现在的位置"}
+          {locating ? "定位中…" : autoLocated ? `✓ ${locatedName ?? "已用我当前的位置"}` : "📍 用我现在的位置"}
         </button>
 
         <div className="text-[11px] cn-serif text-[var(--ink-soft)] mb-2 text-center">
@@ -411,7 +433,7 @@ function CardPage() {
             return (
               <button
                 key={c}
-                onClick={() => { setCity(c); setAutoLocated(false); coordsRef.current = null; }}
+                onClick={() => { setCity(c); setAutoLocated(false); setLocatedName(null); coordsRef.current = null; }}
                 className={`chip ${active ? "is-active" : ""}`}
               >
                 {c}
