@@ -122,11 +122,32 @@ function CardPage() {
     setLocating(true);
     setError(null);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        coordsRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        coordsRef.current = { lat, lng };
         setAutoLocated(true);
         setCity("");
         setLocating(false);
+        setLocatedName("正在识别…");
+        // 反向地理编码：BigDataCloud 免费、无需 Key、支持中文
+        try {
+          const r = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=zh`,
+          );
+          const j = await r.json();
+          const parts = [
+            j.principalSubdivision, // 省/直辖市
+            j.city || j.locality,    // 市
+            j.localityInfo?.administrative?.find((a: any) => a.adminLevel === 6)?.name, // 区/县
+          ].filter(Boolean);
+          const name = parts.length ? Array.from(new Set(parts)).join(" · ") : (j.locality || j.city || "未知位置");
+          setLocatedName(name);
+          // 同步给后端用作 city 字段（保留坐标）
+          if (j.city || j.locality) setCity(j.city || j.locality);
+        } catch {
+          setLocatedName(`约 ${lat.toFixed(3)}, ${lng.toFixed(3)}`);
+        }
       },
       (err) => {
         setLocating(false);
