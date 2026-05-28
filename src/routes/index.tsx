@@ -249,11 +249,17 @@ function TarotView({
   onReset: () => void;
 }) {
   // 响应式：在手机端缩小整套牌阵参数
+  const [viewportWidth, setViewportWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 390,
+  );
   const [isMobile, setIsMobile] = useState(
     typeof window !== "undefined" ? window.innerWidth < 640 : false,
   );
   useEffect(() => {
-    const onR = () => setIsMobile(window.innerWidth < 640);
+    const onR = () => {
+      setViewportWidth(window.innerWidth);
+      setIsMobile(window.innerWidth < 640);
+    };
     window.addEventListener("resize", onR);
     return () => window.removeEventListener("resize", onR);
   }, []);
@@ -265,7 +271,7 @@ function TarotView({
   const CARD_H = isMobile ? 104 : 168;
   const FAN_W = isMobile ? 340 : 860;
   const FAN_H = isMobile ? 230 : 360;
-  const EXPANDED_H = isMobile ? 500 : 560;
+  const EXPANDED_H = isMobile ? 520 : 560;
   const PIVOT_Y = FAN_H + RADIUS - (isMobile ? 60 : 90);
 
   const [order, setOrder] = useState(() => Array.from({ length: CARD_COUNT }, (_, i) => i));
@@ -404,9 +410,15 @@ function TarotView({
 
           // picked 后画布会扩大；让 picked 卡居中并按可用高度缩放
           const expandedH = EXPANDED_H;
-          const maxPickedWidth = Math.min(FAN_W - (isMobile ? 20 : 80), isMobile ? 320 : 360);
-          const maxPickedHeight = expandedH - (isMobile ? 20 : 40);
+          const maxPickedWidth = Math.min(
+            FAN_W - (isMobile ? 28 : 80),
+            viewportWidth - (isMobile ? 72 : 120),
+            isMobile ? 292 : 360,
+          );
+          const maxPickedHeight = expandedH - (isMobile ? 28 : 40);
           const pickedScale = Math.min(maxPickedWidth / CARD_W, maxPickedHeight / CARD_H);
+          const pickedCardWidth = CARD_W * pickedScale;
+          const pickedCardHeight = CARD_H * pickedScale;
 
           // 洗牌：所有牌聚拢到中线，轻微角度散
           const stackTilt = ((i % 7) - 3) * 1.6;
@@ -420,7 +432,7 @@ function TarotView({
             ? 0
             : shuffling ? stackTilt : angle;
 
-          const innerScale = isPicked ? pickedScale : isHover ? 1.06 : 1;
+          const innerScale = isHover ? 1.06 : 1;
           const innerLift = isPicked || shuffling ? 0 : -lift;
 
           const innerRotateY = isPicked && flipped ? 180 : 0;
@@ -436,12 +448,12 @@ function TarotView({
               style={{
                 left: slotLeft,
                 top: slotTop,
-                width: CARD_W,
-                height: CARD_H,
+                width: isPicked ? pickedCardWidth : CARD_W,
+                height: isPicked ? pickedCardHeight : CARD_H,
                 transform: `translate(-50%, -50%) rotate(${slotRotate}deg)`,
                 transition: isPicked
-                  ? "left 0.7s cubic-bezier(.22,1,.36,1), top 0.7s cubic-bezier(.22,1,.36,1), transform 0.7s cubic-bezier(.22,1,.36,1)"
-                  : "left 0.42s cubic-bezier(.22,1,.36,1), top 0.42s cubic-bezier(.22,1,.36,1), transform 0.42s cubic-bezier(.22,1,.36,1), opacity 0.4s",
+                  ? "left 0.7s cubic-bezier(.22,1,.36,1), top 0.7s cubic-bezier(.22,1,.36,1), width 0.7s cubic-bezier(.22,1,.36,1), height 0.7s cubic-bezier(.22,1,.36,1), transform 0.7s cubic-bezier(.22,1,.36,1)"
+                  : "left 0.42s cubic-bezier(.22,1,.36,1), top 0.42s cubic-bezier(.22,1,.36,1), width 0.42s cubic-bezier(.22,1,.36,1), height 0.42s cubic-bezier(.22,1,.36,1), transform 0.42s cubic-bezier(.22,1,.36,1), opacity 0.4s",
                 transitionDelay,
                 zIndex: isPicked ? 120 : isHover ? 80 : i,
                 opacity: isOther ? 0 : 1,
