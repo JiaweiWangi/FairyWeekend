@@ -515,6 +515,21 @@ function SceneSheet({
             </div>
           )}
 
+          {bundlePurchased && (
+            <div
+              className="mt-3 px-3 py-2 rounded-2xl flex items-center justify-between gap-2"
+              style={{ background: "linear-gradient(135deg,#2d3a2a 0%,#4a5a3d 100%)", color: "#fff" }}
+            >
+              <div className="cn-serif text-[12px] leading-tight">
+                ✓ 已包含在「今日全程套装」
+                <span className="display italic text-[10px] text-white/70 ml-1">到店出示即可核销</span>
+              </div>
+              <div className="display italic text-[10px] px-2 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.18)" }}>
+                BUNDLE
+              </div>
+            </div>
+          )}
+
           {/* ✦ 第一眼吸引：实景大图 + 卖点 hook */}
           <AppealHook
             kind={kind}
