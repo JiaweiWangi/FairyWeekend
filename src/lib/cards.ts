@@ -5,6 +5,10 @@ import cover003 from "@/assets/persona/card_003.png";
 import cover004 from "@/assets/persona/card_004.png";
 import cover005 from "@/assets/persona/card_005.png";
 import cover006 from "@/assets/persona/card_006.png";
+import cover007 from "@/assets/persona/card_007.png";
+import cover008 from "@/assets/persona/card_008.png";
+import cover009 from "@/assets/persona/card_009.png";
+import cover010 from "@/assets/persona/card_010.png";
 
 const COVERS: Record<string, string> = {
   card_001: cover001,
@@ -13,6 +17,10 @@ const COVERS: Record<string, string> = {
   card_004: cover004,
   card_005: cover005,
   card_006: cover006,
+  card_007: cover007,
+  card_008: cover008,
+  card_009: cover009,
+  card_010: cover010,
 };
 
 const _PERSONA_CARDS_BASE: PersonaCard[] = [
