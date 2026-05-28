@@ -5,6 +5,10 @@ import cover003 from "@/assets/persona/card_003.png";
 import cover004 from "@/assets/persona/card_004.png";
 import cover005 from "@/assets/persona/card_005.png";
 import cover006 from "@/assets/persona/card_006.png";
+import cover007 from "@/assets/persona/card_007.png";
+import cover008 from "@/assets/persona/card_008.png";
+import cover009 from "@/assets/persona/card_009.png";
+import cover010 from "@/assets/persona/card_010.png";
 
 const COVERS: Record<string, string> = {
   card_001: cover001,
@@ -13,6 +17,10 @@ const COVERS: Record<string, string> = {
   card_004: cover004,
   card_005: cover005,
   card_006: cover006,
+  card_007: cover007,
+  card_008: cover008,
+  card_009: cover009,
+  card_010: cover010,
 };
 
 const _PERSONA_CARDS_BASE: PersonaCard[] = [
@@ -87,6 +95,24 @@ const _PERSONA_CARDS_BASE: PersonaCard[] = [
     mission: "去一家没有英文菜单的小馆子吃饭",
     colors: ["#e0f2f1", "#80cbc4", "#e8f5e9"],
     illustration_keyword: "local_pretender",
+  },
+  {
+    id: "card_009",
+    rarity: "R",
+    identity: "想被朋友包围的人",
+    mood: "今天不想一个人，想笑得大声一点",
+    mission: "约一个许久没见的朋友，吃顿饭再散散步",
+    colors: ["#ffe0d6", "#ffb38a", "#fff1ea"],
+    illustration_keyword: "friends_gathering",
+  },
+  {
+    id: "card_010",
+    rarity: "SR",
+    identity: "想钻进旧时光里的人",
+    mood: "想被慢一点的东西包住",
+    mission: "找一家旧唱片店或老书店，待到天黑",
+    colors: ["#dfe7f3", "#4f6d99", "#f3d8a8"],
+    illustration_keyword: "vintage_seeker",
   },
 ];
 

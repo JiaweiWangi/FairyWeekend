@@ -12,6 +12,8 @@ const CARD_TAGS: Record<string, string[]> = {
   card_006: ["感伤", "独处", "复古", "怀旧"],
   card_007: ["感伤", "怀旧", "记录", "随性"],
   card_008: ["好奇", "热闹", "冒险", "陌生"],
+  card_009: ["热闹", "治愈", "随性"],
+  card_010: ["复古", "安静", "怀旧", "独处"],
 };
 
 type Step = "mood" | "duration" | "vibe" | "extra" | "result";
@@ -46,6 +48,7 @@ interface ChatMsg {
   chips?: { label: string; tag: string }[];
   step?: Step;
   freeInput?: boolean;
+  multi?: boolean;
   card?: PersonaCard;
 }
 
@@ -77,6 +80,7 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
   const [recIdx, setRecIdx] = useState(0);
   const [listening, setListening] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [picked, setPicked] = useState<number[]>([]);
   const recognitionRef = useRef<any>(null);
   const ranking = useRef<PersonaCard[]>([]);
   const idRef = useRef(0);
@@ -143,8 +147,8 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
     // 首屏立即给出全部初始内容，不让用户等
     push({ who: "agent", text: "嗨，我是今日小说的策划助理 ❦" }, 0);
     push({ who: "agent", text: "这个周末，你想过成什么样？随便讲就行——\n· 此刻的状态（累瘫了 / 有点闷 / 想撒野…）\n· 想待在什么环境（窝在房间 / 想出门晒太阳 / 找个安静角落…）\n· 想和谁、做点什么、或者只是想被什么样的氛围包住\n\n想到哪说到哪，下面也可以点气泡让我一步步带你选。" }, 0);
-    push({ who: "agent", text: "要不先从这个开始：你现在大概是什么状态？" }, 0);
-    push({ who: "agent", chips: MOOD_CHIPS, step: "mood", freeInput: true }, 0);
+    push({ who: "agent", text: "要不先从这个开始：你现在大概是什么状态？（可多选）" }, 0);
+    push({ who: "agent", chips: MOOD_CHIPS, step: "mood", freeInput: true, multi: true }, 0);
   }, []);
 
   // 自动滚到底
@@ -156,7 +160,7 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
     // 把这条消息的 chips 标记为已选并隐藏（通过移除 chips 字段）
     setMsgs((m) =>
       m.map((x) =>
-        x.step === step && x.chips ? { ...x, chips: undefined, freeInput: false } : x,
+        x.step === step && x.chips ? { ...x, chips: undefined, freeInput: false, multi: false } : x,
       ),
     );
     // 显示用户气泡
@@ -166,10 +170,28 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
     advance(step, newTags, freeText);
   }
 
+  function handleMultiSubmit(step: Step, chips: { label: string; tag: string }[]) {
+    if (picked.length === 0) return;
+    const chosen = picked.map((i) => chips[i]);
+    const label = chosen.map((c) => c.label).join("、");
+    const addTags = chosen.map((c) => c.tag).filter(Boolean);
+    setMsgs((m) =>
+      m.map((x) =>
+        x.step === step && x.chips ? { ...x, chips: undefined, freeInput: false, multi: false } : x,
+      ),
+    );
+    setMsgs((m) => [...m, { id: nextId(), who: "user", text: label }]);
+    const newTags = [...tags, ...addTags];
+    setTags(newTags);
+    setPicked([]);
+    advance(step, newTags, freeText);
+  }
+
   function handleFreeSubmit(currentStep: Step) {
     const text = input.trim();
     if (!text) return;
     setInput("");
+    setPicked([]);
     setMsgs((m) =>
       m.map((x) =>
         x.step === currentStep && x.chips ? { ...x, chips: undefined, freeInput: false } : x,
@@ -186,8 +208,8 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
       push({ who: "agent", text: "好嘞。今天大概有多少时间？" }, 250);
       push({ who: "agent", chips: DURATION_CHIPS, step: "duration", freeInput: false }, 450);
     } else if (fromStep === "duration") {
-      push({ who: "agent", text: "想要的氛围是哪种？" }, 250);
-      push({ who: "agent", chips: VIBE_CHIPS, step: "vibe", freeInput: false }, 450);
+      push({ who: "agent", text: "想要的氛围是哪种？（可多选）" }, 250);
+      push({ who: "agent", chips: VIBE_CHIPS, step: "vibe", freeInput: false, multi: true }, 450);
     } else if (fromStep === "vibe") {
       push({ who: "agent", text: "想再用一句话补充吗？（可选）" }, 250);
       push({ who: "agent", chips: [{ label: "不用了，给我推荐吧 →", tag: "" }], step: "extra", freeInput: true }, 450);
@@ -229,7 +251,7 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
 
       <div
         ref={scrollRef}
-        className="bg-[var(--muted)]/40 rounded-3xl border border-[var(--border)] p-4 sm:p-5 max-h-[62vh] overflow-y-auto"
+        className="bg-[var(--muted)]/40 rounded-3xl border border-[var(--border)] p-4 sm:p-5"
       >
         <div className="flex flex-col gap-3">
           {msgs.map((m) => (
@@ -245,16 +267,40 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
 
           {/* chips */}
           {lastInteractive?.chips && (
-            <div className="flex flex-wrap gap-2 mt-1 pl-1">
-              {lastInteractive.chips.map((c, i) => (
-                <button
-                  key={i}
-                  className="chip"
-                  onClick={() => handleChip(lastInteractive.step!, c.label, c.tag)}
-                >
-                  {c.label}
-                </button>
-              ))}
+            <div className="mt-1 pl-1">
+              <div className="flex flex-wrap gap-2">
+                {lastInteractive.chips.map((c, i) => {
+                  const isPicked = lastInteractive.multi && picked.includes(i);
+                  return (
+                    <button
+                      key={i}
+                      className={`chip transition ${isPicked ? "bg-[var(--primary)] text-[var(--primary-foreground)] border-transparent" : ""}`}
+                      onClick={() => {
+                        if (lastInteractive.multi) {
+                          setPicked((p) => (p.includes(i) ? p.filter((x) => x !== i) : [...p, i]));
+                        } else {
+                          handleChip(lastInteractive.step!, c.label, c.tag);
+                        }
+                      }}
+                    >
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {lastInteractive.multi && (
+                <div className="flex items-center gap-2 mt-3">
+                  <button
+                    type="button"
+                    disabled={picked.length === 0}
+                    onClick={() => handleMultiSubmit(lastInteractive.step!, lastInteractive.chips!)}
+                    className="px-4 py-2 rounded-full bg-[var(--ink)] text-[var(--card)] cn-serif text-[13px] disabled:opacity-40 transition"
+                  >
+                    确定（{picked.length}）
+                  </button>
+                  <span className="cn-serif text-[11px] text-[var(--ink-soft)]">可以选多个，或者直接在下面打字也行</span>
+                </div>
+              )}
             </div>
           )}
 
