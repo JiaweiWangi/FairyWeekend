@@ -545,6 +545,11 @@ function TarotView({
 
 function FullCardFront({ card }: { card: PersonaCard }) {
   const [a, b, c] = card.colors;
+  const [userPhoto, setUserPhotoState] = useState<string | null>(null);
+  useEffect(() => {
+    setUserPhotoState(getUserPhoto());
+    return subscribeUserPhoto(setUserPhotoState);
+  }, []);
   return (
     <div className="h-full w-full flex flex-col">
       <div
@@ -570,10 +575,16 @@ function FullCardFront({ card }: { card: PersonaCard }) {
         <div className="absolute top-3 left-3 rarity-chip" data-rarity={card.rarity}>
           ✦ {card.rarity} · {RARITY_LABEL[card.rarity]}
         </div>
+        {userPhoto && (
+          <div className="absolute top-3 right-3 w-11 h-11 rounded-full overflow-hidden border-2 border-white/85 shadow-md ring-1 ring-black/10">
+            <img src={userPhoto} alt="你" className="w-full h-full object-cover" />
+          </div>
+        )}
         <div className="absolute bottom-3 right-3 display italic text-[13px] text-white/90 drop-shadow">
           {card.id.replace("card_", "No.")}
         </div>
       </div>
+
       <div className="flex-1 p-5 flex flex-col">
         <div className="cn-serif text-[11px] tracking-[0.25em] text-[var(--ink-soft)]">
           IDENTITY · 身份
