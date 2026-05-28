@@ -156,6 +156,77 @@ function CardPage() {
           <p className="cn-serif text-[16px] italic text-[var(--ink)] mt-1">
             「{card.mission}」
           </p>
+
+          {card.catchphrase && (
+            <p className="mt-5 cn-serif text-[15px] italic text-[var(--ink)] leading-relaxed border-l-2 border-[var(--primary)] pl-3">
+              「{card.catchphrase}」
+            </p>
+          )}
+
+          {card.story && (
+            <>
+              <div className="mt-6 cn-serif text-[11px] tracking-[0.3em] text-[var(--ink-soft)]">
+                STORY
+              </div>
+              <p className="cn-serif text-[14.5px] leading-relaxed text-[var(--ink)] mt-2">
+                {card.story}
+              </p>
+            </>
+          )}
+
+          {card.keywords && card.keywords.length > 0 && (
+            <div className="mt-5 flex flex-wrap gap-1.5">
+              {card.keywords.map((k) => (
+                <span
+                  key={k}
+                  className="px-2.5 py-1 rounded-full bg-[var(--muted)] cn-serif text-[11.5px] text-[var(--ink-soft)]"
+                >
+                  #{k}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {(card.best_time || card.companion || card.soundtrack || card.avoid || card.gift_from_city) && (
+            <div className="mt-6 grid grid-cols-1 gap-3">
+              {card.best_time && (
+                <MetaRow label="推荐时段" value={card.best_time} />
+              )}
+              {card.companion && (
+                <MetaRow label="同行建议" value={card.companion} />
+              )}
+              {card.soundtrack && (
+                <MetaRow label="今日 BGM" value={card.soundtrack} />
+              )}
+              {card.avoid && (
+                <MetaRow label="今天别做" value={card.avoid} />
+              )}
+              {card.gift_from_city && (
+                <MetaRow label="城市赠礼" value={card.gift_from_city} />
+              )}
+            </div>
+          )}
+
+          {card.routes && card.routes.length > 0 && (
+            <>
+              <div className="mt-6 cn-serif text-[11px] tracking-[0.3em] text-[var(--ink-soft)]">
+                POSSIBLE ROUTES
+              </div>
+              <ul className="mt-2 space-y-1.5">
+                {card.routes.map((r, i) => (
+                  <li
+                    key={i}
+                    className="cn-serif text-[14px] text-[var(--ink)] leading-relaxed flex gap-2"
+                  >
+                    <span className="display italic text-[var(--ink-soft)] shrink-0">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <span>{r}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
       </div>
 
