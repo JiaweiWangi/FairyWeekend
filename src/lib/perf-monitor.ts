@@ -7,7 +7,7 @@
  * 用法：在路由组件 useEffect 里调用 reportPagePerf("me")
  */
 
-import { onLCP, onCLS, onINP, onFCP, onTTFB, type Metric } from "web-vitals";
+import type { Metric } from "web-vitals";
 
 const STARTED = new Set<string>();
 
@@ -137,16 +137,19 @@ export function reportPagePerf(pageName: string) {
     window.addEventListener("load", () => setTimeout(summarize, 150), { once: true });
   }
 
-  // Web Vitals 持续上报
+  // Web Vitals 持续上报 — 动态加载 web-vitals，避免进入主 chunk
   const tag = `🎯 [vitals · ${pageName}]`;
   const onMetric = (m: Metric) => {
     const value = m.name === "CLS" ? m.value : Math.round(m.value);
     const formatted = m.name === "CLS" ? value.toFixed(3) : `${value} ms`;
     console.log(`${tag} ${m.name}: ${formatted}  ${rating(m.name, m.value)}`);
   };
-  onLCP(onMetric);
-  onCLS(onMetric);
-  onINP(onMetric);
-  onFCP(onMetric);
-  onTTFB(onMetric);
+  void import("web-vitals").then(({ onLCP, onCLS, onINP, onFCP, onTTFB }) => {
+    onLCP(onMetric);
+    onCLS(onMetric);
+    onINP(onMetric);
+    onFCP(onMetric);
+    onTTFB(onMetric);
+  });
 }
+

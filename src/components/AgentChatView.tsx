@@ -321,7 +321,7 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
               onSubmit={(e) => { e.preventDefault(); handleFreeSubmit(lastInteractive.step!); }}
               className="mt-3 flex flex-col gap-2"
             >
-              <div className="rounded-3xl bg-[var(--card)] border border-[var(--border)] focus-within:border-[var(--primary)] transition shadow-sm overflow-hidden">
+              <div className="rounded-3xl bg-[var(--card)] border border-[var(--border)] focus-within:border-[var(--primary)] focus-within:shadow-[0_6px_18px_-12px_rgba(0,0,0,0.2)] transition shadow-sm overflow-hidden">
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -331,23 +331,23 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
                       if (input.trim()) handleFreeSubmit(lastInteractive.step!);
                     }
                   }}
-                  rows={3}
+                  rows={2}
                   placeholder={
                     listening
                       ? "听着呢…说吧"
-                      : "想到哪说到哪～\n比如：今天加班到飞起，只想窝在沙发里看点轻松的；或者，想被夏天的海风吹一吹…"
+                      : "聊聊你现在的状态、想要什么样的周末…"
                   }
-                  className="w-full px-4 pt-3 pb-2 bg-transparent cn-serif text-[15px] leading-relaxed text-[var(--ink)] placeholder:text-[var(--ink-soft)] placeholder:whitespace-pre-line resize-none outline-none min-h-[96px] max-h-[200px]"
+                  className="w-full px-4 pt-3 pb-1 bg-transparent cn-serif text-[15px] leading-relaxed text-[var(--ink)] placeholder:text-[var(--ink-soft)] resize-none outline-none min-h-[60px] max-h-[180px]"
                 />
-                {/* footer bar：把按钮单独一行，手机端再也不会压到文字 */}
-                <div className="flex items-center justify-between gap-2 px-2 pb-2">
-                  <div className="flex items-center gap-1.5">
+                {/* footer bar：紧贴 textarea，手机端清爽不空旷 */}
+                <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-1">
+                  <div className="flex items-center gap-1.5 min-w-0">
                     {voiceSupported && (
                       <button
                         type="button"
                         onClick={toggleVoice}
                         aria-label={listening ? "停止语音" : "开始语音输入"}
-                        className={`w-9 h-9 shrink-0 rounded-full border cn-serif text-[14px] flex items-center justify-center transition ${
+                        className={`w-8 h-8 shrink-0 rounded-full border text-[13px] flex items-center justify-center transition ${
                           listening
                             ? "bg-[oklch(0.6_0.18_25)] text-white border-transparent animate-pulse"
                             : "bg-[var(--background)] border-[var(--border)] text-[var(--ink)] hover:border-[var(--primary)]"
@@ -356,19 +356,20 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
                         🎤
                       </button>
                     )}
-                    <span className="hidden sm:inline text-[11px] cn-serif text-[var(--ink-soft)] ml-1">
+                    <span className="hidden sm:inline text-[11px] cn-serif text-[var(--ink-soft)] ml-1 truncate">
                       Enter 发送 · Shift+Enter 换行
                     </span>
                   </div>
                   <button
                     type="submit"
                     disabled={!input.trim()}
-                    className="h-9 px-5 rounded-full bg-[var(--ink)] text-[var(--card)] cn-serif text-[13px] disabled:opacity-40 transition"
+                    className="h-8 px-4 rounded-full bg-[var(--ink)] text-[var(--card)] cn-serif text-[12.5px] disabled:opacity-40 transition"
                   >
                     发送
                   </button>
                 </div>
               </div>
+
               {voiceError && (
                 <div className="px-1 text-[11px] cn-serif text-[oklch(0.55_0.15_25)]">{voiceError}</div>
               )}
