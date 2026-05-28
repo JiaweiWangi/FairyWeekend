@@ -11,6 +11,7 @@ import {
   setPersonalizedCard,
   clearPersonalizedCard,
 } from "@/lib/user-photo";
+import { toSimplified } from "@/lib/zh-simplify";
 
 export const Route = createFileRoute("/card")({ component: CardPage });
 
@@ -130,21 +131,37 @@ function CardPage() {
         setCity("");
         setLocating(false);
         setLocatedName("正在识别…");
-        // 反向地理编码：BigDataCloud 免费、无需 Key、支持中文
+        // 反向地理编码：优先 Nominatim（中文简体），失败再 fallback BigDataCloud
         try {
-          const r = await fetch(
-            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=zh`,
-          );
-          const j = await r.json();
-          const parts = [
-            j.principalSubdivision, // 省/直辖市
-            j.city || j.locality,    // 市
-            j.localityInfo?.administrative?.find((a: any) => a.adminLevel === 6)?.name, // 区/县
-          ].filter(Boolean);
-          const name = parts.length ? Array.from(new Set(parts)).join(" · ") : (j.locality || j.city || "未知位置");
-          setLocatedName(name);
-          // 同步给后端用作 city 字段（保留坐标）
-          if (j.city || j.locality) setCity(j.city || j.locality);
+          let name = "";
+          let cityName = "";
+          try {
+            const r = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=zh-CN&zoom=12`,
+              { headers: { Accept: "application/json" } },
+            );
+            const j = await r.json();
+            const a = j.address || {};
+            cityName = a.city || a.town || a.county || a.state || "";
+            const parts = [a.state, cityName, a.city_district || a.district || a.suburb].filter(Boolean);
+            name = Array.from(new Set(parts)).join(" · ");
+          } catch { /* fallback below */ }
+
+          if (!name) {
+            const r2 = await fetch(
+              `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=zh-CN`,
+            );
+            const j2 = await r2.json();
+            cityName = j2.city || j2.locality || cityName;
+            const parts = [
+              j2.principalSubdivision,
+              cityName,
+              j2.localityInfo?.administrative?.find((a: any) => a.adminLevel === 6)?.name,
+            ].filter(Boolean);
+            name = Array.from(new Set(parts)).join(" · ") || cityName || "未知位置";
+          }
+          setLocatedName(toSimplified(name));
+          if (cityName) setCity(toSimplified(cityName));
         } catch {
           setLocatedName(`约 ${lat.toFixed(3)}, ${lng.toFixed(3)}`);
         }
