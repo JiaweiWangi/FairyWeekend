@@ -78,6 +78,7 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
   const [recIdx, setRecIdx] = useState(0);
   const [listening, setListening] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [picked, setPicked] = useState<number[]>([]);
   const recognitionRef = useRef<any>(null);
   const ranking = useRef<PersonaCard[]>([]);
   const idRef = useRef(0);
