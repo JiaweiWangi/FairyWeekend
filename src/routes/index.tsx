@@ -265,6 +265,7 @@ function TarotView({
   const CARD_H = isMobile ? 104 : 168;
   const FAN_W = isMobile ? 340 : 860;
   const FAN_H = isMobile ? 230 : 360;
+  const EXPANDED_H = isMobile ? 500 : 560;
   const PIVOT_Y = FAN_H + RADIUS - (isMobile ? 60 : 90);
 
   const [order, setOrder] = useState(() => Array.from({ length: CARD_COUNT }, (_, i) => i));
@@ -380,7 +381,7 @@ function TarotView({
         className="relative select-none touch-none mx-auto"
         style={{
           width: FAN_W,
-          height: picked !== null ? (isMobile ? 380 : 500) : FAN_H,
+          height: picked !== null ? EXPANDED_H : FAN_H,
           maxWidth: "100%",
           perspective: 1600,
           transition: "height 0.6s cubic-bezier(.22,1,.36,1)",
@@ -402,9 +403,10 @@ function TarotView({
           const lift = isHover ? 52 : Math.max(0, 18 - dist * 5);
 
           // picked 后画布会扩大；让 picked 卡居中并按可用高度缩放
-          const expandedH = isMobile ? 380 : 500;
-          const targetH = expandedH - 40;
-          const pickedScale = targetH / CARD_H;
+          const expandedH = EXPANDED_H;
+          const maxPickedWidth = Math.min(FAN_W - (isMobile ? 20 : 80), isMobile ? 320 : 360);
+          const maxPickedHeight = expandedH - (isMobile ? 20 : 40);
+          const pickedScale = Math.min(maxPickedWidth / CARD_W, maxPickedHeight / CARD_H);
 
           // 洗牌：所有牌聚拢到中线，轻微角度散
           const stackTilt = ((i % 7) - 3) * 1.6;
