@@ -42,8 +42,11 @@ export interface Journey {
 
 export interface SceneRecord {
   note?: string;
-  photo?: string; // data URL
-  mood?: string;  // emoji
+  photo?: string;        // 兼容旧版：单张
+  photos?: string[];     // 新版：多张 data URL，最多 3 张
+  mood?: string;         // emoji
+  rating?: number;       // 1-5
+  companion?: string;    // 同行人：独自 / 朋友 / 恋人 / 家人 / 同事
   completedAt: number;
 }
 
