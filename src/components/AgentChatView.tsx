@@ -205,8 +205,8 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
       push({ who: "agent", text: "好嘞。今天大概有多少时间？" }, 250);
       push({ who: "agent", chips: DURATION_CHIPS, step: "duration", freeInput: false }, 450);
     } else if (fromStep === "duration") {
-      push({ who: "agent", text: "想要的氛围是哪种？" }, 250);
-      push({ who: "agent", chips: VIBE_CHIPS, step: "vibe", freeInput: false }, 450);
+      push({ who: "agent", text: "想要的氛围是哪种？（可多选）" }, 250);
+      push({ who: "agent", chips: VIBE_CHIPS, step: "vibe", freeInput: false, multi: true }, 450);
     } else if (fromStep === "vibe") {
       push({ who: "agent", text: "想再用一句话补充吗？（可选）" }, 250);
       push({ who: "agent", chips: [{ label: "不用了，给我推荐吧 →", tag: "" }], step: "extra", freeInput: true }, 450);
