@@ -345,17 +345,23 @@ function CardPage() {
                 POSSIBLE ROUTES
               </div>
               <ul className="mt-2 space-y-1.5">
-                {card.routes.map((r, i) => (
-                  <li
-                    key={i}
-                    className="cn-serif text-[14px] text-[var(--ink)] leading-relaxed flex gap-2"
-                  >
-                    <span className="display italic text-[var(--ink-soft)] shrink-0">
-                      {String(i + 1).padStart(2, "0")}
-                    </span>
-                    <span>{r}</span>
-                  </li>
-                ))}
+                {card.routes.map((r, i) => {
+                  const emoji = pickEmoji(r);
+                  return (
+                    <li
+                      key={i}
+                      className="cn-serif text-[14px] text-[var(--ink)] leading-relaxed flex gap-2"
+                    >
+                      <span className="display italic text-[var(--ink-soft)] shrink-0">
+                        {String(i + 1).padStart(2, "0")}
+                      </span>
+                      <span>
+                        {r}
+                        {emoji && <span className="ml-1.5 text-[15px] align-[-1px]">{emoji}</span>}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             </>
           )}
