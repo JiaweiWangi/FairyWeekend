@@ -248,14 +248,24 @@ function TarotView({
   onAccept: (c: PersonaCard) => void;
   onReset: () => void;
 }) {
+  // 响应式：在手机端缩小整套牌阵参数
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" ? window.innerWidth < 640 : false,
+  );
+  useEffect(() => {
+    const onR = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener("resize", onR);
+    return () => window.removeEventListener("resize", onR);
+  }, []);
+
   const CARD_COUNT = 22;
-  const SPREAD = 96;          // 总角度
-  const RADIUS = 440;         // 弧半径
-  const CARD_W = 108;
-  const CARD_H = 168;
-  const FAN_W = 860;
-  const FAN_H = 360;
-  const PIVOT_Y = FAN_H + RADIUS - 90; // 圆心 y（在容器下方）
+  const SPREAD = isMobile ? 78 : 96;     // 总角度
+  const RADIUS = isMobile ? 240 : 440;   // 弧半径
+  const CARD_W = isMobile ? 68 : 108;
+  const CARD_H = isMobile ? 104 : 168;
+  const FAN_W = isMobile ? 340 : 860;
+  const FAN_H = isMobile ? 230 : 360;
+  const PIVOT_Y = FAN_H + RADIUS - (isMobile ? 60 : 90);
 
   const [order, setOrder] = useState(() => Array.from({ length: CARD_COUNT }, (_, i) => i));
   const [hover, setHover] = useState<number | null>(null);
@@ -263,6 +273,7 @@ function TarotView({
   const [flipped, setFlipped] = useState(false);
   const [dragShift, setDragShift] = useState(0);
   const [shuffling, setShuffling] = useState(false);
+
   const fanRef = useRef<HTMLDivElement>(null);
   const dragStartX = useRef<number | null>(null);
   const movedRef = useRef(false);
