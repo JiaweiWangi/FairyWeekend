@@ -22,6 +22,7 @@ function JourneyPage() {
     const r = loadRun();
     if (!r) { navigate({ to: "/" }); return; }
     setRun(r);
+    setBundlePurchased(isBundlePurchased(r.card.id));
     const text = r.journey.story_opening;
     let i = 0;
     const t = setInterval(() => {
@@ -36,6 +37,7 @@ function JourneyPage() {
 
   const { card, journey, city, completedSceneOrders } = run;
   const allDone = completedSceneOrders.length >= journey.scenes.length;
+  const bundle = useMemo(() => buildBundle(run), [run]);
 
   function refresh() {
     const r = loadRun();
