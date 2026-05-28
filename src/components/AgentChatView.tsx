@@ -12,6 +12,8 @@ const CARD_TAGS: Record<string, string[]> = {
   card_006: ["感伤", "独处", "复古", "怀旧"],
   card_007: ["感伤", "怀旧", "记录", "随性"],
   card_008: ["好奇", "热闹", "冒险", "陌生"],
+  card_009: ["热闹", "治愈", "随性"],
+  card_010: ["复古", "安静", "怀旧", "独处"],
 };
 
 type Step = "mood" | "duration" | "vibe" | "extra" | "result";
