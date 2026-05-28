@@ -113,8 +113,196 @@ function JourneyPage() {
           city={city}
           onClose={() => setOpenScene(null)}
           onUpdated={refresh}
+          bundlePurchased={bundlePurchased}
         />
       )}
+
+      {/* Bundle purchase sheet */}
+      {bundleOpen && (
+        <BundleSheet
+          bundle={bundle}
+          scenes={journey.scenes}
+          city={city}
+          purchased={bundlePurchased}
+          onClose={() => setBundleOpen(false)}
+          onPurchased={() => {
+            markBundlePurchased(card.id);
+            setBundlePurchased(true);
+            toast.success("已锁定今日全程套装 · 到店出示二维码核销");
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ============ Bundle Card & Sheet ============ */
+
+function BundleCard({
+  bundle, purchased, onOpen,
+}: { bundle: JourneyBundle; purchased: boolean; onOpen: () => void }) {
+  const save = bundle.originalPrice - bundle.dealPrice;
+  return (
+    <button
+      onClick={onOpen}
+      className="w-full text-left rounded-3xl overflow-hidden relative fade-up"
+      style={{
+        background: purchased
+          ? "linear-gradient(135deg,#2d3a2a 0%,#4a5a3d 60%,#7a8a5a 100%)"
+          : "linear-gradient(135deg,#3d2a4a 0%,#6a3d70 50%,#c47a5b 100%)",
+        boxShadow: "0 12px 30px -10px rgba(60,40,30,0.4)",
+        padding: "18px 20px",
+      }}
+    >
+      <div className="flex items-center justify-between">
+        <div className="display italic text-[10px] tracking-[0.3em] text-white/70">
+          {purchased ? "✓ ALREADY UNLOCKED" : "✦ TODAY ONLY · BUNDLE"}
+        </div>
+        <div className="display italic text-[10px] text-white/60">#{bundle.dealId}</div>
+      </div>
+      <h3 className="cn-serif text-[18px] text-white mt-1.5 leading-snug">{bundle.title}</h3>
+      <div className="cn-serif text-[12px] text-white/75 mt-0.5">{bundle.subtitle}</div>
+
+      <div className="flex flex-wrap gap-1.5 mt-3">
+        {bundle.highlights.map((h, i) => (
+          <span
+            key={i}
+            className="cn-serif text-[11px] px-2 py-0.5 rounded-full"
+            style={{ background: "rgba(255,255,255,0.16)", color: "#fff" }}
+          >
+            ✦ {h}
+          </span>
+        ))}
+      </div>
+
+      <div className="flex items-end justify-between mt-3.5">
+        <div>
+          {!purchased && (
+            <div className="display italic text-[11px] text-white/55 line-through">
+              ¥{bundle.originalPrice}
+            </div>
+          )}
+          <div className="flex items-baseline gap-1.5">
+            <span className="cn-serif text-[26px] text-white leading-none">
+              ¥{purchased ? bundle.dealPrice : bundle.dealPrice}
+            </span>
+            {!purchased && (
+              <span className="display italic text-[10px] text-[#f5d68a]">省 ¥{save}</span>
+            )}
+          </div>
+        </div>
+        <div
+          className="cn-serif text-[12px] px-4 py-2 rounded-full"
+          style={{ background: "rgba(255,255,255,0.95)", color: "#3d2a4a" }}
+        >
+          {purchased ? "查看核销 →" : "锁定 →"}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function BundleSheet({
+  bundle, scenes, city, purchased, onClose, onPurchased,
+}: {
+  bundle: JourneyBundle;
+  scenes: JourneyScene[];
+  city?: string;
+  purchased: boolean;
+  onClose: () => void;
+  onPurchased: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center fade-in" onClick={onClose}>
+      <div className="absolute inset-0" style={{ background: "rgba(40,35,30,0.5)", backdropFilter: "blur(4px)" }} />
+      <div
+        className="relative w-full max-w-xl rounded-t-[32px] overflow-hidden bg-[var(--card)] fade-up"
+        style={{ maxHeight: "88vh", overflowY: "auto" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          className="p-6 pb-5"
+          style={{
+            background: purchased
+              ? "linear-gradient(135deg,#2d3a2a 0%,#4a5a3d 60%,#7a8a5a 100%)"
+              : "linear-gradient(135deg,#3d2a4a 0%,#6a3d70 50%,#c47a5b 100%)",
+            color: "#fff",
+          }}
+        >
+          <div className="display italic text-[10px] tracking-[0.3em] text-white/70">
+            {purchased ? "✓ UNLOCKED" : "✦ BUNDLE"}
+          </div>
+          <h3 className="cn-serif text-[22px] mt-1.5 leading-snug">{bundle.title}</h3>
+          <div className="cn-serif text-[13px] text-white/80 mt-1">{bundle.subtitle}</div>
+          <div className="display italic text-[10px] text-white/55 mt-2">#{bundle.dealId}{city ? ` · ${city}` : ""}</div>
+        </div>
+
+        <div className="p-6 pt-5">
+          <div className="cn-serif text-[12px] text-[var(--ink-soft)] mb-2">包含 {scenes.length} 个场景</div>
+          <ul className="space-y-2">
+            {scenes.map((s) => (
+              <li key={s.order} className="flex items-start gap-3 p-3 rounded-2xl" style={{ background: "rgba(60,40,30,0.04)" }}>
+                <div
+                  className="display italic text-[12px] w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+                  style={{ background: "var(--card-soft, #f3ecdc)", color: "var(--ink)" }}
+                >
+                  0{s.order}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="cn-serif text-[14px] text-[var(--ink)] truncate">「{s.scene_name}」</div>
+                  <div className="cn-serif text-[12px] text-[var(--ink-soft)] truncate">
+                    {s.location_name} · ~{s.stay_minutes}min
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <div className="mt-5">
+            <div className="cn-serif text-[12px] text-[var(--ink-soft)] mb-2">套装福利</div>
+            <ul className="space-y-1.5">
+              {bundle.perks.map((p, i) => (
+                <li key={i} className="cn-serif text-[13px] text-[var(--ink)] flex gap-2">
+                  <span className="text-[var(--ink-soft)]">·</span>{p}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="mt-6 flex items-end justify-between pb-2">
+            <div>
+              {!purchased && (
+                <div className="display italic text-[12px] text-[var(--ink-soft)] line-through">
+                  原价 ¥{bundle.originalPrice}
+                </div>
+              )}
+              <div className="cn-serif text-[28px] text-[var(--ink)] leading-none mt-0.5">
+                ¥{bundle.dealPrice}
+              </div>
+            </div>
+            {purchased ? (
+              <div
+                className="cn-serif text-[13px] px-5 py-3 rounded-full"
+                style={{ background: "#e3ebda", color: "#3d4a2a" }}
+              >
+                ✓ 已锁定 · 到店出示
+              </div>
+            ) : (
+              <button
+                onClick={onPurchased}
+                className="cn-serif text-[13px] px-5 py-3 rounded-full"
+                style={{ background: "var(--ink)", color: "var(--card)" }}
+              >
+                确认锁定 ¥{bundle.dealPrice}
+              </button>
+            )}
+          </div>
+
+          <div className="display italic text-[10px] text-[var(--ink-soft)] text-center mt-3 leading-relaxed">
+            未到的场景将自动退回到原支付方式 · 演示流程，不会真实扣款
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
