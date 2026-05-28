@@ -1093,3 +1093,124 @@ function SceneBuzz({
   );
 }
 
+/* ============ AppealHook: 第一眼吸引 —— 实景大图 + 卖点 hook ============ */
+
+const APPEAL_PRESETS: Record<string, { hook: string; tags: string[] }> = {
+  cafe:       { hook: "光线、慢拍、一杯能坐很久的咖啡",   tags: ["手冲单品", "靠窗位",   "可久坐"] },
+  bakery:     { hook: "出炉那一刻，整条街都是麦香",       tags: ["现烤可颂",   "天然酵母", "外带方便"] },
+  dessert:    { hook: "为这一口糖分专程而来",             tags: ["招牌限定",   "适合拍照", "下午茶位"] },
+  noodle:     { hook: "一碗热汤把今天烫平",               tags: ["现熬高汤",   "本地老味",   "排队也值"] },
+  restaurant: { hook: "一顿正经饭，把心慢慢沉下来",       tags: ["主厨推荐",   "适合两人",   "氛围加分"] },
+  bar:        { hook: "灯一暗，世界就变小了",             tags: ["招牌特调", "live 现场", "适合夜聊"] },
+  market:     { hook: "新鲜、烟火气、活着的声音",         tags: ["当季食材", "本地小贩", "随手就买"] },
+  bookstore:  { hook: "一本书的距离，世界安静下来",       tags: ["独立选书", "可阅读区", "周末有讲座"] },
+  gallery:    { hook: "在一幅画前停三分钟",               tags: ["小型展览", "免费观展", "拍照友好"] },
+  museum:     { hook: "把今天放进更长的时间里",           tags: ["镇馆之宝", "讲解动线", "适合放空"] },
+  cinema:     { hook: "灯一灭，故事就开始了",             tags: ["IMAX 厅",   "靠后排位",   "饮料自由"] },
+  flower:     { hook: "捧一束回家，今天就温柔一点",       tags: ["当季花束", "可定制",     "小束起订"] },
+  plant:      { hook: "看一会儿绿色，眼睛就松了",         tags: ["稀有品种", "新手友好", "可托养"] },
+  park:       { hook: "脚踩在草上，时间就慢了",           tags: ["大片草坪", "适合发呆", "傍晚最美"] },
+  spa:        { hook: "把肩膀和今天，都放下来",           tags: ["招牌项目", "环境安静", "可预约"] },
+  temple:     { hook: "走进去，喧嚣自己就退后了",         tags: ["香火清净", "建筑细节", "免费入院"] },
+  river:      { hook: "看水流过，心事也跟着走一段",       tags: ["开阔视野", "拍照点位", "傍晚风好"] },
+  street:     { hook: "走一段路，把这座城闻一遍",         tags: ["市井烟火", "随手好拍", "适合慢逛"] },
+  shop:       { hook: "为自己挑一件小礼物",               tags: ["小众设计", "性价比高", "限定款"] },
+  default:    { hook: "来过这里的人，都说值得",           tags: ["氛围加分", "适合此刻", "拍照好看"] },
+};
+
+function AppealHook({
+  kind, sceneName, narrative, emotionTags, stayMinutes,
+}: {
+  kind: string;
+  sceneName: string;
+  narrative: string;
+  emotionTags?: string[];
+  stayMinutes?: number;
+}) {
+  const photos = useMemo(() => getVenuePhotos(kind), [kind]);
+  const preset = APPEAL_PRESETS[kind] || APPEAL_PRESETS.default;
+
+  const chips = useMemo(() => {
+    const fromScene = (emotionTags ?? []).slice(0, 2);
+    const fromPreset = preset.tags.filter((t) => !fromScene.includes(t));
+    return [...fromScene, ...fromPreset].slice(0, 3);
+  }, [emotionTags, preset.tags]);
+
+  const hook = useMemo(() => {
+    const first = (narrative || "").split(/[。！？\n]/)[0]?.trim();
+    if (first && first.length >= 8 && first.length <= 36) return first;
+    return preset.hook;
+  }, [narrative, preset.hook]);
+
+  const cover = photos[0];
+  const more = photos.slice(1, 3);
+
+  return (
+    <div className="mt-4 -mx-6">
+      <div className="relative overflow-hidden" style={{ height: 180 }}>
+        {cover ? (
+          <img
+            src={cover}
+            alt={`${sceneName} 参考实景`}
+            className="absolute inset-0 w-full h-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div className="absolute inset-0" style={{ background: "linear-gradient(160deg,#f3e6d2,#e8c2a0)" }} />
+        )}
+        <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(20,15,10,0.05) 0%, rgba(20,15,10,0.55) 75%, rgba(20,15,10,0.78) 100%)" }} />
+
+        <div
+          className="absolute top-3 right-4 cn-serif text-[10px] px-2 py-0.5 rounded-full"
+          style={{ background: "rgba(255,253,243,0.85)", color: "#5a4a3a" }}
+        >
+          参考实景
+        </div>
+
+        {more.length > 0 && (
+          <div className="absolute top-12 right-4 flex flex-col gap-1.5">
+            {more.map((src, i) => (
+              <div
+                key={i}
+                className="w-12 h-12 rounded-lg overflow-hidden"
+                style={{ boxShadow: "0 4px 12px rgba(0,0,0,0.25)", outline: "2px solid rgba(255,253,243,0.85)" }}
+              >
+                <img src={src} alt="" className="w-full h-full object-cover" loading="lazy" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="absolute left-5 right-5 bottom-3">
+          <div className="display text-[10px] tracking-[0.35em] mb-1" style={{ color: "rgba(255,253,243,0.8)" }}>
+            WHY HERE · 为什么来这里
+          </div>
+          <p className="cn-serif text-[15px] leading-snug" style={{ color: "#fffdf3", textShadow: "0 2px 8px rgba(0,0,0,0.5)" }}>
+            {hook}
+          </p>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {chips.map((t) => (
+              <span
+                key={t}
+                className="cn-serif text-[11px] px-2 py-0.5 rounded-full"
+                style={{ background: "rgba(255,253,243,0.92)", color: "#3d3530" }}
+              >
+                ✦ {t}
+              </span>
+            ))}
+            {stayMinutes ? (
+              <span
+                className="cn-serif text-[11px] px-2 py-0.5 rounded-full"
+                style={{ background: "rgba(0,0,0,0.35)", color: "#fffdf3", backdropFilter: "blur(4px)" }}
+              >
+                建议停留 ~{stayMinutes}min
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
