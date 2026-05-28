@@ -72,6 +72,15 @@ function JourneyPage() {
         </div>
       </div>
 
+      {/* ✦ 全程套装 Bundle */}
+      <div className="max-w-xl mx-auto px-5 mt-5">
+        <BundleCard
+          bundle={bundle}
+          purchased={bundlePurchased}
+          onOpen={() => setBundleOpen(true)}
+        />
+      </div>
+
       {/* Map */}
       <div className="max-w-xl mx-auto px-3 mt-6">
         <JourneyMap
