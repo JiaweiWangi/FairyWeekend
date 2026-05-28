@@ -15,6 +15,8 @@ function JourneyPage() {
   const [run, setRun] = useState<JourneyRunState | null>(null);
   const [openScene, setOpenScene] = useState<JourneyScene | null>(null);
   const [openingShown, setOpeningShown] = useState("");
+  const [bundleOpen, setBundleOpen] = useState(false);
+  const [bundlePurchased, setBundlePurchased] = useState(false);
 
   useEffect(() => {
     const r = loadRun();
