@@ -283,7 +283,7 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
                         }
                       }}
                     >
-                      {c.label}
+                      {isPicked && <span className="mr-1">✓</span>}{c.label}
                     </button>
                   );
                 })}
