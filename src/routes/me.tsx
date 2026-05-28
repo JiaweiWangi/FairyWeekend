@@ -89,6 +89,12 @@ function loadPostchainPrivacy(): PostchainPrivacySettings {
 
 function MePage() {
   const navigate = useNavigate();
+
+  // 性能监测：首屏 / Web Vitals / 资源体积，控制台输出
+  useEffect(() => {
+    reportPagePerf("me");
+  }, []);
+
   const [tabs, setTabs] = useState<Set<Tab>>(() => {
     if (typeof window !== "undefined" && localStorage.getItem(POSTCHAIN_ENTRY_KEY) === "1") {
       localStorage.removeItem(POSTCHAIN_ENTRY_KEY);
