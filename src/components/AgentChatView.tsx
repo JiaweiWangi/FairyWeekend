@@ -75,9 +75,51 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
   const [recIdx, setRecIdx] = useState(0);
+  const [listening, setListening] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const recognitionRef = useRef<any>(null);
   const ranking = useRef<PersonaCard[]>([]);
   const idRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const voiceSupported =
+    typeof window !== "undefined" &&
+    ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+
+  function toggleVoice() {
+    if (!voiceSupported) {
+      setVoiceError("当前浏览器不支持语音输入");
+      return;
+    }
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    try {
+      const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const rec = new SR();
+      rec.lang = "zh-CN";
+      rec.interimResults = true;
+      rec.continuous = false;
+      rec.onresult = (e: any) => {
+        let text = "";
+        for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
+        setInput(text);
+      };
+      rec.onerror = (e: any) => {
+        setVoiceError(e.error === "not-allowed" ? "麦克风权限被拒绝" : "语音识别失败");
+        setListening(false);
+      };
+      rec.onend = () => setListening(false);
+      recognitionRef.current = rec;
+      setVoiceError(null);
+      setListening(true);
+      rec.start();
+    } catch {
+      setVoiceError("无法开启语音输入");
+      setListening(false);
+    }
+  }
 
   const nextId = () => ++idRef.current;
 
@@ -100,7 +142,8 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
     initedRef.current = true;
     // 首屏立即给出全部初始内容，不让用户等
     push({ who: "agent", text: "嗨，我是今日小说的策划助理 ❦" }, 0);
-    push({ who: "agent", text: "今天想成为谁？先告诉我——你现在大概是什么状态？" }, 0);
+    push({ who: "agent", text: "接下来两种方式都行——点下方气泡让我一步步带你选，或者直接说/打一句你今天的状态，我顺着你的话来。" }, 0);
+    push({ who: "agent", text: "先从这里开始：你现在大概是什么状态？" }, 0);
     push({ who: "agent", chips: MOOD_CHIPS, step: "mood", freeInput: true }, 0);
   }, []);
 
@@ -219,21 +262,40 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
           {lastInteractive?.freeInput && (
             <form
               onSubmit={(e) => { e.preventDefault(); handleFreeSubmit(lastInteractive.step!); }}
-              className="mt-2 flex gap-2"
+              className="mt-2 flex flex-col gap-1"
             >
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="也可以自己说一句…"
-                className="flex-1 px-4 py-2.5 rounded-full bg-[var(--card)] border border-[var(--border)] cn-serif text-[14px] text-[var(--ink)] placeholder:text-[var(--ink-soft)]"
-              />
-              <button
-                type="submit"
-                disabled={!input.trim()}
-                className="px-4 py-2.5 rounded-full bg-[var(--ink)] text-[var(--card)] cn-serif text-[13px] disabled:opacity-40"
-              >
-                发送
-              </button>
+              <div className="flex gap-2">
+                <input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder={listening ? "听着呢…说吧" : "也可以自己说一句，或按 🎤 用语音"}
+                  className="flex-1 px-4 py-2.5 rounded-full bg-[var(--card)] border border-[var(--border)] cn-serif text-[14px] text-[var(--ink)] placeholder:text-[var(--ink-soft)]"
+                />
+                {voiceSupported && (
+                  <button
+                    type="button"
+                    onClick={toggleVoice}
+                    aria-label={listening ? "停止语音" : "开始语音输入"}
+                    className={`w-10 h-10 shrink-0 rounded-full border cn-serif text-[14px] flex items-center justify-center transition ${
+                      listening
+                        ? "bg-[oklch(0.6_0.18_25)] text-white border-transparent animate-pulse"
+                        : "bg-[var(--card)] border-[var(--border)] text-[var(--ink)]"
+                    }`}
+                  >
+                    🎤
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  disabled={!input.trim()}
+                  className="px-4 py-2.5 rounded-full bg-[var(--ink)] text-[var(--card)] cn-serif text-[13px] disabled:opacity-40"
+                >
+                  发送
+                </button>
+              </div>
+              {voiceError && (
+                <div className="text-[11px] cn-serif text-[oklch(0.55_0.15_25)] pl-2">{voiceError}</div>
+              )}
             </form>
           )}
         </div>
