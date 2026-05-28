@@ -142,8 +142,8 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
     initedRef.current = true;
     // 首屏立即给出全部初始内容，不让用户等
     push({ who: "agent", text: "嗨，我是今日小说的策划助理 ❦" }, 0);
-    push({ who: "agent", text: "接下来两种方式都行——点下方气泡让我一步步带你选，或者直接说/打一句你今天的状态，我顺着你的话来。" }, 0);
-    push({ who: "agent", text: "先从这里开始：你现在大概是什么状态？" }, 0);
+    push({ who: "agent", text: "这个周末，你想过成什么样？随便讲就行——\n· 此刻的状态（累瘫了 / 有点闷 / 想撒野…）\n· 想待在什么环境（窝在房间 / 想出门晒太阳 / 找个安静角落…）\n· 想和谁、做点什么、或者只是想被什么样的氛围包住\n\n想到哪说到哪，下面也可以点气泡让我一步步带你选。" }, 0);
+    push({ who: "agent", text: "要不先从这个开始：你现在大概是什么状态？" }, 0);
     push({ who: "agent", chips: MOOD_CHIPS, step: "mood", freeInput: true }, 0);
   }, []);
 
@@ -262,40 +262,58 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
           {lastInteractive?.freeInput && (
             <form
               onSubmit={(e) => { e.preventDefault(); handleFreeSubmit(lastInteractive.step!); }}
-              className="mt-2 flex flex-col gap-1"
+              className="mt-3 flex flex-col gap-2"
             >
-              <div className="flex gap-2">
-                <input
+              <div className="relative rounded-2xl bg-[var(--card)] border border-[var(--border)] focus-within:border-[var(--primary)] transition shadow-sm">
+                <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder={listening ? "听着呢…说吧" : "也可以自己说一句，或按 🎤 用语音"}
-                  className="flex-1 px-4 py-2.5 rounded-full bg-[var(--card)] border border-[var(--border)] cn-serif text-[14px] text-[var(--ink)] placeholder:text-[var(--ink-soft)]"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      if (input.trim()) handleFreeSubmit(lastInteractive.step!);
+                    }
+                  }}
+                  rows={3}
+                  placeholder={
+                    listening
+                      ? "听着呢…说吧"
+                      : "想到哪说到哪～\n比如：今天加班到飞起，只想窝在沙发里看点轻松的；或者，想被夏天的海风吹一吹…"
+                  }
+                  className="w-full px-4 py-3 pr-24 rounded-2xl bg-transparent cn-serif text-[15px] leading-relaxed text-[var(--ink)] placeholder:text-[var(--ink-soft)] placeholder:whitespace-pre-line resize-none outline-none min-h-[88px] max-h-[200px]"
                 />
-                {voiceSupported && (
+                <div className="absolute right-2 bottom-2 flex items-center gap-1.5">
+                  {voiceSupported && (
+                    <button
+                      type="button"
+                      onClick={toggleVoice}
+                      aria-label={listening ? "停止语音" : "开始语音输入"}
+                      className={`w-9 h-9 shrink-0 rounded-full border cn-serif text-[14px] flex items-center justify-center transition ${
+                        listening
+                          ? "bg-[oklch(0.6_0.18_25)] text-white border-transparent animate-pulse"
+                          : "bg-[var(--background)] border-[var(--border)] text-[var(--ink)] hover:border-[var(--primary)]"
+                      }`}
+                    >
+                      🎤
+                    </button>
+                  )}
                   <button
-                    type="button"
-                    onClick={toggleVoice}
-                    aria-label={listening ? "停止语音" : "开始语音输入"}
-                    className={`w-10 h-10 shrink-0 rounded-full border cn-serif text-[14px] flex items-center justify-center transition ${
-                      listening
-                        ? "bg-[oklch(0.6_0.18_25)] text-white border-transparent animate-pulse"
-                        : "bg-[var(--card)] border-[var(--border)] text-[var(--ink)]"
-                    }`}
+                    type="submit"
+                    disabled={!input.trim()}
+                    className="h-9 px-4 rounded-full bg-[var(--ink)] text-[var(--card)] cn-serif text-[13px] disabled:opacity-40 transition"
                   >
-                    🎤
+                    发送
                   </button>
-                )}
-                <button
-                  type="submit"
-                  disabled={!input.trim()}
-                  className="px-4 py-2.5 rounded-full bg-[var(--ink)] text-[var(--card)] cn-serif text-[13px] disabled:opacity-40"
-                >
-                  发送
-                </button>
+                </div>
               </div>
-              {voiceError && (
-                <div className="text-[11px] cn-serif text-[oklch(0.55_0.15_25)] pl-2">{voiceError}</div>
-              )}
+              <div className="flex items-center justify-between px-1">
+                <div className="text-[11px] cn-serif text-[var(--ink-soft)]">
+                  Enter 发送 · Shift+Enter 换行
+                </div>
+                {voiceError && (
+                  <div className="text-[11px] cn-serif text-[oklch(0.55_0.15_25)]">{voiceError}</div>
+                )}
+              </div>
             </form>
           )}
         </div>
