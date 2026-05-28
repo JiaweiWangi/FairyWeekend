@@ -12,10 +12,12 @@ import {
   clearPersonalizedCard,
 } from "@/lib/user-photo";
 import { toSimplified } from "@/lib/zh-simplify";
+import { pickEmoji } from "@/lib/text-emoji";
 
 export const Route = createFileRoute("/card")({ component: CardPage });
 
 function MetaRow({ label, value }: { label: string; value: string }) {
+  const emoji = pickEmoji(value);
   return (
     <div className="flex gap-3 items-baseline">
       <span className="display italic text-[10.5px] tracking-[0.25em] text-[var(--ink-soft)] shrink-0 w-20">
@@ -23,6 +25,7 @@ function MetaRow({ label, value }: { label: string; value: string }) {
       </span>
       <span className="cn-serif text-[13.5px] text-[var(--ink)] leading-relaxed">
         {value}
+        {emoji && <span className="ml-1.5 text-[14px] align-[-1px]">{emoji}</span>}
       </span>
     </div>
   );
@@ -342,17 +345,23 @@ function CardPage() {
                 POSSIBLE ROUTES
               </div>
               <ul className="mt-2 space-y-1.5">
-                {card.routes.map((r, i) => (
-                  <li
-                    key={i}
-                    className="cn-serif text-[14px] text-[var(--ink)] leading-relaxed flex gap-2"
-                  >
-                    <span className="display italic text-[var(--ink-soft)] shrink-0">
-                      {String(i + 1).padStart(2, "0")}
-                    </span>
-                    <span>{r}</span>
-                  </li>
-                ))}
+                {card.routes.map((r, i) => {
+                  const emoji = pickEmoji(r);
+                  return (
+                    <li
+                      key={i}
+                      className="cn-serif text-[14px] text-[var(--ink)] leading-relaxed flex gap-2"
+                    >
+                      <span className="display italic text-[var(--ink-soft)] shrink-0">
+                        {String(i + 1).padStart(2, "0")}
+                      </span>
+                      <span>
+                        {r}
+                        {emoji && <span className="ml-1.5 text-[15px] align-[-1px]">{emoji}</span>}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             </>
           )}
