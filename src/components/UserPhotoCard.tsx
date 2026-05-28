@@ -39,13 +39,23 @@ export function UserPhotoCard({ variant = "inline", onDone }: Props) {
   const [batchTotal, setBatchTotal] = useState(0);
   const [batchFailed, setBatchFailed] = useState<string[]>([]);
   const [generatedCount, setGeneratedCount] = useState(0);
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [currentId, setCurrentId] = useState<string | null>(null);
   const cancelRef = useRef(false);
 
   function refreshGeneratedCount() {
     if (typeof window === "undefined") return;
     let n = 0;
-    for (const c of PERSONA_CARDS) if (getPersonalizedCard(c.id)) n++;
+    const map: Record<string, string> = {};
+    for (const c of PERSONA_CARDS) {
+      const img = getPersonalizedCard(c.id);
+      if (img) {
+        n++;
+        map[c.id] = img;
+      }
+    }
     setGeneratedCount(n);
+    setThumbs(map);
   }
 
   useEffect(() => {
