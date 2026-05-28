@@ -105,6 +105,7 @@ export function UserPhotoCard({ variant = "inline", onDone }: Props) {
     // 串行，避免触发限流；逐张更新进度
     for (const card of targets) {
       if (cancelRef.current) break;
+      setCurrentId(card.id);
       try {
         const coverDataUrl = card.cover ? await urlToDataUrl(card.cover) : "";
         const res = await fetch("/api/public/personalize-card", {
@@ -128,6 +129,7 @@ export function UserPhotoCard({ variant = "inline", onDone }: Props) {
         refreshGeneratedCount();
       }
     }
+    setCurrentId(null);
     setBatchFailed(failed);
     setBatchRunning(false);
   }
