@@ -46,6 +46,7 @@ interface ChatMsg {
   chips?: { label: string; tag: string }[];
   step?: Step;
   freeInput?: boolean;
+  multi?: boolean;
   card?: PersonaCard;
 }
 
