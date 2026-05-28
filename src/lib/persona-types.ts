@@ -11,6 +11,13 @@ export interface PersonaCard {
   cover?: string;            // 卡面插画 URL（可选）
   story?: string;            // 背景故事（一段叙述，吸引用户）
   routes?: string[];         // 未来可能展开的路线（3 条左右）
+  catchphrase?: string;      // 一句话台词 / 卡片签
+  soundtrack?: string;       // 今天的 BGM 建议
+  best_time?: string;        // 推荐时段
+  companion?: string;        // 适合独自 / 结伴
+  avoid?: string;            // 今天别做的事
+  gift_from_city?: string;   // 城市可能送你的小礼物
+  keywords?: string[];       // 关键词标签（3-5 个）
 }
 
 export interface JourneyScene {
