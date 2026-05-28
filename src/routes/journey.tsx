@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { loadRun, recordScene, clearSceneRecord } from "@/lib/persona-store";
 import type { JourneyRunState, JourneyScene, SceneRecord } from "@/lib/persona-types";
 import { VenueIcon, detectVenue } from "@/components/VenueIcon";
+import { getVenuePhotos } from "@/lib/venue-gallery";
 import { toast } from "sonner";
 
 
