@@ -7,7 +7,7 @@
  * 用法：在路由组件 useEffect 里调用 reportPagePerf("me")
  */
 
-import { onLCP, onCLS, onINP, onFCP, onTTFB, type Metric } from "web-vitals";
+import type { Metric } from "web-vitals";
 
 const STARTED = new Set<string>();
 
