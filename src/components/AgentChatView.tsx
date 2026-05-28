@@ -142,8 +142,8 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
     initedRef.current = true;
     // 首屏立即给出全部初始内容，不让用户等
     push({ who: "agent", text: "嗨，我是今日小说的策划助理 ❦" }, 0);
-    push({ who: "agent", text: "接下来两种方式都行——点下方气泡让我一步步带你选，或者直接说/打一句你今天的状态，我顺着你的话来。" }, 0);
-    push({ who: "agent", text: "先从这里开始：你现在大概是什么状态？" }, 0);
+    push({ who: "agent", text: "这个周末，你想过成什么样？随便讲就行——\n· 此刻的状态（累瘫了 / 有点闷 / 想撒野…）\n· 想待在什么环境（窝在房间 / 想出门晒太阳 / 找个安静角落…）\n· 想和谁、做点什么、或者只是想被什么样的氛围包住\n\n想到哪说到哪，下面也可以点气泡让我一步步带你选。" }, 0);
+    push({ who: "agent", text: "要不先从这个开始：你现在大概是什么状态？" }, 0);
     push({ who: "agent", chips: MOOD_CHIPS, step: "mood", freeInput: true }, 0);
   }, []);
 
