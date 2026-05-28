@@ -7,6 +7,19 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/card")({ component: CardPage });
 
+function MetaRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex gap-3 items-baseline">
+      <span className="display italic text-[10.5px] tracking-[0.25em] text-[var(--ink-soft)] shrink-0 w-20">
+        {label}
+      </span>
+      <span className="cn-serif text-[13.5px] text-[var(--ink)] leading-relaxed">
+        {value}
+      </span>
+    </div>
+  );
+}
+
 const LOADING_LINES = [
   "正在打开今日的剧本……",
   "AI 正在用这个人设的眼睛重新看城市……",
