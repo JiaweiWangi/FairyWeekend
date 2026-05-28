@@ -322,6 +322,16 @@ function SceneSheet({
             {scene.persona_narrative}
           </p>
 
+          <SceneBuzz
+            sceneName={scene.scene_name}
+            locationName={scene.location_name}
+            locationType={scene.location_type}
+            kind={kind}
+            city={city}
+          />
+
+
+
           {/* Task card */}
           <div
             className="mt-5 p-4 rounded-2xl relative overflow-hidden"
