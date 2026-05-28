@@ -252,12 +252,16 @@ function TarotView({
   const [viewportWidth, setViewportWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 390,
   );
+  const [viewportHeight, setViewportHeight] = useState(
+    typeof window !== "undefined" ? window.innerHeight : 844,
+  );
   const [isMobile, setIsMobile] = useState(
     typeof window !== "undefined" ? window.innerWidth < 640 : false,
   );
   useEffect(() => {
     const onR = () => {
       setViewportWidth(window.innerWidth);
+      setViewportHeight(window.innerHeight);
       setIsMobile(window.innerWidth < 640);
     };
     window.addEventListener("resize", onR);
@@ -271,7 +275,7 @@ function TarotView({
   const CARD_H = isMobile ? 104 : 168;
   const FAN_W = isMobile ? 340 : 860;
   const FAN_H = isMobile ? 230 : 360;
-  const EXPANDED_H = isMobile ? 520 : 560;
+  const EXPANDED_H = isMobile ? Math.max(420, viewportHeight - 240) : 560;
   const PIVOT_Y = FAN_H + RADIUS - (isMobile ? 60 : 90);
 
   const [order, setOrder] = useState(() => Array.from({ length: CARD_COUNT }, (_, i) => i));
@@ -281,6 +285,7 @@ function TarotView({
   const [dragShift, setDragShift] = useState(0);
   const [shuffling, setShuffling] = useState(false);
 
+  const sectionRef = useRef<HTMLElement>(null);
   const fanRef = useRef<HTMLDivElement>(null);
   const dragStartX = useRef<number | null>(null);
   const movedRef = useRef(false);
