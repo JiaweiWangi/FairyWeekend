@@ -445,7 +445,7 @@ function JourneyMap({
 /* ============ Scene bottom sheet ============ */
 
 function SceneSheet({
-  scene, done, record, city, onClose, onUpdated,
+  scene, done, record, city, onClose, onUpdated, bundlePurchased,
 }: {
   scene: JourneyScene;
   done: boolean;
@@ -453,6 +453,7 @@ function SceneSheet({
   city?: string;
   onClose: () => void;
   onUpdated: () => void;
+  bundlePurchased?: boolean;
 }) {
   const mapHref = `https://uri.amap.com/marker?name=${encodeURIComponent(scene.location_name)}&src=todaypersona&coordinate=gaode&callnative=1`;
   const meituanHref = `https://i.meituan.com/s/${encodeURIComponent(scene.meituan_keyword || scene.location_name)}`;
