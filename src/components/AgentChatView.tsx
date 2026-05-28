@@ -158,13 +158,30 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
     // 把这条消息的 chips 标记为已选并隐藏（通过移除 chips 字段）
     setMsgs((m) =>
       m.map((x) =>
-        x.step === step && x.chips ? { ...x, chips: undefined, freeInput: false } : x,
+        x.step === step && x.chips ? { ...x, chips: undefined, freeInput: false, multi: false } : x,
       ),
     );
     // 显示用户气泡
     setMsgs((m) => [...m, { id: nextId(), who: "user", text: label }]);
     const newTags = tag ? [...tags, tag] : tags;
     setTags(newTags);
+    advance(step, newTags, freeText);
+  }
+
+  function handleMultiSubmit(step: Step, chips: { label: string; tag: string }[]) {
+    if (picked.length === 0) return;
+    const chosen = picked.map((i) => chips[i]);
+    const label = chosen.map((c) => c.label).join("、");
+    const addTags = chosen.map((c) => c.tag).filter(Boolean);
+    setMsgs((m) =>
+      m.map((x) =>
+        x.step === step && x.chips ? { ...x, chips: undefined, freeInput: false, multi: false } : x,
+      ),
+    );
+    setMsgs((m) => [...m, { id: nextId(), who: "user", text: label }]);
+    const newTags = [...tags, ...addTags];
+    setTags(newTags);
+    setPicked([]);
     advance(step, newTags, freeText);
   }
 
