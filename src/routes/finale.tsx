@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { loadRun, clearRun, archiveCurrentRun } from "@/lib/persona-store";
 import type { JourneyRunState } from "@/lib/persona-types";
 import { RARITY_LABEL } from "@/lib/cards";
+import { PhotoOnboardingModal } from "@/components/PhotoOnboardingModal";
+import { getUserPhoto } from "@/lib/user-photo";
 
 export const Route = createFileRoute("/finale")({ component: FinalePage });
 
@@ -10,6 +12,7 @@ function FinalePage() {
   const navigate = useNavigate();
   const [run, setRun] = useState<JourneyRunState | null>(null);
   const [shown, setShown] = useState("");
+  const [rewardOpen, setRewardOpen] = useState(false);
 
   useEffect(() => {
     const r = loadRun();
@@ -23,7 +26,15 @@ function FinalePage() {
       setShown(text.slice(0, i));
       if (i >= text.length) clearInterval(t);
     }, 50);
-    return () => clearInterval(t);
+    // 完成奖励：还没上传过照片的话，2 秒后弹出解锁专属形象的奖励
+    let rewardTimer: ReturnType<typeof setTimeout> | undefined;
+    if (!getUserPhoto()) {
+      rewardTimer = setTimeout(() => setRewardOpen(true), 2000);
+    }
+    return () => {
+      clearInterval(t);
+      if (rewardTimer) clearTimeout(rewardTimer);
+    };
   }, [navigate]);
 
   const petals = useMemo(
@@ -138,6 +149,12 @@ function FinalePage() {
           抽下一张人设卡 →
         </button>
       </div>
+
+      <PhotoOnboardingModal
+        mode="reward"
+        open={rewardOpen}
+        onClose={() => setRewardOpen(false)}
+      />
     </div>
   );
 }
