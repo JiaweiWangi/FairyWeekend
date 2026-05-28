@@ -39,13 +39,23 @@ export function UserPhotoCard({ variant = "inline", onDone }: Props) {
   const [batchTotal, setBatchTotal] = useState(0);
   const [batchFailed, setBatchFailed] = useState<string[]>([]);
   const [generatedCount, setGeneratedCount] = useState(0);
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [currentId, setCurrentId] = useState<string | null>(null);
   const cancelRef = useRef(false);
 
   function refreshGeneratedCount() {
     if (typeof window === "undefined") return;
     let n = 0;
-    for (const c of PERSONA_CARDS) if (getPersonalizedCard(c.id)) n++;
+    const map: Record<string, string> = {};
+    for (const c of PERSONA_CARDS) {
+      const img = getPersonalizedCard(c.id);
+      if (img) {
+        n++;
+        map[c.id] = img;
+      }
+    }
     setGeneratedCount(n);
+    setThumbs(map);
   }
 
   useEffect(() => {
@@ -95,6 +105,7 @@ export function UserPhotoCard({ variant = "inline", onDone }: Props) {
     // 串行，避免触发限流；逐张更新进度
     for (const card of targets) {
       if (cancelRef.current) break;
+      setCurrentId(card.id);
       try {
         const coverDataUrl = card.cover ? await urlToDataUrl(card.cover) : "";
         const res = await fetch("/api/public/personalize-card", {
@@ -118,6 +129,7 @@ export function UserPhotoCard({ variant = "inline", onDone }: Props) {
         refreshGeneratedCount();
       }
     }
+    setCurrentId(null);
     setBatchFailed(failed);
     setBatchRunning(false);
   }
@@ -274,6 +286,43 @@ export function UserPhotoCard({ variant = "inline", onDone }: Props) {
                 停止
               </button>
             )}
+          </div>
+
+          {/* 缩略图网格：实时显示每张卡的生成结果 */}
+          <div className="mt-4 grid grid-cols-5 gap-2">
+            {PERSONA_CARDS.map((c) => {
+              const img = thumbs[c.id];
+              const isCurrent = currentId === c.id;
+              return (
+                <div
+                  key={c.id}
+                  className="relative aspect-[3/4] rounded-md overflow-hidden border border-[var(--border)] bg-[var(--muted)]"
+                  title={c.identity}
+                >
+                  {img ? (
+                    <img src={img} alt={c.identity} className="w-full h-full object-cover" />
+                  ) : c.cover ? (
+                    <img
+                      src={c.cover}
+                      alt={c.identity}
+                      className="w-full h-full object-cover opacity-30 grayscale"
+                    />
+                  ) : null}
+                  {isCurrent && (
+                    <div className="absolute inset-0 bg-[var(--ink)]/40 flex items-center justify-center">
+                      <span className="display text-[9px] tracking-[0.2em] text-white animate-pulse">
+                        生成中
+                      </span>
+                    </div>
+                  )}
+                  {img && !isCurrent && (
+                    <div className="absolute bottom-0 right-0 m-0.5 w-3 h-3 rounded-full bg-[var(--ink)] flex items-center justify-center">
+                      <span className="text-[8px] text-[var(--card)]">✓</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           {batchFailed.length > 0 && !batchRunning && (
