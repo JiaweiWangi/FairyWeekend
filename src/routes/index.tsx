@@ -378,8 +378,15 @@ function TarotView({
         onPointerUp={onPointerUp}
         onPointerLeave={onPointerLeave}
         className="relative select-none touch-none mx-auto"
-        style={{ width: FAN_W, height: FAN_H, maxWidth: "100%", perspective: 1600 }}
+        style={{
+          width: FAN_W,
+          height: picked !== null ? (isMobile ? 380 : 500) : FAN_H,
+          maxWidth: "100%",
+          perspective: 1600,
+          transition: "height 0.6s cubic-bezier(.22,1,.36,1)",
+        }}
       >
+        {(() => null)()}
         {order.map((cardId, i) => {
           const t = i / (CARD_COUNT - 1);
           const angle = -SPREAD / 2 + SPREAD * t + dragShift;
@@ -394,20 +401,26 @@ function TarotView({
           const dist = hover === null ? 99 : Math.abs(i - hover);
           const lift = isHover ? 52 : Math.max(0, 18 - dist * 5);
 
+          // picked 后画布会扩大；让 picked 卡居中并按可用高度缩放
+          const expandedH = isMobile ? 380 : 500;
+          const targetH = expandedH - 40;
+          const pickedScale = targetH / CARD_H;
+
           // 洗牌：所有牌聚拢到中线，轻微角度散
           const stackTilt = ((i % 7) - 3) * 1.6;
           const slotLeft = isPicked
             ? FAN_W / 2
             : shuffling ? FAN_W / 2 : cx;
           const slotTop = isPicked
-            ? FAN_H / 2 - 20
+            ? expandedH / 2
             : shuffling ? FAN_H * 0.55 : cy;
           const slotRotate = isPicked
             ? 0
             : shuffling ? stackTilt : angle;
 
-          const innerScale = isPicked ? 2.6 : isHover ? 1.06 : 1;
+          const innerScale = isPicked ? pickedScale : isHover ? 1.06 : 1;
           const innerLift = isPicked || shuffling ? 0 : -lift;
+
           const innerRotateY = isPicked && flipped ? 180 : 0;
 
           // 错开洗牌的动效
