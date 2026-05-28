@@ -218,14 +218,25 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
     }
   }
 
+  function presentCard(card: PersonaCard, intro: string) {
+    push({ who: "agent", text: intro }, 250);
+    push({ who: "agent", card, step: "result" }, 500);
+    if (card.story) {
+      push({ who: "agent", text: `「${card.identity}」\n\n${card.story}` }, 900);
+    }
+    if (card.routes && card.routes.length) {
+      const lines = card.routes.map((r, i) => `${i + 1}. ${r}`).join("\n");
+      push({ who: "agent", text: `如果走进 TA 的一天，可能会是这样——\n\n${lines}\n\n要不要就选 TA？` }, 1300);
+    }
+  }
+
   function finalize(curTags: string[], curText: string) {
     push({ who: "agent", text: "让我想想……" }, 200);
     setTimeout(() => {
       const ranked = scoreCards(curTags, curText);
       ranking.current = ranked;
       setRecIdx(0);
-      push({ who: "agent", text: "为你挑了这张卡 ✦" }, 250);
-      push({ who: "agent", card: ranked[0], step: "result" }, 500);
+      presentCard(ranked[0], "为你挑了这张卡 ✦");
     }, 600);
   }
 
@@ -233,8 +244,7 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
     const next = (recIdx + 1) % ranking.current.length;
     setRecIdx(next);
     setMsgs((m) => [...m, { id: nextId(), who: "user", text: "再换一张" }]);
-    push({ who: "agent", text: "好，这张如何？" }, 200);
-    push({ who: "agent", card: ranking.current[next], step: "result" }, 450);
+    presentCard(ranking.current[next], "好，这张如何？");
   }
 
   // 找到最后一条等待输入的 agent 消息

@@ -9,6 +9,8 @@ export interface PersonaCard {
   colors: string[];          // 卡片配色（3 色）
   illustration_keyword: string;
   cover?: string;            // 卡面插画 URL（可选）
+  story?: string;            // 背景故事（一段叙述，吸引用户）
+  routes?: string[];         // 未来可能展开的路线（3 条左右）
 }
 
 export interface JourneyScene {

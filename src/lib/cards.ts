@@ -32,6 +32,12 @@ const _PERSONA_CARDS_BASE: PersonaCard[] = [
     mission: "寻找三种让你感到安心的气味",
     colors: ["#f0e6d3", "#8fbc8f", "#d4a896"],
     illustration_keyword: "botanical_wanderer",
+    story: "TA 来到这座城市的第七年，依然记不住所有的路名，却开始记得每一棵长在墙缝里的草。今天的 TA 想用鼻子重新认识这里——气味比任何地图都诚实。",
+    routes: [
+      "去一座老花市，挑一束没听过名字的花",
+      "钻进一家中药铺，闻完所有抽屉",
+      "在公园里席地而坐，闭眼听一首歌再走",
+    ],
   },
   {
     id: "card_002",
@@ -41,6 +47,12 @@ const _PERSONA_CARDS_BASE: PersonaCard[] = [
     mission: "找一个让你想多坐一会儿的地方",
     colors: ["#faf0e6", "#deb887", "#f5deb3"],
     illustration_keyword: "cozy_homebody",
+    story: "TA 在床上挣扎了一上午，最后还是穿上了出门的鞋。不为别的，只是想被某个小角落收留一下下——一杯热的、一束斜光、一只睡着的猫，都好。",
+    routes: [
+      "找一家可以坐很久不被赶的咖啡店",
+      "去一家有猫/狗的小店，让动物挑你",
+      "买一本书，去河边长椅上看到太阳偏西",
+    ],
   },
   {
     id: "card_003",
@@ -50,6 +62,12 @@ const _PERSONA_CARDS_BASE: PersonaCard[] = [
     mission: "和一个陌生人说一句话",
     colors: ["#e8e0f0", "#b19cd9", "#f8f0ff"],
     illustration_keyword: "returning_wanderer",
+    story: "很久没和世界正面接触了。TA 像刚出土的植物，对光线、声音和人都还在重新校准。但 TA 决定今天迈出第一步——哪怕只是问一句路。",
+    routes: [
+      "去人最多的市集，被人潮裹着走一圈",
+      "在书店随机问店员一本书的推荐",
+      "找一场不熟悉的展览，留下来听一场讲解",
+    ],
   },
   {
     id: "card_004",
@@ -59,6 +77,12 @@ const _PERSONA_CARDS_BASE: PersonaCard[] = [
     mission: "走进一条没走过的街，走到尽头为止",
     colors: ["#f0f4e8", "#7fb069", "#e8f0d8"],
     illustration_keyword: "urban_wanderer",
+    story: "TA 厌倦了被算法推着走的日子。今天不查攻略、不开导航，把自己丢回街道里——城市还是有野生的角落的，只是太久没去找了。",
+    routes: [
+      "随便上一辆没坐过的公交，到终点站再说",
+      "钻进一片老城区，迷路两小时也无所谓",
+      "去一座山或江边，走到脚酸为止",
+    ],
   },
   {
     id: "card_005",
@@ -68,6 +92,12 @@ const _PERSONA_CARDS_BASE: PersonaCard[] = [
     mission: "给自己买一样平时舍不得买的东西",
     colors: ["#fce4ec", "#f48fb1", "#fdf0f5"],
     illustration_keyword: "healing_soul",
+    story: "眼泪流够了。今天 TA 决定先把自己当回事——不为谁，只为提醒自己：值得被认真对待的人，首先是自己。",
+    routes: [
+      "走进一家平时只敢看橱窗的店，买点什么",
+      "做一次按摩或 SPA，让别人替你温柔一下自己",
+      "一个人去吃一顿好的，点一杯酒",
+    ],
   },
   {
     id: "card_006",
@@ -77,6 +107,12 @@ const _PERSONA_CARDS_BASE: PersonaCard[] = [
     mission: "去一个「如果当初留下来会常去」的地方",
     colors: ["#e8eaf6", "#9fa8da", "#ede7f6"],
     illustration_keyword: "parallel_self",
+    story: "如果当年没走，今天的 TA 会是什么样？这座城市会替 TA 准备好哪条街、哪扇窗、哪间常去的店？今天，就替那个版本的自己活一天看看。",
+    routes: [
+      "去一个你曾经差点搬过去的街区，转一下午",
+      "找一家本地人推荐的家常菜馆，慢慢吃完",
+      "在城市的高处坐一会儿，看夕阳落下去",
+    ],
   },
   {
     id: "card_007",
@@ -86,6 +122,12 @@ const _PERSONA_CARDS_BASE: PersonaCard[] = [
     mission: "拍下三张「值得被记住」的画面",
     colors: ["#fff8e1", "#ffcc80", "#fff3e0"],
     illustration_keyword: "last_weekend",
+    story: "如果今天是最后一个能这样过的周末——TA 不想错过任何一束光、任何一阵风。镜头是借口，认真看世界才是目的。",
+    routes: [
+      "回到你最早爱上这座城市的地方再走一遍",
+      "拍一组陌生人的背影，作为「今天存在过」的证据",
+      "去一家老地方，点你十年前就常点的那一样",
+    ],
   },
   {
     id: "card_008",
@@ -95,6 +137,12 @@ const _PERSONA_CARDS_BASE: PersonaCard[] = [
     mission: "去一家没有英文菜单的小馆子吃饭",
     colors: ["#e0f2f1", "#80cbc4", "#e8f5e9"],
     illustration_keyword: "local_pretender",
+    story: "TA 不想再被认成游客了。今天 TA 要走进一家本地人才知道的小馆子，假装很熟地点上一份招牌——哪怕语言磕磕巴巴，也想试试这座城市真正的味道。",
+    routes: [
+      "去菜市场里那家排队的小档口，随大流点一份",
+      "拐进巷子深处的家常店，听老板讲两句",
+      "找一条本地人遛弯的路线，跟着走一圈",
+    ],
   },
   {
     id: "card_009",
@@ -104,6 +152,12 @@ const _PERSONA_CARDS_BASE: PersonaCard[] = [
     mission: "约一个许久没见的朋友，吃顿饭再散散步",
     colors: ["#ffe0d6", "#ffb38a", "#fff1ea"],
     illustration_keyword: "friends_gathering",
+    story: "TA 突然意识到：上次和朋友面对面笑出眼泪，已经是好几个月前的事了。今天不想再让聊天框代替见面，TA 想要真实的拥抱和真实的菜。",
+    routes: [
+      "约一顿火锅或烧烤，吃到油亮亮地走出来",
+      "去一个有院子或屋顶的酒馆，聊到打烊",
+      "拉上朋友去玩点幼稚的：桌游、KTV、夹娃娃",
+    ],
   },
   {
     id: "card_010",
@@ -113,6 +167,12 @@ const _PERSONA_CARDS_BASE: PersonaCard[] = [
     mission: "找一家旧唱片店或老书店，待到天黑",
     colors: ["#dfe7f3", "#4f6d99", "#f3d8a8"],
     illustration_keyword: "vintage_seeker",
+    story: "TA 受够了滑不到底的信息流，受够了什么都更新得太快。今天 TA 想躲进一段慢的时间里，最好有黑胶在转、有书页的味道、有店主不太说话的善意。",
+    routes: [
+      "钻进一家旧唱片店，让店主放一张你没听过的专辑",
+      "去一家老书店，按封面挑一本带走",
+      "找一家开了二十年以上的老咖啡馆，坐到打烊",
+    ],
   },
 ];
 
