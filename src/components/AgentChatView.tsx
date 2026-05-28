@@ -321,7 +321,21 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
               onSubmit={(e) => { e.preventDefault(); handleFreeSubmit(lastInteractive.step!); }}
               className="mt-3 flex flex-col gap-2"
             >
-              <div className="rounded-3xl bg-[var(--card)] border border-[var(--border)] focus-within:border-[var(--primary)] focus-within:shadow-[0_6px_18px_-12px_rgba(0,0,0,0.2)] transition shadow-sm overflow-hidden">
+              <div className="rounded-full sm:rounded-3xl bg-[var(--card)] border border-[var(--border)] focus-within:border-[var(--primary)] focus-within:shadow-[0_6px_18px_-12px_rgba(0,0,0,0.2)] transition shadow-sm flex items-end gap-1.5 px-2 py-1.5">
+                {voiceSupported && (
+                  <button
+                    type="button"
+                    onClick={toggleVoice}
+                    aria-label={listening ? "停止语音" : "开始语音输入"}
+                    className={`w-9 h-9 shrink-0 rounded-full border text-[14px] flex items-center justify-center transition self-end ${
+                      listening
+                        ? "bg-[oklch(0.6_0.18_25)] text-white border-transparent animate-pulse"
+                        : "bg-[var(--background)] border-[var(--border)] text-[var(--ink)] hover:border-[var(--primary)]"
+                    }`}
+                  >
+                    🎤
+                  </button>
+                )}
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -331,43 +345,25 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
                       if (input.trim()) handleFreeSubmit(lastInteractive.step!);
                     }
                   }}
-                  rows={2}
+                  rows={1}
                   placeholder={
                     listening
                       ? "听着呢…说吧"
-                      : "聊聊你现在的状态、想要什么样的周末…"
+                      : "聊聊你的状态…"
                   }
-                  className="w-full px-4 pt-3 pb-1 bg-transparent cn-serif text-[15px] leading-relaxed text-[var(--ink)] placeholder:text-[var(--ink-soft)] resize-none outline-none min-h-[60px] max-h-[180px]"
+                  className="flex-1 min-w-0 px-1 py-2 bg-transparent cn-serif text-[15px] leading-snug text-[var(--ink)] placeholder:text-[var(--ink-soft)] resize-none outline-none min-h-[36px] max-h-[140px]"
                 />
-                {/* footer bar：紧贴 textarea，手机端清爽不空旷 */}
-                <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-1">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    {voiceSupported && (
-                      <button
-                        type="button"
-                        onClick={toggleVoice}
-                        aria-label={listening ? "停止语音" : "开始语音输入"}
-                        className={`w-8 h-8 shrink-0 rounded-full border text-[13px] flex items-center justify-center transition ${
-                          listening
-                            ? "bg-[oklch(0.6_0.18_25)] text-white border-transparent animate-pulse"
-                            : "bg-[var(--background)] border-[var(--border)] text-[var(--ink)] hover:border-[var(--primary)]"
-                        }`}
-                      >
-                        🎤
-                      </button>
-                    )}
-                    <span className="hidden sm:inline text-[11px] cn-serif text-[var(--ink-soft)] ml-1 truncate">
-                      Enter 发送 · Shift+Enter 换行
-                    </span>
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={!input.trim()}
-                    className="h-8 px-4 rounded-full bg-[var(--ink)] text-[var(--card)] cn-serif text-[12.5px] disabled:opacity-40 transition"
-                  >
-                    发送
-                  </button>
-                </div>
+                <button
+                  type="submit"
+                  disabled={!input.trim()}
+                  aria-label="发送"
+                  className="w-9 h-9 shrink-0 rounded-full bg-[var(--ink)] text-[var(--card)] cn-serif text-[13px] disabled:opacity-40 transition flex items-center justify-center self-end"
+                >
+                  ↑
+                </button>
+              </div>
+              <div className="hidden sm:block px-2 text-[11px] cn-serif text-[var(--ink-soft)]">
+                Enter 发送 · Shift+Enter 换行
               </div>
 
               {voiceError && (
