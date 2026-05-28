@@ -354,6 +354,11 @@ function TarotView({
     setHover(null);
     setPicked(visualIdx);
     drewRef.current = false;
+    if (isMobile) {
+      requestAnimationFrame(() => {
+        sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
     // 1. 飞到中心
     // 2. 调用 onDraw 让父层准备 revealed 数据
     setTimeout(() => {
@@ -374,7 +379,7 @@ function TarotView({
   const showActions = picked === null;
 
   return (
-    <section className="relative z-10 flex flex-col items-center">
+    <section ref={sectionRef} className="relative z-10 flex flex-col items-center">
       <p className="text-center cn-serif text-[13px] text-[var(--ink-soft)] mb-6 max-w-md">
         {picked === null
           ? "说不清想成为谁？把手放上去，拨开牌阵，挑一张属于今天的牌。"
