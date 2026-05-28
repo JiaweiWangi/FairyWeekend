@@ -194,7 +194,9 @@ function CardPage() {
               : { background: `linear-gradient(160deg, ${a} 0%, ${b} 100%)` }
           }
         >
-          {card.cover ? (
+          {personalCover ? (
+            <img src={personalCover} alt={card.identity} className="absolute inset-0 w-full h-full object-cover" />
+          ) : card.cover ? (
             <img src={card.cover} alt={card.identity} className="absolute inset-0 w-full h-full object-cover" />
           ) : (
             <div
@@ -208,10 +210,22 @@ function CardPage() {
           <div className="absolute top-4 left-4 rarity-chip" data-rarity={card.rarity}>
             ✦ {card.rarity} · {RARITY_LABEL[card.rarity]}
           </div>
+          {userPhoto && !personalCover && (
+            <div className="absolute top-4 right-4 w-12 h-12 rounded-full overflow-hidden border-2 border-white/85 shadow-md ring-1 ring-black/10">
+              <img src={userPhoto} alt="你" className="w-full h-full object-cover" />
+            </div>
+          )}
+          {personalCover && (
+            <div className="absolute top-4 right-4 display italic text-[10.5px] tracking-[0.25em] text-white/90 drop-shadow bg-black/30 rounded-full px-2.5 py-1">
+              ✦ YOU
+            </div>
+          )}
           <div className="absolute bottom-4 right-4 display italic text-sm text-white/90 drop-shadow">
             {card.id.replace("card_", "No.")}
           </div>
         </div>
+
+
 
         <div className="p-7">
           <div className="cn-serif text-[11px] tracking-[0.3em] text-[var(--ink-soft)]">
