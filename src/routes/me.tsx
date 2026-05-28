@@ -37,6 +37,8 @@ import { buildCityPreferenceProfile, type DmMemorySnapshot } from "@/lib/city-pr
 import { supabase } from "@/integrations/supabase/client";
 import { qrSvgDataUrl } from "@/lib/qr";
 import { buildSerialInsights } from "@/lib/serial-insights";
+import { reportPagePerf } from "@/lib/perf-monitor";
+
 
 export const Route = createFileRoute("/me")({ component: MePage });
 
