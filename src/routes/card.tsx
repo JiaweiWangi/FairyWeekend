@@ -421,7 +421,7 @@ function CardPage() {
               : "bg-[var(--card)] border-[var(--border)] text-[var(--ink)] hover:bg-[var(--muted)]"
           }`}
         >
-          {locating ? "定位中…" : autoLocated ? "✓ 已用我当前的位置" : "📍 用我现在的位置"}
+          {locating ? "定位中…" : autoLocated ? `✓ ${locatedName ?? "已用我当前的位置"}` : "📍 用我现在的位置"}
         </button>
 
         <div className="text-[11px] cn-serif text-[var(--ink-soft)] mb-2 text-center">
