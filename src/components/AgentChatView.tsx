@@ -274,7 +274,7 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
                   return (
                     <button
                       key={i}
-                      className={`chip transition ${isPicked ? "bg-[var(--primary)] text-[var(--primary-foreground)] border-transparent" : ""}`}
+                      className={`chip ${isPicked ? "is-active" : ""}`}
                       onClick={() => {
                         if (lastInteractive.multi) {
                           setPicked((p) => (p.includes(i) ? p.filter((x) => x !== i) : [...p, i]));
