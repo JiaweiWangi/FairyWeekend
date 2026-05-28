@@ -337,7 +337,7 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
                       ? "听着呢…说吧"
                       : "想到哪说到哪～\n比如：今天加班到飞起，只想窝在沙发里看点轻松的；或者，想被夏天的海风吹一吹…"
                   }
-                  className="w-full px-4 py-3 pr-24 rounded-2xl bg-transparent cn-serif text-[15px] leading-relaxed text-[var(--ink)] placeholder:text-[var(--ink-soft)] placeholder:whitespace-pre-line resize-none outline-none min-h-[88px] max-h-[200px]"
+                  className="w-full px-4 py-3 pr-28 sm:pr-32 rounded-2xl bg-transparent cn-serif text-[15px] leading-relaxed text-[var(--ink)] placeholder:text-[var(--ink-soft)] placeholder:whitespace-pre-line resize-none outline-none min-h-[88px] max-h-[200px]"
                 />
                 <div className="absolute right-2 bottom-2 flex items-center gap-1.5">
                   {voiceSupported && (
