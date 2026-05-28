@@ -47,6 +47,7 @@ function CardPage() {
   const [city, setCity] = useState("");
   const [locating, setLocating] = useState(false);
   const [autoLocated, setAutoLocated] = useState(false);
+  const [locatedName, setLocatedName] = useState<string | null>(null);
   const [loadingIdx, setLoadingIdx] = useState(0);
   const [userPhoto, setUserPhotoState] = useState<string | null>(null);
   const [personalCover, setPersonalCover] = useState<string | null>(null);
