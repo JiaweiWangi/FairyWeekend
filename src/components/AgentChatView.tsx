@@ -299,7 +299,7 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
                 })}
               </div>
               {lastInteractive.multi && (
-                <div className="flex items-center gap-2 mt-3">
+                <div className="flex flex-wrap items-center gap-2 mt-3">
                   <button
                     type="button"
                     disabled={picked.length === 0}
@@ -308,9 +308,10 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
                   >
                     确定（{picked.length}）
                   </button>
-                  <span className="cn-serif text-[11px] text-[var(--ink-soft)]">可以选多个，或者直接在下面打字也行</span>
+                  <span className="cn-serif text-[11px] text-[var(--ink-soft)] leading-snug">可以选多个，或者直接打字也行</span>
                 </div>
               )}
+
             </div>
           )}
 
