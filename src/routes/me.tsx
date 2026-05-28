@@ -37,6 +37,8 @@ import { buildCityPreferenceProfile, type DmMemorySnapshot } from "@/lib/city-pr
 import { supabase } from "@/integrations/supabase/client";
 import { qrSvgDataUrl } from "@/lib/qr";
 import { buildSerialInsights } from "@/lib/serial-insights";
+import { reportPagePerf } from "@/lib/perf-monitor";
+
 
 export const Route = createFileRoute("/me")({ component: MePage });
 
@@ -87,6 +89,12 @@ function loadPostchainPrivacy(): PostchainPrivacySettings {
 
 function MePage() {
   const navigate = useNavigate();
+
+  // 性能监测：首屏 / Web Vitals / 资源体积，控制台输出
+  useEffect(() => {
+    reportPagePerf("me");
+  }, []);
+
   const [tabs, setTabs] = useState<Set<Tab>>(() => {
     if (typeof window !== "undefined" && localStorage.getItem(POSTCHAIN_ENTRY_KEY) === "1") {
       localStorage.removeItem(POSTCHAIN_ENTRY_KEY);
