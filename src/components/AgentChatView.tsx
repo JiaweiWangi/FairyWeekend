@@ -264,16 +264,40 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
 
           {/* chips */}
           {lastInteractive?.chips && (
-            <div className="flex flex-wrap gap-2 mt-1 pl-1">
-              {lastInteractive.chips.map((c, i) => (
-                <button
-                  key={i}
-                  className="chip"
-                  onClick={() => handleChip(lastInteractive.step!, c.label, c.tag)}
-                >
-                  {c.label}
-                </button>
-              ))}
+            <div className="mt-1 pl-1">
+              <div className="flex flex-wrap gap-2">
+                {lastInteractive.chips.map((c, i) => {
+                  const isPicked = lastInteractive.multi && picked.includes(i);
+                  return (
+                    <button
+                      key={i}
+                      className={`chip transition ${isPicked ? "bg-[var(--primary)] text-[var(--primary-foreground)] border-transparent" : ""}`}
+                      onClick={() => {
+                        if (lastInteractive.multi) {
+                          setPicked((p) => (p.includes(i) ? p.filter((x) => x !== i) : [...p, i]));
+                        } else {
+                          handleChip(lastInteractive.step!, c.label, c.tag);
+                        }
+                      }}
+                    >
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {lastInteractive.multi && (
+                <div className="flex items-center gap-2 mt-3">
+                  <button
+                    type="button"
+                    disabled={picked.length === 0}
+                    onClick={() => handleMultiSubmit(lastInteractive.step!, lastInteractive.chips!)}
+                    className="px-4 py-2 rounded-full bg-[var(--ink)] text-[var(--card)] cn-serif text-[13px] disabled:opacity-40 transition"
+                  >
+                    确定（{picked.length}）
+                  </button>
+                  <span className="cn-serif text-[11px] text-[var(--ink-soft)]">可以选多个，或者直接在下面打字也行</span>
+                </div>
+              )}
             </div>
           )}
 
