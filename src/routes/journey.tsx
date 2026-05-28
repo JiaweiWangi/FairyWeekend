@@ -33,11 +33,12 @@ function JourneyPage() {
     return () => clearInterval(t);
   }, [navigate]);
 
-  if (!run) return null;
+  const bundle = useMemo(() => (run ? buildBundle(run) : null), [run]);
+
+  if (!run || !bundle) return null;
 
   const { card, journey, city, completedSceneOrders } = run;
   const allDone = completedSceneOrders.length >= journey.scenes.length;
-  const bundle = useMemo(() => buildBundle(run), [run]);
 
   function refresh() {
     const r = loadRun();
