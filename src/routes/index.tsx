@@ -4,7 +4,6 @@ import { PERSONA_CARDS, drawCard, RARITY_LABEL } from "@/lib/cards";
 import { savePendingCard } from "@/lib/persona-store";
 import type { PersonaCard } from "@/lib/persona-types";
 import { AgentChatView } from "@/components/AgentChatView";
-import { PhotoOnboardingModal } from "@/components/PhotoOnboardingModal";
 import { getUserPhoto, subscribeUserPhoto } from "@/lib/user-photo";
 
 export const Route = createFileRoute("/")({ component: Index });
@@ -118,7 +117,7 @@ function Index() {
         />
       )}
 
-      <PhotoOnboardingModal />
+
 
 
       <footer className="mt-16 text-center text-[11px] tracking-[0.3em] text-[var(--ink-soft)] display relative z-10">
