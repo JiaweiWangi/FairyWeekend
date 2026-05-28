@@ -97,7 +97,7 @@ export function UserPhotoCard({ variant = "inline", onDone }: Props) {
       if (cancelRef.current) break;
       try {
         const coverDataUrl = card.cover ? await urlToDataUrl(card.cover) : "";
-        const res = await fetch("/api/personalize-card", {
+        const res = await fetch("/api/public/personalize-card", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

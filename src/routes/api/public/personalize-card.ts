@@ -8,7 +8,7 @@ interface Body {
   illustration_keyword: string;
 }
 
-export const Route = createFileRoute("/api/personalize-card")({
+export const Route = createFileRoute("/api/public/personalize-card")({
   server: {
     handlers: {
       POST: async ({ request }) => {
