@@ -133,7 +133,7 @@ function CardPage() {
         // 反向地理编码：BigDataCloud 免费、无需 Key、支持中文
         try {
           const r = await fetch(
-            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=zh`,
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=zh-CN`,
           );
           const j = await r.json();
           const parts = [
