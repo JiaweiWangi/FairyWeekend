@@ -48,6 +48,62 @@ function CardPage() {
   const [locating, setLocating] = useState(false);
   const [autoLocated, setAutoLocated] = useState(false);
   const [loadingIdx, setLoadingIdx] = useState(0);
+  const [userPhoto, setUserPhotoState] = useState<string | null>(null);
+  const [personalCover, setPersonalCover] = useState<string | null>(null);
+  const [personalizing, setPersonalizing] = useState(false);
+  const [personalizeErr, setPersonalizeErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    setUserPhotoState(getUserPhoto());
+    return subscribeUserPhoto(setUserPhotoState);
+  }, []);
+
+  useEffect(() => {
+    if (card) setPersonalCover(getPersonalizedCard(card.id));
+  }, [card]);
+
+  async function urlToDataUrl(url: string): Promise<string> {
+    if (url.startsWith("data:")) return url;
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+  }
+
+  async function handlePersonalize() {
+    if (!card || !userPhoto) return;
+    setPersonalizing(true);
+    setPersonalizeErr(null);
+    try {
+      const coverDataUrl = card.cover ? await urlToDataUrl(card.cover) : "";
+      const res = await fetch("/api/personalize-card", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userPhoto,
+          cardCover: coverDataUrl,
+          identity: card.identity,
+          mood: card.mood,
+          illustration_keyword: card.illustration_keyword,
+        }),
+      });
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || `合成失败 (${res.status})`);
+      }
+      const { image } = (await res.json()) as { image: string };
+      setPersonalizedCard(card.id, image);
+      setPersonalCover(image);
+    } catch (e) {
+      setPersonalizeErr(e instanceof Error ? e.message : "合成失败");
+    } finally {
+      setPersonalizing(false);
+    }
+  }
   const coordsRef = useRef<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
