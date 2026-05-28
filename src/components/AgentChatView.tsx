@@ -262,21 +262,40 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
           {lastInteractive?.freeInput && (
             <form
               onSubmit={(e) => { e.preventDefault(); handleFreeSubmit(lastInteractive.step!); }}
-              className="mt-2 flex gap-2"
+              className="mt-2 flex flex-col gap-1"
             >
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="也可以自己说一句…"
-                className="flex-1 px-4 py-2.5 rounded-full bg-[var(--card)] border border-[var(--border)] cn-serif text-[14px] text-[var(--ink)] placeholder:text-[var(--ink-soft)]"
-              />
-              <button
-                type="submit"
-                disabled={!input.trim()}
-                className="px-4 py-2.5 rounded-full bg-[var(--ink)] text-[var(--card)] cn-serif text-[13px] disabled:opacity-40"
-              >
-                发送
-              </button>
+              <div className="flex gap-2">
+                <input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder={listening ? "听着呢…说吧" : "也可以自己说一句，或按 🎤 用语音"}
+                  className="flex-1 px-4 py-2.5 rounded-full bg-[var(--card)] border border-[var(--border)] cn-serif text-[14px] text-[var(--ink)] placeholder:text-[var(--ink-soft)]"
+                />
+                {voiceSupported && (
+                  <button
+                    type="button"
+                    onClick={toggleVoice}
+                    aria-label={listening ? "停止语音" : "开始语音输入"}
+                    className={`w-10 h-10 shrink-0 rounded-full border cn-serif text-[14px] flex items-center justify-center transition ${
+                      listening
+                        ? "bg-[oklch(0.6_0.18_25)] text-white border-transparent animate-pulse"
+                        : "bg-[var(--card)] border-[var(--border)] text-[var(--ink)]"
+                    }`}
+                  >
+                    🎤
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  disabled={!input.trim()}
+                  className="px-4 py-2.5 rounded-full bg-[var(--ink)] text-[var(--card)] cn-serif text-[13px] disabled:opacity-40"
+                >
+                  发送
+                </button>
+              </div>
+              {voiceError && (
+                <div className="text-[11px] cn-serif text-[oklch(0.55_0.15_25)] pl-2">{voiceError}</div>
+              )}
             </form>
           )}
         </div>
