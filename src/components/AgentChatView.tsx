@@ -146,7 +146,7 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
     push({ who: "agent", text: "嗨，我是今日小说的策划助理 ❦" }, 0);
     push({ who: "agent", text: "这个周末，你想过成什么样？随便讲就行——\n· 此刻的状态（累瘫了 / 有点闷 / 想撒野…）\n· 想待在什么环境（窝在房间 / 想出门晒太阳 / 找个安静角落…）\n· 想和谁、做点什么、或者只是想被什么样的氛围包住\n\n想到哪说到哪，下面也可以点气泡让我一步步带你选。" }, 0);
     push({ who: "agent", text: "要不先从这个开始：你现在大概是什么状态？" }, 0);
-    push({ who: "agent", chips: MOOD_CHIPS, step: "mood", freeInput: true }, 0);
+    push({ who: "agent", chips: MOOD_CHIPS, step: "mood", freeInput: true, multi: true }, 0);
   }, []);
 
   // 自动滚到底
