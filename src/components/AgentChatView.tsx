@@ -249,7 +249,7 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
 
       <div
         ref={scrollRef}
-        className="bg-[var(--muted)]/40 rounded-3xl border border-[var(--border)] p-4 sm:p-5 max-h-[62vh] overflow-y-auto"
+        className="bg-[var(--muted)]/40 rounded-3xl border border-[var(--border)] p-4 sm:p-5"
       >
         <div className="flex flex-col gap-3">
           {msgs.map((m) => (
