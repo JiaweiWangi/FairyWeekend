@@ -189,6 +189,7 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
     const text = input.trim();
     if (!text) return;
     setInput("");
+    setPicked([]);
     setMsgs((m) =>
       m.map((x) =>
         x.step === currentStep && x.chips ? { ...x, chips: undefined, freeInput: false } : x,
