@@ -4,6 +4,13 @@ import { loadPendingCard, startRun } from "@/lib/persona-store";
 import { RARITY_LABEL } from "@/lib/cards";
 import type { PersonaCard, Journey } from "@/lib/persona-types";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  getUserPhoto,
+  subscribeUserPhoto,
+  getPersonalizedCard,
+  setPersonalizedCard,
+  clearPersonalizedCard,
+} from "@/lib/user-photo";
 
 export const Route = createFileRoute("/card")({ component: CardPage });
 
