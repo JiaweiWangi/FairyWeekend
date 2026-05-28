@@ -433,7 +433,7 @@ function CardPage() {
             return (
               <button
                 key={c}
-                onClick={() => { setCity(c); setAutoLocated(false); coordsRef.current = null; }}
+                onClick={() => { setCity(c); setAutoLocated(false); setLocatedName(null); coordsRef.current = null; }}
                 className={`chip ${active ? "is-active" : ""}`}
               >
                 {c}
