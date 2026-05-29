@@ -1,14 +1,14 @@
 import type { PersonaCard, Rarity } from "./persona-types";
-import cover001 from "@/assets/persona/card_001.png";
-import cover002 from "@/assets/persona/card_002.png";
-import cover003 from "@/assets/persona/card_003.png";
-import cover004 from "@/assets/persona/card_004.png";
-import cover005 from "@/assets/persona/card_005.png";
-import cover006 from "@/assets/persona/card_006.png";
-import cover007 from "@/assets/persona/card_007.png";
-import cover008 from "@/assets/persona/card_008.png";
-import cover009 from "@/assets/persona/card_009.png";
-import cover010 from "@/assets/persona/card_010.png";
+import cover001 from "@/assets/persona/card_001.webp";
+import cover002 from "@/assets/persona/card_002.webp";
+import cover003 from "@/assets/persona/card_003.webp";
+import cover004 from "@/assets/persona/card_004.webp";
+import cover005 from "@/assets/persona/card_005.webp";
+import cover006 from "@/assets/persona/card_006.webp";
+import cover007 from "@/assets/persona/card_007.webp";
+import cover008 from "@/assets/persona/card_008.webp";
+import cover009 from "@/assets/persona/card_009.webp";
+import cover010 from "@/assets/persona/card_010.webp";
 
 const COVERS: Record<string, string> = {
   card_001: cover001,
