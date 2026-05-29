@@ -145,56 +145,60 @@ function BundleCard({
   return (
     <button
       onClick={onOpen}
-      className="w-full text-left rounded-3xl overflow-hidden relative fade-up"
+      className="w-full text-left rounded-2xl overflow-hidden relative fade-up bg-[var(--card)] border border-[var(--border)] hover:border-[var(--ink-soft)] transition"
       style={{
-        background: purchased
-          ? "linear-gradient(135deg,#2d3a2a 0%,#4a5a3d 60%,#7a8a5a 100%)"
-          : "linear-gradient(135deg,#3d2a4a 0%,#6a3d70 50%,#c47a5b 100%)",
-        boxShadow: "0 12px 30px -10px rgba(60,40,30,0.4)",
+        boxShadow: "0 1px 0 rgba(0,0,0,0.02), 0 8px 24px -16px rgba(60,40,30,0.18)",
         padding: "18px 20px",
       }}
     >
+      {/* 顶部细金线，呼应编辑/出版气质 */}
+      <div
+        className="absolute top-0 left-5 right-5 h-px"
+        style={{ background: "linear-gradient(90deg, transparent, var(--ink-soft), transparent)", opacity: 0.45 }}
+      />
       <div className="flex items-center justify-between">
-        <div className="display italic text-[10px] tracking-[0.3em] text-white/70">
+        <div className="display italic text-[10px] tracking-[0.3em] text-[var(--ink-soft)]">
           {purchased ? "✓ ALREADY UNLOCKED" : "✦ TODAY ONLY · BUNDLE"}
         </div>
-        <div className="display italic text-[10px] text-white/60">#{bundle.dealId}</div>
+        <div className="display italic text-[10px] text-[var(--ink-soft)]/70">#{bundle.dealId}</div>
       </div>
-      <h3 className="cn-serif text-[18px] text-white mt-1.5 leading-snug">{bundle.title}</h3>
-      <div className="cn-serif text-[12px] text-white/75 mt-0.5">{bundle.subtitle}</div>
+
+      <h3 className="cn-serif text-[18px] text-[var(--ink)] mt-2 leading-snug">{bundle.title}</h3>
+      <div className="cn-serif text-[12.5px] italic text-[var(--ink-soft)] mt-0.5">{bundle.subtitle}</div>
 
       <div className="flex flex-wrap gap-1.5 mt-3">
         {bundle.highlights.map((h, i) => (
           <span
             key={i}
-            className="cn-serif text-[11px] px-2 py-0.5 rounded-full"
-            style={{ background: "rgba(255,255,255,0.16)", color: "#fff" }}
+            className="cn-serif text-[11px] px-2 py-0.5 rounded-full bg-[var(--muted)] text-[var(--ink)]"
           >
-            ✦ {h}
+            {h}
           </span>
         ))}
       </div>
 
-      <div className="flex items-end justify-between mt-3.5">
+      {/* 分隔虚线 */}
+      <div className="mt-4 border-t border-dashed border-[var(--border)]" />
+
+      <div className="flex items-end justify-between mt-3">
         <div>
           {!purchased && (
-            <div className="display italic text-[11px] text-white/55 line-through">
+            <div className="display italic text-[11px] text-[var(--ink-soft)] line-through">
               ¥{bundle.originalPrice}
             </div>
           )}
-          <div className="flex items-baseline gap-1.5">
-            <span className="cn-serif text-[26px] text-white leading-none">
-              ¥{purchased ? bundle.dealPrice : bundle.dealPrice}
+          <div className="flex items-baseline gap-2">
+            <span className="cn-serif text-[26px] text-[var(--ink)] leading-none">
+              ¥{bundle.dealPrice}
             </span>
             {!purchased && (
-              <span className="display italic text-[10px] text-[#f5d68a]">省 ¥{save}</span>
+              <span className="display italic text-[10px] tracking-[0.15em] text-[oklch(0.55_0.13_50)]">
+                省 ¥{save}
+              </span>
             )}
           </div>
         </div>
-        <div
-          className="cn-serif text-[12px] px-4 py-2 rounded-full"
-          style={{ background: "rgba(255,255,255,0.95)", color: "#3d2a4a" }}
-        >
+        <div className="cn-serif text-[12px] px-4 py-2 rounded-full bg-[var(--ink)] text-[var(--card)]">
           {purchased ? "查看核销 →" : "锁定 →"}
         </div>
       </div>
