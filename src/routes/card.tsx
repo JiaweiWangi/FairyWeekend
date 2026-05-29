@@ -229,7 +229,7 @@ function CardPage() {
 
       <div className="persona-card relative" data-rarity={card.rarity} style={{ minHeight: 540 }}>
         <div
-          className="relative h-72 overflow-hidden"
+          className="relative aspect-[4/5] w-full overflow-hidden"
           style={
             card.cover
               ? undefined
