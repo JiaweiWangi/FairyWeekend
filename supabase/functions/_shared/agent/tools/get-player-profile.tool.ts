@@ -3,7 +3,7 @@
  * 获取玩家历史画像和偏好
  */
 
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
 
@@ -26,14 +26,8 @@ const DEFAULT_PROFILE: PlayerProfile = {
   visited_pois: [],
 };
 
-export const getPlayerProfileTool = new DynamicStructuredTool({
-  name: "get_player_profile",
-  description:
-    "获取玩家的历史画像和偏好。包含：画像描述、喜欢的标签、不喜欢的标签、去过的地方。用于个性化推荐。",
-  schema: z.object({
-    playerKey: z.string().describe("玩家唯一标识，如 user_abc123"),
-  }),
-  func: async ({ playerKey }) => {
+export const getPlayerProfileTool = tool(
+  async ({ playerKey }) => {
     try {
       const { data, error } = await supabase
         .from("dm_memory")
@@ -53,10 +47,19 @@ export const getPlayerProfileTool = new DynamicStructuredTool({
         visited_pois: data?.visited_pois ?? [],
       };
 
+      // 返回 JSON 字符串，避免通义千问不支持复杂类型
       return JSON.stringify(profile);
     } catch (e) {
       console.warn("get_player_profile tool error:", e);
       return JSON.stringify(DEFAULT_PROFILE);
     }
   },
-});
+  {
+    name: "get_player_profile",
+    description:
+      "获取玩家的历史画像和偏好。包含：画像描述、喜欢的标签、不喜欢的标签、去过的地方。用于个性化推荐。",
+    schema: z.object({
+      playerKey: z.string().describe("玩家唯一标识，如 user_abc123"),
+    }),
+  }
+);

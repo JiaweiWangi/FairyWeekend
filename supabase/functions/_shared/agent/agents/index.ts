@@ -7,10 +7,10 @@ export {
   runPOIPlanner,
   type POIPlannerInput,
   type POIPlannerOutput,
-} from "./poi-planner.agent";
+} from "./poi-planner.agent.ts";
 
 export {
   STORY_GENERATOR_PROMPT,
   runStoryGenerator,
   type StoryGeneratorInput,
-} from "./story-generator.agent";
+} from "./story-generator.agent.ts";

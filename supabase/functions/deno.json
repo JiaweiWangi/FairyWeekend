@@ -1,5 +1,12 @@
 {
   "imports": {
-    "llmClient/": "./_shared/llmClient/"
+    "llmClient/": "./_shared/llmClient/",
+    "agent/": "./_shared/agent/",
+    "@langchain/core": "npm:@langchain/core",
+    "@langchain/openai": "npm:@langchain/openai",
+    "@langchain/langgraph": "npm:@langchain/langgraph",
+    "@langchain/langgraph/prebuilt": "npm:@langchain/langgraph/prebuilt",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js",
+    "zod": "npm:zod"
   }
 }
