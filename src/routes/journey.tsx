@@ -914,7 +914,7 @@ function CheckInPanel({
     setMood(record?.mood);
     setRating(record?.rating ?? 0);
     setCompanion(record?.companion);
-    setEditing(!done);
+    setEditing(false);
   }, [sceneOrder, done, record?.note, record?.photo, record?.mood, record?.rating, record?.companion, record?.photos]);
 
   async function handlePhoto(e: ChangeEvent<HTMLInputElement>) {
