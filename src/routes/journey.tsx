@@ -898,7 +898,7 @@ function CheckInPanel({
   record?: SceneRecord;
   onUpdated: () => void;
 }) {
-  const [editing, setEditing] = useState(!done);
+  const [editing, setEditing] = useState(false);
   const [note, setNote] = useState(record?.note ?? "");
   const [photos, setPhotos] = useState<string[]>(initialPhotos(record));
   const [mood, setMood] = useState<string | undefined>(record?.mood);
@@ -914,7 +914,7 @@ function CheckInPanel({
     setMood(record?.mood);
     setRating(record?.rating ?? 0);
     setCompanion(record?.companion);
-    setEditing(!done);
+    setEditing(false);
   }, [sceneOrder, done, record?.note, record?.photo, record?.mood, record?.rating, record?.companion, record?.photos]);
 
   async function handlePhoto(e: ChangeEvent<HTMLInputElement>) {
@@ -964,6 +964,34 @@ function CheckInPanel({
     setEditing(true);
     onUpdated();
     toast("已取消打卡");
+  }
+
+  // ============ Quick check-in view (not done, not editing) ============
+  if (!done && !editing) {
+    return (
+      <div
+        className="mt-6 rounded-2xl border p-5 fade-up text-center"
+        style={{ background: "linear-gradient(160deg,#fffdf6 0%,#fdf3ea 100%)", borderColor: "#f0e1c8" }}
+      >
+        <div className="cn-serif text-[11px] tracking-[0.3em] text-[var(--ink-soft)] mb-3">
+          CHECK IN · 来过这里
+        </div>
+        <button
+          onClick={save}
+          disabled={busy}
+          className="btn-soft w-full justify-center"
+        >
+          完成打卡 ✦
+        </button>
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="cn-serif text-[12px] text-[var(--ink-soft)] mt-3 underline-offset-4 hover:underline"
+        >
+          顺便记录一下 · 心情 / 随笔 / 照片 ↓
+        </button>
+      </div>
+    );
   }
 
   // ============ Recap view (done & not editing) ============
@@ -1146,11 +1174,9 @@ function CheckInPanel({
       </div>
 
       <div className="flex gap-2 mt-4">
-        {done && (
-          <button onClick={() => setEditing(false)} className="btn-ghost flex-1 justify-center">
-            取消
-          </button>
-        )}
+        <button onClick={() => setEditing(false)} className="btn-ghost flex-1 justify-center">
+          {done ? "取消" : "← 返回"}
+        </button>
         <button onClick={save} disabled={busy} className="btn-soft flex-1 justify-center">
           {done ? "保存修改 ✦" : "完成打卡 ✦"}
         </button>
