@@ -898,7 +898,7 @@ function CheckInPanel({
   record?: SceneRecord;
   onUpdated: () => void;
 }) {
-  const [editing, setEditing] = useState(!done);
+  const [editing, setEditing] = useState(false);
   const [note, setNote] = useState(record?.note ?? "");
   const [photos, setPhotos] = useState<string[]>(initialPhotos(record));
   const [mood, setMood] = useState<string | undefined>(record?.mood);
