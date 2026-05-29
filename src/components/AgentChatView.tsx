@@ -454,11 +454,11 @@ function RecCard({
       data-rarity={card.rarity}
     >
       <div
-        className="relative h-36 overflow-hidden"
+        className="relative aspect-[3/4] w-full overflow-hidden"
         style={card.cover ? undefined : { background: `linear-gradient(160deg, ${a}, ${b})` }}
       >
         {card.cover ? (
-          <img src={card.cover} alt={card.identity} className="absolute inset-0 w-full h-full object-cover" />
+          <img src={card.cover} alt={card.identity} loading="lazy" className="absolute inset-0 w-full h-full object-cover object-center" />
         ) : (
           <div
             className="absolute inset-0 opacity-70"
