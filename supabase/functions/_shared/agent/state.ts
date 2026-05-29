@@ -4,7 +4,7 @@
  */
 
 import { Annotation } from "@langchain/langgraph";
-import type { POI, PlayerProfile } from "./tools/index";
+import type { POI, PlayerProfile } from "./tools/index.ts";
 
 // ===== 类型定义 =====
 

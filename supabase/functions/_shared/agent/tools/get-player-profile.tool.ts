@@ -37,7 +37,7 @@ export const getPlayerProfileTool = tool(
 
       if (error) {
         console.warn("Failed to fetch player profile:", error);
-        return DEFAULT_PROFILE;
+        return JSON.stringify(DEFAULT_PROFILE);
       }
 
       const profile: PlayerProfile = {
@@ -47,10 +47,11 @@ export const getPlayerProfileTool = tool(
         visited_pois: data?.visited_pois ?? [],
       };
 
-      return profile;
+      // 返回 JSON 字符串，避免通义千问不支持复杂类型
+      return JSON.stringify(profile);
     } catch (e) {
       console.warn("get_player_profile tool error:", e);
-      return DEFAULT_PROFILE;
+      return JSON.stringify(DEFAULT_PROFILE);
     }
   },
   {

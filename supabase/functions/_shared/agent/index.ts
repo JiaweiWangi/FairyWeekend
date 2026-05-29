@@ -4,7 +4,7 @@
  */
 
 // Graph
-export { questGraph, runQuest, type QuestInput, type QuestOutput } from "./graph";
+export { questGraph, runQuest, type QuestInput, type QuestOutput } from "./graph.ts";
 
 // State
 export {
@@ -13,19 +13,19 @@ export {
   type PersonaCard,
   type Journey,
   type JourneyScene,
-} from "./state";
+} from "./state.ts";
 
 // Agents
 export {
   runPOIPlanner,
   type POIPlannerInput,
   type POIPlannerOutput,
-} from "./agents/poi-planner.agent";
+} from "./agents/poi-planner.agent.ts";
 
 export {
   runStoryGenerator,
   type StoryGeneratorInput,
-} from "./agents/story-generator.agent";
+} from "./agents/story-generator.agent.ts";
 
 // Tools
 export {
@@ -36,4 +36,4 @@ export {
   type POI,
   type PlayerProfile,
   type GeocodeResult,
-} from "./tools/index";
+} from "./tools/index.ts";

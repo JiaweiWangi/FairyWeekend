@@ -3,13 +3,13 @@
  * 节点编排层，调用 agents 和 tools
  */
 
-import type { QuestStateType } from "./state";
+import type { QuestStateType } from "./state.ts";
 import {
   getPlayerProfileTool,
   reverseGeocodeTool,
-} from "./tools/index";
-import { runPOIPlanner } from "./agents/poi-planner.agent";
-import { runStoryGenerator } from "./agents/story-generator.agent";
+} from "./tools/index.ts";
+import { runPOIPlanner } from "./agents/poi-planner.agent.ts";
+import { runStoryGenerator } from "./agents/story-generator.agent.ts";
 
 // ===== 日志工具 =====
 
@@ -45,9 +45,12 @@ export async function fetchProfile(state: QuestStateType) {
   log("fetchProfile", "📥 获取玩家画像...", { playerKey: state.playerKey });
 
   try {
-    const profile = await getPlayerProfileTool.invoke({
+    const result = await getPlayerProfileTool.invoke({
       playerKey: state.playerKey,
     });
+
+    // 工具返回 JSON 字符串，需要解析
+    const profile = typeof result === "string" ? JSON.parse(result) : result;
 
     log("fetchProfile", "✅ 成功获取画像", {
       profile: profile.profile?.slice(0, 50) + "...",
@@ -82,10 +85,13 @@ export async function resolveLocation(state: QuestStateType) {
   });
 
   try {
-    const geo = await reverseGeocodeTool.invoke({
+    const result = await reverseGeocodeTool.invoke({
       lat: state.lat,
       lng: state.lng,
     });
+
+    // 工具返回 JSON 字符串，需要解析
+    const geo = typeof result === "string" ? JSON.parse(result) : result;
 
     if (geo.error) {
       logWarn("resolveLocation", "❌ 逆地理编码失败", geo.error);
@@ -175,7 +181,8 @@ export async function planPois(state: QuestStateType) {
 export async function validatePois(state: QuestStateType) {
   log("validatePois", "🚀 开始执行");
 
-  const { poiCandidates } = state;
+  // 确保 poiCandidates 是数组
+  const poiCandidates = state.poiCandidates || [];
   const types = new Set(poiCandidates.map((p) => p.type));
 
   log("validatePois", "📊 统计信息", {
@@ -212,9 +219,12 @@ export async function validatePois(state: QuestStateType) {
 export async function generateJourney(state: QuestStateType) {
   log("generateJourney", "🚀 开始执行");
 
+  // 确保 poiCandidates 是数组
+  const poiCandidates = state.poiCandidates || [];
+
   log("generateJourney", "📋 输入参数", {
     identity: state.card.identity,
-    candidatesCount: state.poiCandidates.length,
+    candidatesCount: poiCandidates.length,
     timePeriod: state.timePeriod,
     companion: state.companion,
   });
@@ -228,7 +238,7 @@ export async function generateJourney(state: QuestStateType) {
       mission: state.card.mission,
       rarity: state.card.rarity,
     },
-    poiCandidates: state.poiCandidates,
+    poiCandidates: poiCandidates,
     timePeriod: state.timePeriod,
     companion: state.companion,
   });

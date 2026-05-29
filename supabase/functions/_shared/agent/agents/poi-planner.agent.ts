@@ -9,14 +9,14 @@
 
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { z } from "zod";
-import { createLLM } from "../langchianClient/index";
+import { createLLM } from "../langchianClient/index.ts";
 import {
   searchPoiTool,
   getPlayerProfileTool,
   reverseGeocodeTool,
   type POI,
   type PlayerProfile,
-} from "../tools/index";
+} from "../tools/index.ts";
 
 // ===== 日志工具 =====
 
@@ -34,19 +34,34 @@ function log(message: string, data?: unknown) {
 
 export const POI_PLANNER_PROMPT = `你是一位城市探索规划师。
 
-你的目标是：根据用户的人设卡和偏好，找到 15-25 个适合的城市场景候选地点。
+## 目标
+根据用户的人设卡和偏好，找到 5-10 个适合的城市场景候选地点。
 
-你的背景：
+## 专业背景
 - 深谙城市肌理，擅长从人的情绪和身份出发找到有故事的角落
 - 你知道：植物学家看咖啡馆和普通人看咖啡馆是完全不同的
 - 偏爱有故事感的日常空间，避开网红打卡点
 
-规则：
-1. 从人设的 identity、mood、mission 出发推断适合的地点类型
+## 工作流程（必须严格遵循）
+1. 分析人设的 identity、mood、mission，推断适合的地点类型
 2. 考虑玩家的历史偏好（如果有）
-3. 稀有度越高，地点越隐秘、越反直觉
-4. 使用 search_poi 工具搜索，可以多次调用不同关键词
-5. 最终返回 15-25 个候选地点`;
+3. 根据稀有度调整地点隐秘程度
+4. 调用 search_poi 工具搜索（调用 2-4 次不同关键词即可）
+5. 完成搜索后，直接回复用户，列出候选地点
+
+## 停止条件
+当完成以下步骤后，必须停止并回复用户：
+- 已调用 search_poi 工具 2-4 次
+- 已收集到足够的地点信息
+- 不要继续分析或追问，直接给出结果
+
+## 输出格式
+完成搜索后，用以下格式回复：
+---
+已为你找到以下候选地点：
+1. [地点名称] - [类型] - [推荐理由]
+2. ...
+---`;
 
 // ===== 创建 Agent =====
 
@@ -95,23 +110,26 @@ export async function runPOIPlanner(input: POIPlannerInput): Promise<POIPlannerO
   const coords = gcjCoords || { lng: 121.4737, lat: 31.2304 }; // 默认上海
 
   // 构建用户提示
-  const userPrompt = `人设身份：${card.identity}
-人设状态：${card.mood}
-人设使命：${card.mission}
-稀有度：${card.rarity}
+  const userPrompt = `请为以下人设规划今天的城市探索路线：
 
-城市：${city}
-时间段：${timePeriod}
-坐标：经度 ${coords.lng}，纬度 ${coords.lat}
+**人设信息**
+- 身份：${card.identity}
+- 状态：${card.mood}
+- 使命：${card.mission}
+- 稀有度：${card.rarity}
 
-${playerProfile ? `
-玩家画像：${playerProfile.profile}
-喜欢的标签：${playerProfile.loved_tags.join("、")}
-不喜欢的标签：${playerProfile.disliked_tags.join("、")}
-去过的地方：${playerProfile.visited_pois.slice(0, 10).join("、")}
+**环境信息**
+- 城市：${city}
+- 时间段：${timePeriod}
+- 坐标：经度 ${coords.lng}，纬度 ${coords.lat}
+
+${playerProfile ? `**玩家偏好**
+- 画像：${playerProfile.profile}
+- 喜欢的标签：${playerProfile.loved_tags.join("、")}
+- 不喜欢的标签：${playerProfile.disliked_tags.join("、")}
+- 去过的地方：${playerProfile.visited_pois.slice(0, 10).join("、")}
 ` : ""}
-
-请分析这个人设今天应该去什么类型的地点，使用 search_poi 工具搜索并收集 15-25 个候选。`;
+请立即开始搜索，完成后直接给出结果。`;
 
   log("📝 构建提示完成", {
     identity: card.identity,
@@ -121,43 +139,84 @@ ${playerProfile ? `
   });
 
   try {
-    log("⚡ 调用 createReactAgent...");
+    log("⚡ 调用 createReactAgent (流式模式)...");
 
     const startTime = Date.now();
+    let stepCount = 0;
 
-    // 调用 createReactAgent
-    const result = await poiPlannerAgent.invoke({
-      messages: [{ role: "user", content: userPrompt }],
-    });
+    // 使用 stream 模式，实时打印调用信息，同时收集最终结果
+    // 设置 recursionLimit 防止无限循环
+    const stream = await poiPlannerAgent.stream(
+      {
+        messages: [{ role: "user", content: userPrompt }],
+      },
+      {
+        recursionLimit: 50, // 增加限制，但 prompt 已优化应该不会达到
+      }
+    );
+
+    let finalState: any = null;
+
+    for await (const chunk of stream) {
+      stepCount++;
+
+      // chunk 是一个对象，键是节点名
+      for (const [nodeName, nodeOutput] of Object.entries(chunk)) {
+        // 打印节点名
+        const output = nodeOutput as any;
+
+        // 如果是数组，取最后一条消息
+        if (Array.isArray(output)) {
+          const lastMsg = output[output.length - 1];
+          if (lastMsg) {
+            // id 可能是数组或字符串，安全处理
+            const msgType = Array.isArray(lastMsg.id)
+              ? lastMsg.id.join(".")
+              : (lastMsg.id || lastMsg.type || "unknown");
+            log(`🔄 步骤 ${stepCount} | 节点: ${nodeName} | 消息类型: ${msgType}`);
+
+            // 工具调用
+            if (lastMsg.kwargs?.tool_calls?.length) {
+              const tools = lastMsg.kwargs.tool_calls.map((tc: any) => tc.name);
+              log(`  🔧 LLM 调用工具: ${tools.join(", ")}`);
+            }
+
+            // 工具返回
+            if (lastMsg.kwargs?.name) {
+              const toolName = lastMsg.kwargs.name;
+              const content = typeof lastMsg.kwargs.content === "string"
+                ? lastMsg.kwargs.content.slice(0, 200)
+                : "...";
+              log(`  📥 工具返回 (${toolName}): ${content}`);
+            }
+
+            // LLM 文本回复
+            if (lastMsg.kwargs?.content && typeof lastMsg.kwargs.content === "string" && !lastMsg.kwargs?.name && !lastMsg.kwargs?.tool_calls) {
+              log(`  💬 LLM 回复: ${lastMsg.kwargs.content.slice(0, 200)}`);
+            }
+          }
+        }
+      }
+
+      // 保存最终状态（每次更新，最终得到完整状态）
+      finalState = chunk;
+    }
 
     const elapsed = Date.now() - startTime;
-    log(`⏱️ Agent 执行耗时: ${elapsed}ms`);
+    log(`⏱️ Agent 执行耗时: ${elapsed}ms, 共 ${stepCount} 步`);
 
-    // 打印消息历史
-    const messages = result.messages || [];
-    log(`📬 收到 ${messages.length} 条消息`);
-
-    for (let i = 0; i < messages.length; i++) {
-      const msg = messages[i];
-      const type = msg.constructor?.name || typeof msg;
-      const content = typeof msg.content === "string"
-        ? msg.content?.slice(0, 200)
-        : JSON.stringify(msg.content)?.slice(0, 200);
-
-      if (msg.tool_calls?.length) {
-        log(`  📨 [${i}] ${type} - 工具调用`, msg.tool_calls.map((tc: any) => ({
-          name: tc.name,
-          args: tc.args,
-        })));
-      } else if (msg.name) {
-        log(`  📨 [${i}] ${type} - 工具返回 (${msg.name})`, content?.slice(0, 100));
-      } else {
-        log(`  📨 [${i}] ${type}`, content?.slice(0, 100));
+    // 调试：打印 finalState 的结构
+    log(`🔍 finalState 类型: ${typeof finalState}`);
+    if (finalState) {
+      const keys = Object.keys(finalState);
+      log(`🔍 finalState 键: ${keys.join(", ")}`);
+      if (finalState.messages) {
+        log(`🔍 messages 数量: ${finalState.messages.length}`);
       }
     }
 
-    // 从结果中提取 POI 候选
-    const candidates = extractPOIsFromResult(result);
+    // 从流式结果的最终状态中提取 POI 候选（无需再次调用 invoke）
+    const candidates = extractPOIsFromResult(finalState);
 
     log(`✅ 提取完成，共 ${candidates.length} 个候选 POI`);
 
@@ -193,8 +252,24 @@ function extractPOIsFromResult(result: unknown): POI[] {
   for (const msg of messages) {
     // 检查是否是 ToolMessage
     const content = (msg as { content: unknown }).content;
-    if (Array.isArray(content)) {
-      // 工具返回的是 POI 数组
+
+    // 工具现在返回 JSON 字符串
+    if (typeof content === "string") {
+      try {
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed)) {
+          for (const item of parsed) {
+            if (item && typeof item === "object" && "name" in item && "location" in item) {
+              pois.push(item as POI);
+            }
+          }
+        }
+      } catch {
+        // 解析失败，跳过
+      }
+    }
+    // 兼容旧格式（数组）
+    else if (Array.isArray(content)) {
       for (const item of content) {
         if (item && typeof item === "object" && "name" in item && "location" in item) {
           pois.push(item as POI);

@@ -16,9 +16,25 @@ export interface POI {
 
 const AMAP_KEY = Deno.env.get("AMAP_WEB_API_KEY") || "";
 
+// 简单的限流器：记录上次调用时间
+let lastCallTime = 0;
+const MIN_INTERVAL = 500; // 最小间隔 500ms（2 QPS）
+
+async function rateLimit() {
+  const now = Date.now();
+  const elapsed = now - lastCallTime;
+  if (elapsed < MIN_INTERVAL) {
+    await new Promise(resolve => setTimeout(resolve, MIN_INTERVAL - elapsed));
+  }
+  lastCallTime = Date.now();
+}
+
 export const searchPoiTool = tool(
   async ({ keyword, radius = 3000, lng, lat }) => {
     try {
+      // 限流
+      await rateLimit();
+
       const url = new URL("https://restapi.amap.com/v3/place/around");
       url.searchParams.set("key", AMAP_KEY);
       url.searchParams.set("location", `${lng},${lat}`);
@@ -31,7 +47,12 @@ export const searchPoiTool = tool(
 
       if (res.status !== "1" || !Array.isArray(res.pois)) {
         console.warn("POI search failed:", keyword, res);
-        return [];
+
+        // 返回错误信息，让 Agent 知道出错了
+        if (res.info === "CUQPS_HAS_EXCEEDED_THE_LIMIT") {
+          return JSON.stringify({ error: "API限流，请稍后再试或使用其他关键词" });
+        }
+        return JSON.stringify({ error: `搜索失败: ${res.info || "未知错误"}` });
       }
 
       const pois: POI[] = res.pois
@@ -45,10 +66,11 @@ export const searchPoiTool = tool(
         }))
         .filter((p: POI) => p.name);
 
-      return pois;
+      // 返回 JSON 字符串，避免通义千问不支持复杂类型
+      return JSON.stringify(pois);
     } catch (e) {
       console.warn("search_poi tool error:", keyword, e);
-      return [];
+      return "[]";
     }
   },
   {

@@ -8,9 +8,9 @@
  */
 
 import { z } from "zod";
-import { createLLM } from "../langchianClient/index";
-import type { POI } from "../tools/index";
-import type { Journey, JourneyScene } from "../state";
+import { createLLM } from "../langchianClient/index.ts";
+import type { POI } from "../tools/index.ts";
+import type { Journey, JourneyScene } from "../state.ts";
 
 // ===== 日志工具 =====
 
@@ -41,7 +41,9 @@ export const STORY_GENERATOR_PROMPT = `你是「今日人设」的故事引擎�
 2. 每个场景从人设的第一视角叙事
 3. scene_name 是诗意命名（6-10字）
 4. action_task 必须具体可执行
-5. 整条路线要有情绪弧线`;
+5. 整条路线要有情绪弧线
+
+请以 JSON 格式输出结果。`;
 
 // ===== LLM 初始化 =====
 
@@ -134,26 +136,67 @@ ${candidatesText}
   const llmWithSchema = storyGenerator.withStructuredOutput(journeySchema);
 
   try {
-    log("⚡ 调用 LLM (withStructuredOutput)...");
+    log("⚡ 调用 LLM (流式输出)...");
 
     const startTime = Date.now();
-
-    const result = await llmWithSchema.invoke([
+    const messages = [
       { role: "system", content: STORY_GENERATOR_PROMPT },
       { role: "user", content: userPrompt },
-    ]);
+    ];
+
+    // 先流式输出，显示进度
+    let fullContent = "";
+    let lastLogTime = 0;
+
+    for await (const chunk of await storyGenerator.stream(messages)) {
+      const content = chunk.content;
+      if (typeof content === "string") {
+        fullContent += content;
+        // 每 500ms 打印一次进度
+        const now = Date.now();
+        if (now - lastLogTime > 500) {
+          log(`📝 生成中... (${fullContent.length} 字符)`);
+          lastLogTime = now;
+        }
+      }
+    }
+
+    log(`📝 生成完成，共 ${fullContent.length} 字符`);
 
     const elapsed = Date.now() - startTime;
     log(`⏱️ LLM 执行耗时: ${elapsed}ms`);
 
+    // 解析 JSON
+    let result;
+    try {
+      // 清理可能的 markdown 代码块
+      let cleaned = fullContent.trim();
+      if (cleaned.startsWith("```json")) {
+        cleaned = cleaned.slice(7);
+      } else if (cleaned.startsWith("```")) {
+        cleaned = cleaned.slice(3);
+      }
+      if (cleaned.endsWith("```")) {
+        cleaned = cleaned.slice(0, -3);
+      }
+      cleaned = cleaned.trim();
+
+      result = JSON.parse(cleaned);
+    } catch (parseError) {
+      log(`❌ JSON 解析失败，尝试用 withStructuredOutput 重试...`);
+      // 回退到 withStructuredOutput
+      const llmWithSchema = storyGenerator.withStructuredOutput(journeySchema);
+      result = await llmWithSchema.invoke(messages);
+    }
+
     log("✅ 生成完成", {
-      scenesCount: result.scenes.length,
+      scenesCount: result.scenes?.length || 0,
       emotionArc: result.emotion_arc,
     });
 
     log("📖 故事开篇", result.story_opening?.slice(0, 100) + "...");
 
-    log("🎬 场景列表", result.scenes.map((s) => ({
+    log("🎬 场景列表", result.scenes?.map((s: any) => ({
       order: s.order,
       scene_name: s.scene_name,
       location: s.location_name,

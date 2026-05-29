@@ -22,14 +22,14 @@
  */
 
 import { StateGraph, START, END } from "@langchain/langgraph";
-import { QuestState } from "./state";
+import { QuestState } from "./state.ts";
 import {
   fetchProfile,
   resolveLocation,
   planPois,
   validatePois,
   generateJourney,
-} from "./nodes";
+} from "./nodes.ts";
 
 // ===== 日志工具 =====
 
@@ -76,7 +76,7 @@ log("✅ LangGraph 构建完成");
 
 // ===== 执行函数 =====
 
-import type { PersonaCard, Journey } from "./state";
+import type { PersonaCard, Journey } from "./state.ts";
 
 export interface QuestInput {
   card: PersonaCard;

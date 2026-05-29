@@ -52,7 +52,7 @@ export const reverseGeocodeTool = tool(
 
       if (res.status !== "1") {
         console.warn("Reverse geocode failed:", res);
-        return { error: "geocode_failed" };
+        return JSON.stringify({ error: "geocode_failed" });
       }
 
       const addr = res.regeocode?.addressComponent ?? {};
@@ -76,10 +76,11 @@ export const reverseGeocodeTool = tool(
         gcj: { lng: gcj.lng, lat: gcj.lat },
       };
 
-      return result;
+      // 返回 JSON 字符串，避免通义千问不支持复杂类型
+      return JSON.stringify(result);
     } catch (e) {
       console.warn("reverse_geocode tool error:", e);
-      return { error: String(e) };
+      return JSON.stringify({ error: String(e) });
     }
   },
   {
