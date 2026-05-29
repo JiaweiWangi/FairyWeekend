@@ -251,11 +251,18 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
     push({ who: "agent", text: intro }, 250);
     push({ who: "agent", card, step: "result" }, 500);
     if (card.story) {
-      push({ who: "agent", text: `「${card.identity}」\n\n${card.story}` }, 900);
+      const storyEmoji = pickEmoji(card.story) || pickEmoji(card.mood) || "✨";
+      push({ who: "agent", text: `${storyEmoji}「${card.identity}」\n\n${card.story}` }, 900);
     }
     if (card.routes && card.routes.length) {
-      const lines = card.routes.map((r, i) => `${i + 1}. ${r}`).join("\n");
-      push({ who: "agent", text: `如果走进 TA 的一天，可能会是这样——\n\n${lines}\n\n要不要就选 TA？` }, 1300);
+      const numIcons = ["①", "②", "③", "④", "⑤"];
+      const lines = card.routes
+        .map((r, i) => {
+          const e = pickEmoji(r) || "🌿";
+          return `${numIcons[i] || `${i + 1}.`} ${r} ${e}`;
+        })
+        .join("\n");
+      push({ who: "agent", text: `🗺️ 如果走进 TA 的一天，可能会是这样——\n\n${lines}\n\n💌 要不要就选 TA？` }, 1300);
     }
   }
 
