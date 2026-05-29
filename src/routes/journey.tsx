@@ -966,6 +966,34 @@ function CheckInPanel({
     toast("已取消打卡");
   }
 
+  // ============ Quick check-in view (not done, not editing) ============
+  if (!done && !editing) {
+    return (
+      <div
+        className="mt-6 rounded-2xl border p-5 fade-up text-center"
+        style={{ background: "linear-gradient(160deg,#fffdf6 0%,#fdf3ea 100%)", borderColor: "#f0e1c8" }}
+      >
+        <div className="cn-serif text-[11px] tracking-[0.3em] text-[var(--ink-soft)] mb-3">
+          CHECK IN · 来过这里
+        </div>
+        <button
+          onClick={save}
+          disabled={busy}
+          className="btn-soft w-full justify-center"
+        >
+          完成打卡 ✦
+        </button>
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="cn-serif text-[12px] text-[var(--ink-soft)] mt-3 underline-offset-4 hover:underline"
+        >
+          顺便记录一下 · 心情 / 随笔 / 照片 ↓
+        </button>
+      </div>
+    );
+  }
+
   // ============ Recap view (done & not editing) ============
   if (done && !editing) {
     return (
