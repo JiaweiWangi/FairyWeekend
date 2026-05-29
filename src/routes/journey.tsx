@@ -233,7 +233,7 @@ function BundleSheet({
   // 场景缩略图：用 VenueIcon 检测到的 kind 拿到 unsplash 图
   const sceneThumbs = useMemo(
     () => scenes.map((s) => {
-      const kind = detectVenue(s.type, s.location_name);
+      const kind = detectVenue(s.location_type, s.location_name);
       const photos = getVenuePhotos(kind);
       return photos[s.order % photos.length] || photos[0];
     }),
