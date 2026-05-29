@@ -3,6 +3,7 @@ import type { JourneyScene, SceneRecord } from "./persona-types";
 
 export type PostchainAuthLevel = "basic" | "personal" | "full";
 export type PostchainReportStyle = "moments" | "literary" | "saving" | "niche";
+export type PostchainContentFormat = "self_expression" | "route_spread";
 
 export interface PostchainPrivacySettings {
   showMerchantNames: boolean;
@@ -37,6 +38,25 @@ export interface PostchainFactCheck {
   warnings: string[];
   allowedPlaces: string[];
   allowedCompletedOrders: number[];
+}
+
+export interface PostchainContentVariant {
+  format: PostchainContentFormat;
+  title: string;
+  body: string;
+  sections: Array<{
+    title: string;
+    text: string;
+  }>;
+  bullets: string[];
+  hashtags: string[];
+  riskWarnings: string[];
+}
+
+export interface PostchainTextRisk {
+  level: "warning" | "blocked";
+  label: string;
+  detail: string;
 }
 
 export interface PostchainReport {
@@ -77,6 +97,7 @@ export interface PostchainReport {
   nextHook: string;
   primaryCta: PostchainCta;
   shareText: string;
+  contentVariants: PostchainContentVariant[];
 }
 
 type CompletedScene = {
@@ -199,18 +220,29 @@ function inferInsight(chapter: ArchivedChapter, completed: CompletedScene[], key
   const source = `${chapter.card.identity} ${chapter.card.mood} ${chapter.card.mission} ${tagText} ${noteText}`;
 
   if (/咖啡|低糖|甜|甜品|暂停|治愈|修复/.test(source)) {
+    const hasSweetCue = /低糖|甜|甜品/.test(source);
     return {
-      identityBadge: "高敏甜味自救者",
-      personalityCore: "你不是单纯爱吃甜，而是会用一点可控的小确幸，把快要散掉的自己重新收拢起来。",
+      identityBadge: hasSweetCue ? "高敏甜味自救者" : "低压状态修复者",
+      personalityCore: hasSweetCue
+        ? "你不是单纯爱吃甜，而是会用一点可控的小确幸，把快要散掉的自己重新收拢起来。"
+        : "你选择的不是强刺激路线，而是一组低压、可控、能慢慢把状态调回来的城市节点。",
       hiddenDesire: "你真正想要的不是热闹，是被允许慢下来、被认真照顾一次。",
-      socialSignature: "外表像在随便逛逛，内心其实在给自己做一场精密的情绪修复。",
-      bragLine: "不是脆弱，是拥有把日常调回甜味频道的高级能力。",
+      socialSignature: hasSweetCue
+        ? "外表像在随便逛逛，内心其实在给自己做一场温和的情绪修复。"
+        : "外表像在随便逛逛，内心其实是在给自己找一个不用硬撑的缓冲区。",
+      bragLine: hasSweetCue
+        ? "不是脆弱，是拥有把日常调回甜味频道的高级能力。"
+        : "不是偷懒，是知道怎么把日常调回舒服一点的频道。",
       rarityPercent: 3.7,
-      rarityRankText: "每 100 个城市玩家里，大约只有 4 个会把甜、慢和自我修复排在同一条路线上。",
+      rarityRankText: hasSweetCue
+        ? "每 100 个城市玩家里，大约只有 4 个会把甜、慢和自我修复排在同一条路线上。"
+        : "每 100 个城市玩家里，大约只有 4 个会主动选择低压、慢停留和状态恢复放在同一条路线上。",
       rarityReason: "你没有选择最高效的路线，而是选择了能照顾情绪颗粒度的路线。",
       lifestyleInvestmentScore: investmentScore(completed, 88),
-      lifestyleInvestmentLabel: "情绪修复型消费",
-      flexLine: "我的消费不是冲动，是给情绪系统续费。",
+      lifestyleInvestmentLabel: hasSweetCue ? "情绪修复型消费" : "低压补氧型消费",
+      flexLine: hasSweetCue
+        ? "我的消费不是冲动，是给情绪系统续费。"
+        : "我不是随便逛逛，我是在给自己留一点恢复空间。",
     };
   }
 
@@ -542,6 +574,173 @@ export function validatePostchainShareText(
   return warnings;
 }
 
+export function analyzePostchainTextRisks(
+  chapter: ArchivedChapter,
+  privacy: PostchainPrivacySettings,
+  text: string,
+): PostchainTextRisk[] {
+  const risks: PostchainTextRisk[] = [];
+  const amountMatch = text.match(/¥|￥|\d+\s*元/);
+  if (amountMatch) {
+    risks.push({
+      level: "blocked",
+      label: "金额事实风险",
+      detail: "当前未接入真实订单金额，文案里不能出现具体消费金额。",
+    });
+  }
+  if (!privacy.showLocation && chapter.city && text.includes(chapter.city)) {
+    risks.push({
+      level: "blocked",
+      label: "地点隐私风险",
+      detail: `你已关闭地点展示，但文案里出现了「${chapter.city}」。`,
+    });
+  }
+  if (!privacy.showMerchantNames) {
+    const leakedMerchant = chapter.journey.scenes.find(
+      (scene) => scene.location_name && text.includes(scene.location_name),
+    );
+    if (leakedMerchant) {
+      risks.push({
+        level: "blocked",
+        label: "商户隐私风险",
+        detail: `你已关闭商户名展示，但文案里出现了「${leakedMerchant.location_name}」。`,
+      });
+    }
+  }
+  const knownNames = new Set(
+    chapter.journey.scenes.flatMap((scene) => [
+      scene.scene_name,
+      scene.location_name,
+      scene.location_type,
+      scene.meituan_keyword,
+    ]),
+  );
+  const suspiciousPlace = text
+    .match(/[\u4e00-\u9fa5A-Za-z0-9]{2,16}(咖啡|餐厅|美术馆|博物馆|花店|书店|公园|酒馆|甜品|影院|商场|市集|面馆|茶馆)/g)
+    ?.find((name) => ![...knownNames].some((known) => known && name.includes(known)));
+  if (suspiciousPlace) {
+    risks.push({
+      level: "warning",
+      label: "路线外地点风险",
+      detail: `文案里可能出现了路线外地点「${suspiciousPlace}」，发布前请确认。`,
+    });
+  }
+  if (/已购买|已核销|已支付|下单|实付|省了|优惠券已用/.test(text)) {
+    risks.push({
+      level: "blocked",
+      label: "订单/核销事实风险",
+      detail: "当前未接入订单、核销或券包事实，不能描述已支付、已核销或已使用优惠。",
+    });
+  }
+  return risks;
+}
+
+function nodeRole(node: PostchainNodeSummary, index: number, total: number): string {
+  if (index === 0) return "启动节点";
+  if (index === total - 1) return "收尾节点";
+  if (/咖啡|茶|甜品|饮品|书店/.test(node.locationType + node.displayName)) return "缓冲节点";
+  if (/展览|美术馆|博物馆|公园|风景|街区|市场|市集/.test(node.locationType + node.displayName)) {
+    return "内容节点";
+  }
+  if (/餐|酒|饭|小吃/.test(node.locationType + node.displayName)) return "补给节点";
+  return "转场节点";
+}
+
+function compactNodeRoles(nodes: PostchainNodeSummary[]): string {
+  if (!nodes.length) return "暂无已完成节点，先保留路线主题。";
+  return nodes
+    .slice(0, 3)
+    .map((node, index) => `${node.displayName}是${nodeRole(node, index, nodes.length)}`)
+    .join("，");
+}
+
+function platformHashtags(city: string, categories: string[]): string[] {
+  return unique([
+    city !== "这座城市" ? `#${city}周末` : "#周末路线",
+    "#城市漫游",
+    "#半日路线",
+    "#周末去哪儿",
+    ...categories.slice(0, 2).map((category) => `#${category}`),
+  ]).slice(0, 6);
+}
+
+function buildContentVariants(
+  chapter: ArchivedChapter,
+  report: Omit<PostchainReport, "contentVariants" | "factCheck">,
+  privacy: PostchainPrivacySettings,
+): PostchainContentVariant[] {
+  const places = report.completedNodes.map((node) => node.displayName).slice(0, 3);
+  const categories = unique(report.completedNodes.map((node) => node.locationType)).slice(0, 3);
+  const keywords = report.routeKeywords.slice(0, 5);
+  const city = privacy.showLocation && chapter.city ? chapter.city : "这座城市";
+  const placeText = places.length ? places.join("、") : "已点亮节点";
+  const categoryText = categories.length ? categories.join("、") : "本次路线节点";
+  const traitText = report.behaviorTraits.slice(0, 3).join("、") || "轻量探索";
+  const taskText = report.routeTheme || chapter.card.mission;
+  const completedNodeText = compactNodeRoles(report.completedNodes);
+  const incompleteText = report.incompleteNodes.length
+    ? `还有 ${report.incompleteNodes.length} 个节点没完成，可以留作下次支线。`
+    : "路线已完整点亮，形成了清晰闭环。";
+  const routeSequence = report.completedNodes.length
+    ? report.completedNodes
+        .map((node, index) => `${node.displayName}承担${nodeRole(node, index, report.completedNodes.length)}`)
+        .join("，")
+    : "当前路线还缺少已完成节点，适合先从核心节点开始轻量复刻";
+  const publicTags = platformHashtags(city, categories);
+  const selfExpressionText = `今天在${city}走完了一条很轻的路线：${placeText}。它更接近「${report.identityBadge}」这种状态，因为你围绕「${taskText}」完成了${categoryText}节点，${report.completionText}。${completedNodeText}；${incompleteText} 这次不用把一次出门解释得太重，它只是把普通周末变成了一次有开始、有停留、有结束的轻行动。${publicTags.slice(0, 4).join(" ")}`;
+  const routeSpreadText = `这是一条适合在${city}复刻的半日路线：${placeText}。核心任务是「${taskText}」，节奏可以按“进入状态—停留体验—放松收尾”来走，${routeSequence}。它适合${traitText}的人，也适合独处、朋友轻约会或低压力同行；复刻前确认营业状态、距离和排队情况，时间不够就先保留${places.slice(0, 2).join("、") || "两个核心节点"}。${publicTags.slice(0, 4).join(" ")}`;
+  const variants: Array<Omit<PostchainContentVariant, "riskWarnings">> = [
+    {
+      format: "self_expression",
+      title: "自我表达",
+      body: "把这次路线整理成一段可直接外发的状态表达。",
+      sections: [
+        {
+          title: "最终报告",
+          text: selfExpressionText,
+        },
+      ],
+      bullets: [
+        "单次行程只生成短报告",
+        "不展示内部报告字段",
+        "可加入图片报告",
+      ],
+      hashtags: publicTags,
+    },
+    {
+      format: "route_spread",
+      title: "路线传播",
+      body: "把这次路线整理成一段可转发、可复刻的路线说明。",
+      sections: [
+        {
+          title: "最终报告",
+          text: routeSpreadText,
+        },
+      ],
+      bullets: [
+        "单次行程只生成短报告",
+        "保留复刻需要的信息",
+        "可加入图片报告",
+      ],
+      hashtags: ["#路线推荐", "#可复刻路线", ...publicTags],
+    },
+  ];
+
+  return variants.map((variant) => {
+    const text = [
+      variant.title,
+      variant.body,
+      ...variant.sections.flatMap((section) => [section.title, section.text]),
+      ...variant.bullets,
+      ...variant.hashtags,
+    ].join("\n");
+    return {
+      ...variant,
+      riskWarnings: analyzePostchainTextRisks(chapter, privacy, text).map((risk) => risk.detail),
+    };
+  });
+}
+
 const DEFAULT_PRIVACY: PostchainPrivacySettings = {
   showMerchantNames: true,
   showVisitTime: false,
@@ -617,7 +816,7 @@ export function buildPostchainReport(
         ? "你没有走完整条路线，但已经从城市手里拿回了一枚属于今天的线索。"
         : "故事刚刚亮起一角，城市还把后半段留给下一次见面。";
 
-  const draftReport: PostchainReport = {
+  const draftReport: Omit<PostchainReport, "contentVariants"> = {
     title: `${insight.identityBadge}的今日结局`,
     routeTheme: chapter.card.mission,
     routeSummary: `${chapter.card.identity} · ${chapter.journey.emotion_arc.start} → ${chapter.journey.emotion_arc.end}`,
@@ -653,9 +852,11 @@ export function buildPostchainReport(
     primaryCta,
     shareText: `我今天测出来的城市人格是「${insight.identityBadge}」。据说只占城市玩家 ${insight.rarityPercent}%。${insight.flexLine} 完成度 ${Math.round(completionRate * 100)}%，关键词：${unlockedKeywords.slice(0, 4).join("、")}。`,
   };
+  const contentVariants = buildContentVariants(chapter, draftReport, privacy);
 
   return {
     ...draftReport,
+    contentVariants,
     factCheck: validatePostchainReportFacts(chapter, completed, privacy, draftReport),
   };
 }

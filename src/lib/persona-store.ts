@@ -166,8 +166,7 @@ export interface LibraryEntry {
   hasNote: boolean;
 }
 
-export function buildLibrary(): { places: LibraryEntry[]; activities: LibraryEntry[] } {
-  const sagas = loadSagas();
+export function buildLibrary(sagas = loadSagas()): { places: LibraryEntry[]; activities: LibraryEntry[] } {
   const places = new Map<string, LibraryEntry>();
   const activities = new Map<string, LibraryEntry>();
   for (const ch of sagas) {
