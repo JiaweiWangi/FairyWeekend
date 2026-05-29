@@ -30,9 +30,13 @@ function JourneyPage() {
       i += 1;
       setOpeningShown(text.slice(0, i));
       if (i >= text.length) clearInterval(t);
-    }, 50);
+    }, 32);
     return () => clearInterval(t);
   }, [navigate]);
+
+  function skipOpening() {
+    if (run) setOpeningShown(run.journey.story_opening);
+  }
 
   const bundle = useMemo(() => (run ? buildBundle(run) : null), [run]);
 
@@ -65,7 +69,11 @@ function JourneyPage() {
         <div className="cn-serif text-[13px] text-[var(--ink-soft)] mt-1">
           「{card.mission}」{city && <span className="display italic text-[11px] ml-1.5">· {city}</span>}
         </div>
-        <p className="cn-serif text-[14px] leading-[1.85] text-[var(--ink)] mt-3 cursor-blink">
+        <p
+          onClick={skipOpening}
+          className="cn-serif text-[14px] leading-[1.85] text-[var(--ink)] mt-3 cursor-blink select-none"
+          title="点击跳过"
+        >
           {openingShown}
         </p>
         <div className="display italic text-[11px] text-[var(--ink-soft)] mt-2">
@@ -92,16 +100,43 @@ function JourneyPage() {
       </div>
 
       {/* Legend / progress */}
-      <div className="max-w-xl mx-auto px-5 mt-4 text-center">
-        <div className="cn-serif text-[12px] text-[var(--ink-soft)]">
-          点击地图上的光点查看场景 · 已打卡 {completedSceneOrders.length}/{journey.scenes.length}
+      <div className="max-w-xl mx-auto px-5 mt-5 text-center">
+        <div className="display italic text-[10.5px] tracking-[0.25em] text-[var(--ink-soft)]">
+          TODAY · PROGRESS
+        </div>
+        <div className="flex items-center justify-center gap-2 mt-2.5">
+          {journey.scenes.map((s) => {
+            const done = completedSceneOrders.includes(s.order);
+            return (
+              <div key={s.order} className="flex items-center gap-2">
+                <button
+                  onClick={() => setOpenScene(s)}
+                  className={`w-7 h-7 rounded-full cn-serif text-[11px] flex items-center justify-center transition ${
+                    done
+                      ? "bg-[var(--ink)] text-[var(--card)] shadow-[0_4px_12px_-4px_rgba(60,40,30,0.5)]"
+                      : "bg-[var(--card)] border border-dashed border-[var(--ink-soft)]/50 text-[var(--ink-soft)]"
+                  }`}
+                  aria-label={`场景 ${s.order}`}
+                >
+                  {done ? "✓" : s.order}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+        <div className="cn-serif text-[12px] text-[var(--ink-soft)] mt-3">
+          {allDone
+            ? "今天的剧本走完了 ✶"
+            : `点亮全部 ${journey.scenes.length} 处，今日结语就会浮现`}
         </div>
         <button
           onClick={() => navigate({ to: "/finale" })}
           disabled={!allDone}
           className="btn-soft mt-4"
         >
-          {allDone ? "解锁今日结语 ✶" : "全部打卡后解锁结语"}
+          {allDone
+            ? "解锁今日结语 ✶"
+            : `还差 ${journey.scenes.length - completedSceneOrders.length} 处 · 继续打卡`}
         </button>
       </div>
 
