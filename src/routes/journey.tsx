@@ -1174,11 +1174,9 @@ function CheckInPanel({
       </div>
 
       <div className="flex gap-2 mt-4">
-        {done && (
-          <button onClick={() => setEditing(false)} className="btn-ghost flex-1 justify-center">
-            取消
-          </button>
-        )}
+        <button onClick={() => setEditing(false)} className="btn-ghost flex-1 justify-center">
+          {done ? "取消" : "← 返回"}
+        </button>
         <button onClick={save} disabled={busy} className="btn-soft flex-1 justify-center">
           {done ? "保存修改 ✦" : "完成打卡 ✦"}
         </button>
