@@ -30,9 +30,13 @@ function JourneyPage() {
       i += 1;
       setOpeningShown(text.slice(0, i));
       if (i >= text.length) clearInterval(t);
-    }, 50);
+    }, 32);
     return () => clearInterval(t);
   }, [navigate]);
+
+  function skipOpening() {
+    if (run) setOpeningShown(run.journey.story_opening);
+  }
 
   const bundle = useMemo(() => (run ? buildBundle(run) : null), [run]);
 
