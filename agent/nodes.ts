@@ -7,7 +7,6 @@ import type { QuestStateType } from "./state";
 import {
   getPlayerProfileTool,
   reverseGeocodeTool,
-  type PlayerProfile,
 } from "./tools/index";
 import { runPOIPlanner } from "./agents/poi-planner.agent";
 import { runStoryGenerator } from "./agents/story-generator.agent";
@@ -27,10 +26,10 @@ export async function fetchProfile(state: QuestStateType) {
   console.log("[fetchProfile] 获取玩家画像:", state.playerKey);
 
   try {
-    const result = await getPlayerProfileTool.invoke({
+    // 工具现在直接返回对象，无需 JSON.parse
+    const profile = await getPlayerProfileTool.invoke({
       playerKey: state.playerKey,
     });
-    const profile: PlayerProfile = JSON.parse(result);
 
     console.log(
       "[fetchProfile] 成功，喜欢标签:",
@@ -59,11 +58,11 @@ export async function resolveLocation(state: QuestStateType) {
   console.log("[resolveLocation] 转换坐标:", state.lng, state.lat);
 
   try {
-    const result = await reverseGeocodeTool.invoke({
+    // 工具现在直接返回对象，无需 JSON.parse
+    const geo = await reverseGeocodeTool.invoke({
       lat: state.lat,
       lng: state.lng,
     });
-    const geo = JSON.parse(result);
 
     if (geo.error) {
       console.warn("[resolveLocation] 逆地理编码失败");

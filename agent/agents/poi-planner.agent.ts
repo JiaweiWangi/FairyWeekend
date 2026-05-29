@@ -2,16 +2,21 @@
  * Agent 1: POI 规划师
  * 职责：分析人设卡，决定搜索什么类型的地点，并收集候选 POI
  *
- * 参考 CrewAI 设计原则：
- * - role + goal + backstory → System Prompt
- * - temperature: 0.3（任务明确，不需随机性）
- * - 3 个工具（符合"3-5 个"原则）
+ * 使用 createReactAgent 实现 ReAct 模式：
+ * - Agent 自主决定调用哪些工具、调用多少次
+ * - 工具：search_poi, get_player_profile, reverse_geocode
  */
 
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { z } from "zod";
-import type { PlayerProfile, POI } from "../tools/index";
-import { searchPoisParallel } from "../tools/index";
+import { createLLM } from "../langchianClient/index";
+import {
+  searchPoiTool,
+  getPlayerProfileTool,
+  reverseGeocodeTool,
+  type POI,
+  type PlayerProfile,
+} from "../tools/index";
 
 // ===== System Prompt（对应 CrewAI role + goal + backstory）=====
 
@@ -28,20 +33,17 @@ export const POI_PLANNER_PROMPT = `你是一位城市探索规划师。
 1. 从人设的 identity、mood、mission 出发推断适合的地点类型
 2. 考虑玩家的历史偏好（如果有）
 3. 稀有度越高，地点越隐秘、越反直觉
-4. 输出 3-5 个搜索关键词，我会用这些关键词搜索真实地点`;
+4. 使用 search_poi 工具搜索，可以多次调用不同关键词
+5. 最终返回 15-25 个候选地点`;
 
-// ===== LLM 初始化 =====
+// ===== 创建 Agent =====
 
-const poiPlanner = new ChatGoogleGenerativeAI({
-  model: "gemini-2.5-flash",
-  temperature: 0.3,
-});
+const llm = createLLM();
 
-// ===== 输出 Schema =====
-
-const poiKeywordsSchema = z.object({
-  keywords: z.array(z.string()).min(3).max(5).describe("搜索关键词列表"),
-  reasoning: z.string().describe("决策理由"),
+export const poiPlannerAgent = createReactAgent({
+  llm,
+  tools: [searchPoiTool, getPlayerProfileTool, reverseGeocodeTool],
+  prompt: POI_PLANNER_PROMPT,
 });
 
 // ===== 输入参数 =====
@@ -72,7 +74,9 @@ export interface POIPlannerOutput {
 export async function runPOIPlanner(input: POIPlannerInput): Promise<POIPlannerOutput> {
   const { card, city, timePeriod, playerProfile, gcjCoords } = input;
 
-  // Step 1: LLM 分析人设，输出搜索关键词
+  const coords = gcjCoords || { lng: 121.4737, lat: 31.2304 }; // 默认上海
+
+  // 构建用户提示
   const userPrompt = `人设身份：${card.identity}
 人设状态：${card.mood}
 人设使命：${card.mission}
@@ -80,6 +84,7 @@ export async function runPOIPlanner(input: POIPlannerInput): Promise<POIPlannerO
 
 城市：${city}
 时间段：${timePeriod}
+坐标：经度 ${coords.lng}，纬度 ${coords.lat}
 
 ${playerProfile ? `
 玩家画像：${playerProfile.profile}
@@ -88,39 +93,62 @@ ${playerProfile ? `
 去过的地方：${playerProfile.visited_pois.slice(0, 10).join("、")}
 ` : ""}
 
-请分析这个人设今天应该去什么类型的地点，输出 3-5 个搜索关键词。`;
-
-  const llmWithSchema = poiPlanner.withStructuredOutput(poiKeywordsSchema);
-
-  let keywords: string[];
-  let reasoning: string;
+请分析这个人设今天应该去什么类型的地点，使用 search_poi 工具搜索并收集 15-25 个候选。`;
 
   try {
-    const result = await llmWithSchema.invoke([
-      { role: "system", content: POI_PLANNER_PROMPT },
-      { role: "user", content: userPrompt },
-    ]);
-    keywords = result.keywords;
-    reasoning = result.reasoning;
-    console.log("[poiPlanner] 关键词:", keywords.join(", "));
-    console.log("[poiPlanner] 理由:", reasoning.slice(0, 100));
+    // 调用 createReactAgent
+    const result = await poiPlannerAgent.invoke({
+      messages: [{ role: "user", content: userPrompt }],
+    });
+
+    // 从结果中提取 POI 候选
+    const candidates = extractPOIsFromResult(result);
+
+    console.log(`[poiPlanner] 找到 ${candidates.length} 个候选 POI`);
+
+    return {
+      keywords: [], // Agent 自主搜索，无预设关键词
+      reasoning: "Agent 自主调用工具搜索",
+      candidates,
+    };
   } catch (e) {
-    console.warn("[poiPlanner] LLM 调用失败，使用默认关键词:", e);
-    keywords = ["咖啡馆", "公园", "书店", "餐厅"];
-    reasoning = "LLM 调用失败，使用默认关键词";
+    console.error("[poiPlanner] Agent 执行失败:", e);
+    return {
+      keywords: [],
+      reasoning: "Agent 执行失败",
+      candidates: [],
+    };
+  }
+}
+
+// ===== 辅助函数：从 Agent 结果中提取 POI =====
+
+function extractPOIsFromResult(result: unknown): POI[] {
+  // createReactAgent 返回的结果结构：
+  // { messages: [AIMessage, ToolMessage, AIMessage, ...] }
+  // ToolMessage.content 包含工具返回的 POI 数组
+
+  const pois: POI[] = [];
+  const messages = (result as { messages: unknown[] }).messages || [];
+
+  for (const msg of messages) {
+    // 检查是否是 ToolMessage
+    const content = (msg as { content: unknown }).content;
+    if (Array.isArray(content)) {
+      // 工具返回的是 POI 数组
+      for (const item of content) {
+        if (item && typeof item === "object" && "name" in item && "location" in item) {
+          pois.push(item as POI);
+        }
+      }
+    }
   }
 
-  // Step 2: 并行搜索 POI
-  const coords = gcjCoords || { lng: 121.4737, lat: 31.2304 }; // 默认上海
-
-  const candidates = await searchPoisParallel(keywords, {
-    lng: coords.lng,
-    lat: coords.lat,
-    radius: 3000,
-    excludePois: playerProfile?.visited_pois || [],
+  // 去重（按 location）
+  const seen = new Set<string>();
+  return pois.filter((p) => {
+    if (seen.has(p.location)) return false;
+    seen.add(p.location);
+    return true;
   });
-
-  console.log(`[poiPlanner] 找到 ${candidates.length} 个候选 POI`);
-
-  return { keywords, reasoning, candidates };
 }

@@ -34,26 +34,22 @@ export async function searchPoisParallel(
       lat,
     }).catch((err) => {
       console.warn(`POI search failed for "${keyword}":`, err);
-      return "[]";
+      return [];
     })
   );
 
   const results = await Promise.all(searchPromises);
 
-  // 合并去重
+  // 合并去重（工具现在直接返回 POI 数组）
   const allPois: POI[] = [];
-  for (const result of results) {
-    try {
-      const pois: POI[] =
-        typeof result === "string" ? JSON.parse(result) : result;
+  for (const pois of results) {
+    if (Array.isArray(pois)) {
       for (const poi of pois) {
         if (!seen.has(poi.name) && !excludeSet.has(poi.name)) {
           seen.add(poi.name);
           allPois.push(poi);
         }
       }
-    } catch (e) {
-      // 解析失败，跳过
     }
   }
 

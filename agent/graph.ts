@@ -21,7 +21,7 @@
  *          END
  */
 
-import { StateGraph, END } from "@langchain/langgraph";
+import { StateGraph, START, END } from "@langchain/langgraph";
 import { QuestState } from "./state";
 import {
   fetchProfile,
@@ -31,37 +31,21 @@ import {
   generateJourney,
 } from "./nodes";
 
-// ===== 并行入口节点 =====
-
-/**
- * 并行起始节点
- * 不做任何处理，只用于触发并行分支
- */
-async function parallelStart(state: typeof QuestState.State) {
-  return {};
-}
-
 // ===== Graph 构建 =====
 
 const workflow = new StateGraph(QuestState)
   // ===== 添加节点 =====
-  .addNode("parallel_start", parallelStart)
   .addNode("fetch_profile", fetchProfile)
   .addNode("resolve_location", resolveLocation)
   .addNode("plan_pois", planPois)
   .addNode("validate_pois", validatePois)
   .addNode("generate_journey", generateJourney)
 
-  // ===== 入口 =====
-  .setEntryPoint("parallel_start")
+  // ===== 并行入口（从 START 同时触发两个节点）=====
+  .addEdge(START, "fetch_profile")
+  .addEdge(START, "resolve_location")
 
-  // ===== 并行分支 =====
-  // 从 parallel_start 同时触发 fetch_profile 和 resolve_location
-  .addEdge("parallel_start", "fetch_profile")
-  .addEdge("parallel_start", "resolve_location")
-
-  // ===== 汇合点 =====
-  // 两个并行节点都完成后，进入 plan_pois
+  // ===== 汇合点（两个并行节点都完成后，进入 plan_pois）=====
   .addEdge("fetch_profile", "plan_pois")
   .addEdge("resolve_location", "plan_pois")
 

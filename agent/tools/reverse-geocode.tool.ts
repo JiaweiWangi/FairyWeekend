@@ -3,7 +3,7 @@
  * 坐标转城市名称，调用高德 API
  */
 
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 
 export interface GeocodeResult {
@@ -40,15 +40,8 @@ async function wgs84ToGcj02(
   return { lng, lat };
 }
 
-export const reverseGeocodeTool = new DynamicStructuredTool({
-  name: "reverse_geocode",
-  description:
-    "将坐标转换为城市名称。返回：城市、区县、省份、完整地址。用于确定用户所在位置。",
-  schema: z.object({
-    lat: z.number().describe("纬度（WGS84坐标）"),
-    lng: z.number().describe("经度（WGS84坐标）"),
-  }),
-  func: async ({ lat, lng }) => {
+export const reverseGeocodeTool = tool(
+  async ({ lat, lng }) => {
     try {
       // Step 1: WGS84 -> GCJ02
       const gcj = await wgs84ToGcj02(lng, lat);
@@ -59,7 +52,7 @@ export const reverseGeocodeTool = new DynamicStructuredTool({
 
       if (res.status !== "1") {
         console.warn("Reverse geocode failed:", res);
-        return JSON.stringify({ error: "geocode_failed" });
+        return { error: "geocode_failed" };
       }
 
       const addr = res.regeocode?.addressComponent ?? {};
@@ -83,10 +76,19 @@ export const reverseGeocodeTool = new DynamicStructuredTool({
         gcj: { lng: gcj.lng, lat: gcj.lat },
       };
 
-      return JSON.stringify(result);
+      return result;
     } catch (e) {
       console.warn("reverse_geocode tool error:", e);
-      return JSON.stringify({ error: String(e) });
+      return { error: String(e) };
     }
   },
-});
+  {
+    name: "reverse_geocode",
+    description:
+      "将坐标转换为城市名称。返回：城市、区县、省份、完整地址。用于确定用户所在位置。",
+    schema: z.object({
+      lat: z.number().describe("纬度（WGS84坐标）"),
+      lng: z.number().describe("经度（WGS84坐标）"),
+    }),
+  }
+);
