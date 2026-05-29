@@ -565,6 +565,14 @@ function SceneSheet({
 
 
 
+          {/* ✦ 本场团购 & 推荐 */}
+          <SceneDeals
+            kind={kind}
+            sceneOrder={scene.order}
+            meituanHref={meituanHref}
+            bundlePurchased={bundlePurchased}
+          />
+
           {/* Task card */}
           <div
             className="mt-5 p-4 rounded-2xl relative overflow-hidden"
