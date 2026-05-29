@@ -1,5 +1,10 @@
 {
   "imports": {
-    "llmClient/": "./_shared/llmClient/"
+    "llmClient/": "./_shared/llmClient/",
+    "agent/": "./_shared/agent/",
+    "@langchain/core": "npm:@langchain/core",
+    "@langchain/langgraph": "npm:@langchain/langgraph",
+    "@langchain/langgraph/prebuilt": "npm:@langchain/langgraph/prebuilt",
+    "zod": "npm:zod"
   }
 }

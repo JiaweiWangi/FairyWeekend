@@ -1,0 +1,14 @@
+{
+  "imports": {
+    "@langchain/core": "npm:@langchain/core",
+    "@langchain/core/language_models/chat_models": "npm:@langchain/core/language_models/chat_models",
+    "@langchain/core/messages": "npm:@langchain/core/messages",
+    "@langchain/core/outputs": "npm:@langchain/core/outputs",
+    "@langchain/core/callbacks/manager": "npm:@langchain/core/callbacks/manager",
+    "@langchain/core/tools": "npm:@langchain/core/tools",
+    "@langchain/langgraph": "npm:@langchain/langgraph",
+    "@langchain/langgraph/prebuilt": "npm:@langchain/langgraph/prebuilt",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js",
+    "zod": "npm:zod"
+  }
+}
