@@ -31,6 +31,20 @@ import {
   generateJourney,
 } from "./nodes";
 
+// ===== 日志工具 =====
+
+function log(message: string, data?: unknown) {
+  const timestamp = new Date().toISOString().split("T")[1].slice(0, 12);
+  const prefix = `[${timestamp}][QuestGraph]`;
+  if (data !== undefined) {
+    console.log(prefix, message, typeof data === "object" ? JSON.stringify(data, null, 2) : data);
+  } else {
+    console.log(prefix, message);
+  }
+}
+
+log("🔧 构建 LangGraph...");
+
 // ===== Graph 构建 =====
 
 const workflow = new StateGraph(QuestState)
@@ -58,6 +72,8 @@ const workflow = new StateGraph(QuestState)
 
 export const questGraph = workflow.compile();
 
+log("✅ LangGraph 构建完成");
+
 // ===== 执行函数 =====
 
 import type { PersonaCard, Journey } from "./state";
@@ -84,6 +100,12 @@ export interface QuestOutput {
  * 执行完整的 Quest 流程
  */
 export async function runQuest(input: QuestInput): Promise<QuestOutput> {
+  const timestamp = new Date().toISOString().split("T")[1].slice(0, 12);
+
+  console.log("\n" + "=".repeat(60));
+  console.log(`[${timestamp}][Quest] 🚀 开始执行 Quest`);
+  console.log("=".repeat(60));
+
   const initialState = {
     card: input.card,
     city: input.city || "上海",
@@ -102,12 +124,31 @@ export async function runQuest(input: QuestInput): Promise<QuestOutput> {
     error: undefined,
   };
 
-  console.log("[Quest] 开始执行，人设:", input.card.identity);
+  log("📋 输入参数", {
+    identity: input.card.identity,
+    rarity: input.card.rarity,
+    city: input.city || "上海",
+    hasCoords: !!(input.lat && input.lng),
+    playerKey: input.playerKey || "无",
+  });
+
+  const startTime = Date.now();
 
   try {
     const result = await questGraph.invoke(initialState);
 
-    console.log("[Quest] 执行完成，场景数:", result.journey?.scenes?.length || 0);
+    const elapsed = Date.now() - startTime;
+
+    console.log("\n" + "=".repeat(60));
+    console.log(`[${new Date().toISOString().split("T")[1].slice(0, 12)}][Quest] ✅ 执行完成`);
+    console.log("=".repeat(60));
+
+    log("📊 执行结果", {
+      elapsed: `${elapsed}ms`,
+      scenesCount: result.journey?.scenes?.length || 0,
+      poiCount: result.poiCandidates?.length || 0,
+      city: result.city,
+    });
 
     return {
       journey: result.journey,
@@ -117,7 +158,15 @@ export async function runQuest(input: QuestInput): Promise<QuestOutput> {
       error: result.error,
     };
   } catch (e) {
-    console.error("[Quest] 执行失败:", e);
+    const elapsed = Date.now() - startTime;
+
+    console.log("\n" + "=".repeat(60));
+    console.log(`[${new Date().toISOString().split("T")[1].slice(0, 12)}][Quest] ❌ 执行失败`);
+    console.log("=".repeat(60));
+
+    log(`❌ 错误: ${e}`);
+    console.error(e);
+
     return {
       journey: undefined,
       city: input.city || "上海",

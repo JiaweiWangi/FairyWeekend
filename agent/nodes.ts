@@ -11,6 +11,23 @@ import {
 import { runPOIPlanner } from "./agents/poi-planner.agent";
 import { runStoryGenerator } from "./agents/story-generator.agent";
 
+// ===== 日志工具 =====
+
+function log(node: string, message: string, data?: unknown) {
+  const timestamp = new Date().toISOString().split("T")[1].slice(0, 12);
+  const prefix = `[${timestamp}][${node}]`;
+  if (data !== undefined) {
+    console.log(prefix, message, typeof data === "object" ? JSON.stringify(data, null, 2) : data);
+  } else {
+    console.log(prefix, message);
+  }
+}
+
+function logWarn(node: string, message: string, error?: unknown) {
+  const timestamp = new Date().toISOString().split("T")[1].slice(0, 12);
+  console.warn(`[${timestamp}][${node}]`, message, error ?? "");
+}
+
 // ===== Node 1: fetchProfile =====
 
 /**
@@ -18,27 +35,30 @@ import { runStoryGenerator } from "./agents/story-generator.agent";
  * 并行节点，与 resolveLocation 同时执行
  */
 export async function fetchProfile(state: QuestStateType) {
+  log("fetchProfile", "🚀 开始执行");
+
   if (!state.playerKey) {
-    console.log("[fetchProfile] 无 playerKey，跳过");
+    log("fetchProfile", "⏭️ 无 playerKey，跳过");
     return { playerProfile: undefined };
   }
 
-  console.log("[fetchProfile] 获取玩家画像:", state.playerKey);
+  log("fetchProfile", "📥 获取玩家画像...", { playerKey: state.playerKey });
 
   try {
-    // 工具现在直接返回对象，无需 JSON.parse
     const profile = await getPlayerProfileTool.invoke({
       playerKey: state.playerKey,
     });
 
-    console.log(
-      "[fetchProfile] 成功，喜欢标签:",
-      profile.loved_tags.slice(0, 3).join(", ")
-    );
+    log("fetchProfile", "✅ 成功获取画像", {
+      profile: profile.profile?.slice(0, 50) + "...",
+      loved_tags: profile.loved_tags?.slice(0, 5),
+      disliked_tags: profile.disliked_tags?.slice(0, 5),
+      visited_count: profile.visited_pois?.length || 0,
+    });
 
     return { playerProfile: profile };
   } catch (e) {
-    console.warn("[fetchProfile] 失败:", e);
+    logWarn("fetchProfile", "❌ 获取失败", e);
     return { playerProfile: undefined };
   }
 }
@@ -50,33 +70,41 @@ export async function fetchProfile(state: QuestStateType) {
  * 并行节点，与 fetchProfile 同时执行
  */
 export async function resolveLocation(state: QuestStateType) {
+  log("resolveLocation", "🚀 开始执行");
+
   if (typeof state.lat !== "number" || typeof state.lng !== "number") {
-    console.log("[resolveLocation] 无坐标，跳过");
+    log("resolveLocation", "⏭️ 无坐标，跳过");
     return { gcjCoords: undefined };
   }
 
-  console.log("[resolveLocation] 转换坐标:", state.lng, state.lat);
+  log("resolveLocation", "📥 转换坐标...", {
+    wgs84: { lng: state.lng, lat: state.lat },
+  });
 
   try {
-    // 工具现在直接返回对象，无需 JSON.parse
     const geo = await reverseGeocodeTool.invoke({
       lat: state.lat,
       lng: state.lng,
     });
 
     if (geo.error) {
-      console.warn("[resolveLocation] 逆地理编码失败");
+      logWarn("resolveLocation", "❌ 逆地理编码失败", geo.error);
       return { gcjCoords: undefined };
     }
 
-    console.log("[resolveLocation] 成功，城市:", geo.label);
+    log("resolveLocation", "✅ 成功解析位置", {
+      city: geo.city,
+      district: geo.district,
+      label: geo.label,
+      gcj: geo.gcj,
+    });
 
     return {
       gcjCoords: geo.gcj,
       city: state.city || geo.label,
     };
   } catch (e) {
-    console.warn("[resolveLocation] 失败:", e);
+    logWarn("resolveLocation", "❌ 解析失败", e);
     return { gcjCoords: undefined };
   }
 }
@@ -88,7 +116,19 @@ export async function resolveLocation(state: QuestStateType) {
  * 调用 poi-planner.agent
  */
 export async function planPois(state: QuestStateType) {
-  console.log("[planPois] 调用 poiPlanner...");
+  log("planPois", "🚀 开始执行");
+
+  log("planPois", "📋 输入参数", {
+    identity: state.card.identity,
+    mood: state.card.mood,
+    mission: state.card.mission,
+    rarity: state.card.rarity,
+    city: state.city,
+    hasProfile: !!state.playerProfile,
+    hasCoords: !!state.gcjCoords,
+  });
+
+  const startTime = Date.now();
 
   const result = await runPOIPlanner({
     card: {
@@ -103,6 +143,23 @@ export async function planPois(state: QuestStateType) {
     gcjCoords: state.gcjCoords,
   });
 
+  const elapsed = Date.now() - startTime;
+
+  log("planPois", "✅ Agent 执行完成", {
+    elapsed: `${elapsed}ms`,
+    keywordsCount: result.keywords.length,
+    candidatesCount: result.candidates.length,
+    keywords: result.keywords,
+  });
+
+  if (result.candidates.length > 0) {
+    log("planPois", "📍 候选 POI 示例", result.candidates.slice(0, 3).map(p => ({
+      name: p.name,
+      type: p.type,
+      address: p.address?.slice(0, 30),
+    })));
+  }
+
   return {
     poiKeywords: result.keywords,
     poiCandidates: result.candidates,
@@ -116,9 +173,16 @@ export async function planPois(state: QuestStateType) {
  * 简单验证，失败只记录警告，不重试
  */
 export async function validatePois(state: QuestStateType) {
-  const { poiCandidates } = state;
+  log("validatePois", "🚀 开始执行");
 
-  console.log("[validatePois] 验证候选 POI...");
+  const { poiCandidates } = state;
+  const types = new Set(poiCandidates.map((p) => p.type));
+
+  log("validatePois", "📊 统计信息", {
+    total: poiCandidates.length,
+    typesCount: types.size,
+    types: Array.from(types),
+  });
 
   const warnings: string[] = [];
 
@@ -126,15 +190,14 @@ export async function validatePois(state: QuestStateType) {
     warnings.push(`候选不足 (${poiCandidates.length}/10)`);
   }
 
-  const types = new Set(poiCandidates.map((p) => p.type));
   if (types.size < 2) {
     warnings.push(`类型单一 (${types.size}/2)`);
   }
 
   if (warnings.length > 0) {
-    console.warn("[validatePois] 警告:", warnings.join(", "));
+    logWarn("validatePois", "⚠️ 验证警告", warnings.join(", "));
   } else {
-    console.log("[validatePois] 验证通过");
+    log("validatePois", "✅ 验证通过");
   }
 
   return {};
@@ -147,7 +210,16 @@ export async function validatePois(state: QuestStateType) {
  * 调用 story-generator.agent
  */
 export async function generateJourney(state: QuestStateType) {
-  console.log("[generateJourney] 调用 storyGenerator...");
+  log("generateJourney", "🚀 开始执行");
+
+  log("generateJourney", "📋 输入参数", {
+    identity: state.card.identity,
+    candidatesCount: state.poiCandidates.length,
+    timePeriod: state.timePeriod,
+    companion: state.companion,
+  });
+
+  const startTime = Date.now();
 
   const journey = await runStoryGenerator({
     card: {
@@ -161,12 +233,30 @@ export async function generateJourney(state: QuestStateType) {
     companion: state.companion,
   });
 
+  const elapsed = Date.now() - startTime;
+
   if (!journey) {
+    logWarn("generateJourney", "❌ 生成失败");
     return {
       journey: undefined,
       error: "生成失败",
     };
   }
+
+  log("generateJourney", "✅ Agent 执行完成", {
+    elapsed: `${elapsed}ms`,
+    scenesCount: journey.scenes.length,
+    emotionArc: journey.emotion_arc,
+  });
+
+  log("generateJourney", "📖 故事开篇", journey.story_opening?.slice(0, 100) + "...");
+
+  log("generateJourney", "🎬 场景列表", journey.scenes.map(s => ({
+    order: s.order,
+    scene_name: s.scene_name,
+    location: s.location_name,
+    emotion: s.emotion_tags,
+  })));
 
   return {
     journey,

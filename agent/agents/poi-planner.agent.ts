@@ -18,6 +18,18 @@ import {
   type PlayerProfile,
 } from "../tools/index";
 
+// ===== 日志工具 =====
+
+function log(message: string, data?: unknown) {
+  const timestamp = new Date().toISOString().split("T")[1].slice(0, 12);
+  const prefix = `[${timestamp}][poiPlanner]`;
+  if (data !== undefined) {
+    console.log(prefix, message, typeof data === "object" ? JSON.stringify(data, null, 2) : data);
+  } else {
+    console.log(prefix, message);
+  }
+}
+
 // ===== System Prompt（对应 CrewAI role + goal + backstory）=====
 
 export const POI_PLANNER_PROMPT = `你是一位城市探索规划师。
@@ -38,6 +50,8 @@ export const POI_PLANNER_PROMPT = `你是一位城市探索规划师。
 
 // ===== 创建 Agent =====
 
+log("🤖 初始化 Agent...");
+
 const llm = createLLM();
 
 export const poiPlannerAgent = createReactAgent({
@@ -45,6 +59,8 @@ export const poiPlannerAgent = createReactAgent({
   tools: [searchPoiTool, getPlayerProfileTool, reverseGeocodeTool],
   prompt: POI_PLANNER_PROMPT,
 });
+
+log("✅ Agent 初始化完成");
 
 // ===== 输入参数 =====
 
@@ -74,6 +90,8 @@ export interface POIPlannerOutput {
 export async function runPOIPlanner(input: POIPlannerInput): Promise<POIPlannerOutput> {
   const { card, city, timePeriod, playerProfile, gcjCoords } = input;
 
+  log("🚀 开始执行 POI 规划");
+
   const coords = gcjCoords || { lng: 121.4737, lat: 31.2304 }; // 默认上海
 
   // 构建用户提示
@@ -95,16 +113,60 @@ ${playerProfile ? `
 
 请分析这个人设今天应该去什么类型的地点，使用 search_poi 工具搜索并收集 15-25 个候选。`;
 
+  log("📝 构建提示完成", {
+    identity: card.identity,
+    city,
+    hasProfile: !!playerProfile,
+    coords,
+  });
+
   try {
+    log("⚡ 调用 createReactAgent...");
+
+    const startTime = Date.now();
+
     // 调用 createReactAgent
     const result = await poiPlannerAgent.invoke({
       messages: [{ role: "user", content: userPrompt }],
     });
 
+    const elapsed = Date.now() - startTime;
+    log(`⏱️ Agent 执行耗时: ${elapsed}ms`);
+
+    // 打印消息历史
+    const messages = result.messages || [];
+    log(`📬 收到 ${messages.length} 条消息`);
+
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
+      const type = msg.constructor?.name || typeof msg;
+      const content = typeof msg.content === "string"
+        ? msg.content?.slice(0, 200)
+        : JSON.stringify(msg.content)?.slice(0, 200);
+
+      if (msg.tool_calls?.length) {
+        log(`  📨 [${i}] ${type} - 工具调用`, msg.tool_calls.map((tc: any) => ({
+          name: tc.name,
+          args: tc.args,
+        })));
+      } else if (msg.name) {
+        log(`  📨 [${i}] ${type} - 工具返回 (${msg.name})`, content?.slice(0, 100));
+      } else {
+        log(`  📨 [${i}] ${type}`, content?.slice(0, 100));
+      }
+    }
+
     // 从结果中提取 POI 候选
     const candidates = extractPOIsFromResult(result);
 
-    console.log(`[poiPlanner] 找到 ${candidates.length} 个候选 POI`);
+    log(`✅ 提取完成，共 ${candidates.length} 个候选 POI`);
+
+    if (candidates.length > 0) {
+      log("📍 POI 分布", {
+        types: [...new Set(candidates.map(p => p.type))],
+        sample: candidates.slice(0, 3).map(p => p.name),
+      });
+    }
 
     return {
       keywords: [], // Agent 自主搜索，无预设关键词
@@ -112,7 +174,8 @@ ${playerProfile ? `
       candidates,
     };
   } catch (e) {
-    console.error("[poiPlanner] Agent 执行失败:", e);
+    log(`❌ Agent 执行失败: ${e}`);
+    console.error(e);
     return {
       keywords: [],
       reasoning: "Agent 执行失败",
@@ -124,10 +187,6 @@ ${playerProfile ? `
 // ===== 辅助函数：从 Agent 结果中提取 POI =====
 
 function extractPOIsFromResult(result: unknown): POI[] {
-  // createReactAgent 返回的结果结构：
-  // { messages: [AIMessage, ToolMessage, AIMessage, ...] }
-  // ToolMessage.content 包含工具返回的 POI 数组
-
   const pois: POI[] = [];
   const messages = (result as { messages: unknown[] }).messages || [];
 
