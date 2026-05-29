@@ -217,95 +217,264 @@ function BundleSheet({
   onClose: () => void;
   onPurchased: () => void;
 }) {
+  const saved = Math.max(0, bundle.originalPrice - bundle.dealPrice);
+  const discount = bundle.originalPrice > 0
+    ? (bundle.dealPrice / bundle.originalPrice * 10).toFixed(1)
+    : "9.9";
+  // 演示数据 — 给套装一些可信的"团购感"
+  const stats = useMemo(() => {
+    const seed = bundle.dealId.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+    const sold = 800 + (seed % 1800);
+    const rating = (4.6 + ((seed % 4) / 10)).toFixed(1);
+    const reviews = 120 + (seed % 360);
+    return { sold, rating, reviews };
+  }, [bundle.dealId]);
+
+  // 场景缩略图：用 VenueIcon 检测到的 kind 拿到 unsplash 图
+  const sceneThumbs = useMemo(
+    () => scenes.map((s) => {
+      const kind = detectVenue(s.location_type, s.location_name);
+      const photos = getVenuePhotos(kind);
+      return photos[s.order % photos.length] || photos[0];
+    }),
+    [scenes],
+  );
+
+  // 套装顶部封面：用第一个场景的图
+  const heroImage = sceneThumbs[0];
+
+  // 福利图标
+  const perkIcons = ["🎟", "🎁", "✨", "🍃", "📍", "♻︎"];
+
+  // 推荐加购（演示）
+  const addOns = useMemo(() => {
+    const seed = bundle.dealId.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+    return [
+      { title: "纪念明信片 × 3", price: 9, original: 18, sold: 420 + (seed % 200), img: sceneThumbs[1] || heroImage },
+      { title: "城市气味小样盒", price: 29, original: 49, sold: 180 + (seed % 120), img: sceneThumbs[2] || heroImage },
+    ];
+  }, [bundle.dealId, sceneThumbs, heroImage]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center fade-in" onClick={onClose}>
-      <div className="absolute inset-0" style={{ background: "rgba(40,35,30,0.5)", backdropFilter: "blur(4px)" }} />
+      <div className="absolute inset-0" style={{ background: "rgba(40,35,30,0.55)", backdropFilter: "blur(6px)" }} />
       <div
-        className="relative w-full max-w-xl rounded-t-[32px] overflow-hidden bg-[var(--card)] fade-up"
-        style={{ maxHeight: "88vh", overflowY: "auto" }}
+        className="relative w-full max-w-xl rounded-t-[32px] overflow-hidden bg-[var(--card)] fade-up flex flex-col"
+        style={{ maxHeight: "92vh" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div
-          className="p-6 pb-5"
-          style={{
-            background: purchased
-              ? "linear-gradient(135deg,#2d3a2a 0%,#4a5a3d 60%,#7a8a5a 100%)"
-              : "linear-gradient(135deg,#3d2a4a 0%,#6a3d70 50%,#c47a5b 100%)",
-            color: "#fff",
-          }}
-        >
-          <div className="display italic text-[10px] tracking-[0.3em] text-white/70">
-            {purchased ? "✓ UNLOCKED" : "✦ BUNDLE"}
+        {/* ============ Hero cover ============ */}
+        <div className="relative shrink-0" style={{ height: 240 }}>
+          <img
+            src={heroImage}
+            alt={bundle.title}
+            className="absolute inset-0 w-full h-full object-cover"
+            loading="lazy"
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background: purchased
+                ? "linear-gradient(180deg, rgba(45,58,42,0.2) 0%, rgba(45,58,42,0.55) 55%, rgba(20,28,18,0.92) 100%)"
+                : "linear-gradient(180deg, rgba(40,25,45,0.15) 0%, rgba(60,30,55,0.55) 55%, rgba(30,15,30,0.92) 100%)",
+            }}
+          />
+          {/* close */}
+          <button
+            onClick={onClose}
+            aria-label="关闭"
+            className="absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center"
+            style={{ background: "rgba(255,255,255,0.2)", backdropFilter: "blur(8px)", color: "#fff" }}
+          >
+            ✕
+          </button>
+          {/* badges */}
+          <div className="absolute top-4 left-4 flex gap-2">
+            <span className="display italic text-[10px] tracking-[0.25em] px-2.5 py-1 rounded-full"
+              style={{ background: "rgba(255,255,255,0.18)", color: "#fff", backdropFilter: "blur(6px)" }}>
+              {purchased ? "✓ UNLOCKED" : "✦ BUNDLE"}
+            </span>
+            {!purchased && (
+              <span className="cn-serif text-[11px] px-2.5 py-1 rounded-full"
+                style={{ background: "#e85d3a", color: "#fff" }}>
+                限今日 · {discount}折
+              </span>
+            )}
           </div>
-          <h3 className="cn-serif text-[22px] mt-1.5 leading-snug">{bundle.title}</h3>
-          <div className="cn-serif text-[13px] text-white/80 mt-1">{bundle.subtitle}</div>
-          <div className="display italic text-[10px] text-white/55 mt-2">#{bundle.dealId}{city ? ` · ${city}` : ""}</div>
+          {/* title block */}
+          <div className="absolute left-5 right-5 bottom-4 text-white">
+            <h3 className="cn-serif text-[22px] leading-snug">{bundle.title}</h3>
+            <div className="cn-serif text-[13px] text-white/85 mt-1">{bundle.subtitle}</div>
+            {/* stats row */}
+            <div className="flex items-center gap-3 mt-3 cn-serif text-[12px] text-white/90">
+              <span>★ {stats.rating}</span>
+              <span className="opacity-50">·</span>
+              <span>{stats.reviews} 条评价</span>
+              <span className="opacity-50">·</span>
+              <span>月售 {stats.sold}</span>
+            </div>
+            <div className="display italic text-[10px] text-white/55 mt-2">
+              #{bundle.dealId}{city ? ` · ${city}` : ""}
+            </div>
+          </div>
         </div>
 
-        <div className="p-6 pt-5">
-          <div className="cn-serif text-[12px] text-[var(--ink-soft)] mb-2">包含 {scenes.length} 个场景</div>
-          <ul className="space-y-2">
-            {scenes.map((s) => (
-              <li key={s.order} className="flex items-start gap-3 p-3 rounded-2xl" style={{ background: "rgba(60,40,30,0.04)" }}>
-                <div
-                  className="display italic text-[12px] w-7 h-7 rounded-full flex items-center justify-center shrink-0"
-                  style={{ background: "var(--card-soft, #f3ecdc)", color: "var(--ink)" }}
-                >
-                  0{s.order}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="cn-serif text-[14px] text-[var(--ink)] truncate">「{s.scene_name}」</div>
-                  <div className="cn-serif text-[12px] text-[var(--ink-soft)] truncate">
-                    {s.location_name} · ~{s.stay_minutes}min
+        {/* ============ Scroll body ============ */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Price strip */}
+          <div className="px-5 pt-4 pb-3 flex items-end justify-between border-b border-dashed"
+            style={{ borderColor: "rgba(60,40,30,0.12)" }}>
+            <div className="flex items-baseline gap-2">
+              <span className="cn-serif text-[12px] text-[var(--ink-soft)]">套装价</span>
+              <span className="cn-serif text-[32px] text-[#c44a2a] leading-none">¥{bundle.dealPrice}</span>
+              {!purchased && saved > 0 && (
+                <span className="display italic text-[12px] text-[var(--ink-soft)] line-through">
+                  ¥{bundle.originalPrice}
+                </span>
+              )}
+            </div>
+            {!purchased && saved > 0 && (
+              <span className="cn-serif text-[12px] px-2 py-0.5 rounded"
+                style={{ background: "#fbe8d6", color: "#c44a2a" }}>
+                立省 ¥{saved}
+              </span>
+            )}
+          </div>
+
+          {/* Perks chips */}
+          <div className="px-5 pt-4">
+            <div className="cn-serif text-[12px] text-[var(--ink-soft)] mb-2">套装福利</div>
+            <div className="flex flex-wrap gap-2">
+              {bundle.perks.map((p, i) => (
+                <span key={i} className="cn-serif text-[12px] px-3 py-1.5 rounded-full inline-flex items-center gap-1.5"
+                  style={{ background: "var(--muted)", color: "var(--ink)" }}>
+                  <span>{perkIcons[i % perkIcons.length]}</span>{p}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Scenes — 横向相册 + 列表 */}
+          <div className="px-5 pt-5">
+            <div className="flex items-center justify-between mb-2">
+              <div className="cn-serif text-[14px] text-[var(--ink)]">行程 · {scenes.length} 个场景</div>
+              <div className="display italic text-[10px] text-[var(--ink-soft)] tracking-widest">
+                {scenes.reduce((s, x) => s + (x.stay_minutes || 0), 0)} MIN TOTAL
+              </div>
+            </div>
+
+            {/* 横向预览相册 */}
+            <div className="flex gap-2 overflow-x-auto pb-2 -mx-5 px-5 snap-x snap-mandatory">
+              {scenes.map((s, i) => (
+                <div key={s.order} className="shrink-0 snap-start" style={{ width: 140 }}>
+                  <div className="relative rounded-2xl overflow-hidden" style={{ height: 100 }}>
+                    <img src={sceneThumbs[i]} alt={s.scene_name} className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+                    <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.65) 100%)" }} />
+                    <div className="absolute top-1.5 left-1.5 display italic text-[10px] text-white/95 px-1.5 py-0.5 rounded"
+                      style={{ background: "rgba(0,0,0,0.4)" }}>
+                      0{s.order}
+                    </div>
+                    <div className="absolute bottom-1.5 left-2 right-2 cn-serif text-[11px] text-white truncate">
+                      「{s.scene_name}」
+                    </div>
                   </div>
                 </div>
-              </li>
-            ))}
-          </ul>
+              ))}
+            </div>
 
-          <div className="mt-5">
-            <div className="cn-serif text-[12px] text-[var(--ink-soft)] mb-2">套装福利</div>
-            <ul className="space-y-1.5">
-              {bundle.perks.map((p, i) => (
-                <li key={i} className="cn-serif text-[13px] text-[var(--ink)] flex gap-2">
-                  <span className="text-[var(--ink-soft)]">·</span>{p}
+            {/* 详细列表 */}
+            <ul className="mt-2 space-y-2">
+              {scenes.map((s, i) => (
+                <li key={s.order} className="flex items-center gap-3 p-2.5 rounded-2xl"
+                  style={{ background: "rgba(60,40,30,0.04)" }}>
+                  <img src={sceneThumbs[i]} alt="" className="w-14 h-14 rounded-xl object-cover shrink-0" loading="lazy" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="display italic text-[10px] text-[var(--ink-soft)]">0{s.order}</span>
+                      <span className="cn-serif text-[14px] text-[var(--ink)] truncate">「{s.scene_name}」</span>
+                    </div>
+                    <div className="cn-serif text-[12px] text-[var(--ink-soft)] truncate">
+                      {s.location_name} · ~{s.stay_minutes}min
+                    </div>
+                  </div>
+                  <span className="cn-serif text-[11px] px-2 py-0.5 rounded shrink-0"
+                    style={{ background: "#e3ebda", color: "#3d4a2a" }}>已含</span>
                 </li>
               ))}
             </ul>
           </div>
 
-          <div className="mt-6 flex items-end justify-between pb-2">
-            <div>
-              {!purchased && (
-                <div className="display italic text-[12px] text-[var(--ink-soft)] line-through">
-                  原价 ¥{bundle.originalPrice}
+          {/* 推荐加购 */}
+          <div className="px-5 pt-5">
+            <div className="cn-serif text-[14px] text-[var(--ink)] mb-2">常被一起买</div>
+            <div className="grid grid-cols-2 gap-3">
+              {addOns.map((a, i) => (
+                <div key={i} className="rounded-2xl overflow-hidden border" style={{ borderColor: "rgba(60,40,30,0.1)" }}>
+                  <div className="relative" style={{ height: 90 }}>
+                    <img src={a.img} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+                  </div>
+                  <div className="p-2.5">
+                    <div className="cn-serif text-[12px] text-[var(--ink)] truncate">{a.title}</div>
+                    <div className="flex items-baseline gap-1.5 mt-1">
+                      <span className="cn-serif text-[14px] text-[#c44a2a]">¥{a.price}</span>
+                      <span className="display italic text-[10px] text-[var(--ink-soft)] line-through">¥{a.original}</span>
+                    </div>
+                    <div className="display italic text-[10px] text-[var(--ink-soft)] mt-0.5">月售 {a.sold}</div>
+                  </div>
                 </div>
-              )}
-              <div className="cn-serif text-[28px] text-[var(--ink)] leading-none mt-0.5">
-                ¥{bundle.dealPrice}
-              </div>
+              ))}
             </div>
-            {purchased ? (
-              <div
-                className="cn-serif text-[13px] px-5 py-3 rounded-full"
-                style={{ background: "#e3ebda", color: "#3d4a2a" }}
-              >
-                ✓ 已锁定 · 到店出示
-              </div>
-            ) : (
-              <button
-                onClick={onPurchased}
-                className="cn-serif text-[13px] px-5 py-3 rounded-full"
-                style={{ background: "var(--ink)", color: "var(--card)" }}
-              >
-                确认锁定 ¥{bundle.dealPrice}
-              </button>
-            )}
           </div>
 
-          <div className="display italic text-[10px] text-[var(--ink-soft)] text-center mt-3 leading-relaxed">
-            未到的场景将自动退回到原支付方式 · 演示流程，不会真实扣款
+          {/* 评价 */}
+          <div className="px-5 pt-5 pb-6">
+            <div className="flex items-center justify-between mb-2">
+              <div className="cn-serif text-[14px] text-[var(--ink)]">最新评价</div>
+              <span className="cn-serif text-[12px] text-[var(--ink-soft)]">★ {stats.rating} · {stats.reviews} 条</span>
+            </div>
+            <div className="space-y-2">
+              {[
+                { name: "把生活过成诗", text: "三个场景串得很顺，最后一站咖啡馆刚好接住傍晚的光。" },
+                { name: "城南的老周", text: "比单买便宜不少，老城墙那段意外好评，安静得想哭。" },
+              ].map((c, i) => (
+                <div key={i} className="p-3 rounded-2xl" style={{ background: "rgba(60,40,30,0.04)" }}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="cn-serif text-[12px] text-[var(--ink)]">{c.name}</span>
+                    <span className="display italic text-[10px] text-[#c9a84c]">★★★★★</span>
+                  </div>
+                  <div className="cn-serif text-[12px] text-[var(--ink-soft)] leading-relaxed">{c.text}</div>
+                </div>
+              ))}
+            </div>
           </div>
+        </div>
+
+        {/* ============ Sticky CTA ============ */}
+        <div className="shrink-0 px-5 py-3 border-t flex items-center gap-3"
+          style={{ borderColor: "rgba(60,40,30,0.1)", background: "var(--card)" }}>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline gap-1.5">
+              <span className="cn-serif text-[22px] text-[#c44a2a] leading-none">¥{bundle.dealPrice}</span>
+              {!purchased && saved > 0 && (
+                <span className="display italic text-[11px] text-[var(--ink-soft)] line-through">¥{bundle.originalPrice}</span>
+              )}
+            </div>
+            <div className="display italic text-[10px] text-[var(--ink-soft)] mt-1">
+              未到的场景自动退 · 演示流程，不真实扣款
+            </div>
+          </div>
+          {purchased ? (
+            <div className="cn-serif text-[13px] px-5 py-3 rounded-full"
+              style={{ background: "#e3ebda", color: "#3d4a2a" }}>
+              ✓ 已锁定 · 到店出示
+            </div>
+          ) : (
+            <button onClick={onPurchased}
+              className="cn-serif text-[13px] px-5 py-3 rounded-full shadow-lg"
+              style={{ background: "linear-gradient(135deg, #e85d3a, #c44a2a)", color: "#fff" }}>
+              立即锁定 ¥{bundle.dealPrice}
+            </button>
+          )}
         </div>
       </div>
     </div>
