@@ -69,7 +69,11 @@ function JourneyPage() {
         <div className="cn-serif text-[13px] text-[var(--ink-soft)] mt-1">
           「{card.mission}」{city && <span className="display italic text-[11px] ml-1.5">· {city}</span>}
         </div>
-        <p className="cn-serif text-[14px] leading-[1.85] text-[var(--ink)] mt-3 cursor-blink">
+        <p
+          onClick={skipOpening}
+          className="cn-serif text-[14px] leading-[1.85] text-[var(--ink)] mt-3 cursor-blink select-none"
+          title="点击跳过"
+        >
           {openingShown}
         </p>
         <div className="display italic text-[11px] text-[var(--ink-soft)] mt-2">
