@@ -410,61 +410,7 @@ function CardPage() {
         </div>
       )}
 
-      {/* 紧凑的个性化入口：贴在 CTA 上方 */}
-      <div className="mt-8">
-        {!userPhoto ? (
-          <button
-            type="button"
-            onClick={() => navigate({ to: "/me" })}
-            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-full border border-dashed border-[var(--border)] bg-[var(--card)]/60 text-left hover:border-[var(--ink-soft)] transition"
-          >
-            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: "var(--muted)" }}>
-              <span className="text-[14px]">✨</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="cn-serif text-[13px] text-[var(--ink)] truncate">让这张卡变成「你」</div>
-              <div className="cn-serif text-[11px] text-[var(--ink-soft)] truncate">上传一张照片，AI 把你画进去</div>
-            </div>
-            <span className="cn-serif text-[12px] text-[var(--ink-soft)] shrink-0">→</span>
-          </button>
-        ) : (
-          <div className="flex items-center gap-3 px-4 py-2.5 rounded-full border border-[var(--border)] bg-[var(--card)]">
-            <div className="w-9 h-9 rounded-full overflow-hidden border border-[var(--border)] shrink-0">
-              <img src={userPhoto} alt="你" className="w-full h-full object-cover" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="cn-serif text-[13px] text-[var(--ink)] truncate">
-                {personalCover ? "已合成你的卡面" : "把你画进这张卡"}
-              </div>
-              <div className="cn-serif text-[11px] text-[var(--ink-soft)] truncate">
-                {personalCover ? "可重新生成或恢复原卡" : "AI 作画 · 约 10-20 秒"}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handlePersonalize}
-              disabled={personalizing}
-              className="px-3 py-1.5 rounded-full bg-[var(--ink)] text-[var(--card)] cn-serif text-[12px] disabled:opacity-50 shrink-0"
-            >
-              {personalizing ? "作画中…" : personalCover ? "重画" : "✨ 生成"}
-            </button>
-            {personalCover && !personalizing && (
-              <button
-                type="button"
-                onClick={() => { if (card) { clearPersonalizedCard(card.id); setPersonalCover(null); } }}
-                className="cn-serif text-[11px] text-[var(--ink-soft)] underline shrink-0"
-              >
-                原卡
-              </button>
-            )}
-          </div>
-        )}
-        {personalizeErr && (
-          <p className="mt-2 cn-serif text-[12px] text-[oklch(0.55_0.18_25)] text-center">{personalizeErr}</p>
-        )}
-      </div>
-
-      <div className="mt-4 flex flex-col items-center gap-3">
+      <div className="mt-8 flex flex-col items-center gap-3">
         <button onClick={handleStart} disabled={generating} className="btn-soft w-full justify-center">
           {generating ? (
             <span className="cursor-blink">{LOADING_LINES[loadingIdx]}</span>
