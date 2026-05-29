@@ -619,6 +619,78 @@ function SceneSheet({
   );
 }
 
+/* ============ Per-scene deals & recommendations ============ */
+
+function SceneDeals({
+  kind, sceneOrder, meituanHref, bundlePurchased,
+}: {
+  kind: string;
+  sceneOrder: number;
+  meituanHref: string;
+  bundlePurchased?: boolean;
+}) {
+  const deals = useMemo<SceneDeal[]>(() => getSceneDeals(kind, sceneOrder), [kind, sceneOrder]);
+  if (!deals.length) return null;
+  return (
+    <div className="mt-5">
+      <div className="flex items-baseline justify-between mb-2">
+        <div className="display text-[10px] tracking-[0.35em] text-[var(--ink-soft)]">
+          TODAY&apos;S DEALS · 本场优惠
+        </div>
+        <a
+          href={meituanHref}
+          target="_blank"
+          rel="noreferrer"
+          className="display italic text-[11px] text-[var(--ink-soft)] hover:underline underline-offset-4"
+        >
+          更多 →
+        </a>
+      </div>
+      <div className="grid grid-cols-1 gap-2">
+        {deals.map((d, i) => {
+          const save = d.original - d.price;
+          return (
+            <a
+              key={i}
+              href={meituanHref}
+              target="_blank"
+              rel="noreferrer"
+              className="group flex items-center gap-3 p-3 rounded-2xl bg-[var(--card)] border border-[var(--border)] hover:border-[var(--ink-soft)] transition"
+            >
+              <div
+                className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 cn-serif text-[10px] tracking-[0.15em]"
+                style={{
+                  background: "linear-gradient(135deg, oklch(0.95 0.05 60), oklch(0.92 0.07 40))",
+                  color: "oklch(0.45 0.12 50)",
+                }}
+              >
+                {d.tag}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="cn-serif text-[13.5px] text-[var(--ink)] leading-snug truncate">
+                  {d.title}
+                </div>
+                <div className="flex items-baseline gap-2 mt-0.5">
+                  <span className="cn-serif text-[15px] text-[var(--ink)] leading-none">¥{d.price}</span>
+                  <span className="display italic text-[10.5px] text-[var(--ink-soft)] line-through">¥{d.original}</span>
+                  <span className="display italic text-[10px] text-[oklch(0.55_0.18_30)]">省 ¥{save}</span>
+                  <span className="ml-auto display italic text-[10px] text-[var(--ink-soft)]">{d.sold}</span>
+                </div>
+              </div>
+              <span className="cn-serif text-[12px] text-[var(--ink-soft)] group-hover:translate-x-0.5 transition">→</span>
+            </a>
+          );
+        })}
+      </div>
+      {bundlePurchased && (
+        <p className="cn-serif text-[11px] text-[var(--ink-soft)] italic mt-2 text-center">
+          已锁定「今日全程套装」· 本场可直接核销，无需额外下单
+        </p>
+      )}
+    </div>
+  );
+}
+
 /* ============ Interactive hero with collectibles ============ */
 
 type Hotspot = {
