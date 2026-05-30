@@ -193,7 +193,7 @@ function CardPage() {
     setGenerating(true);
     setError(null);
     try {
-      const { data, error } = await supabase.functions.invoke("generate-quest", {
+      const { data, error } = await supabase.functions.invoke("generate-quest-agent", {
         body: {
           card,
           city: city.trim(),
