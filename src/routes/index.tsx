@@ -93,7 +93,7 @@ function Index() {
             我自己选
           </button>
           <button
-            onClick={() => { setMode("tarot"); setTarotRevealed(null); }}
+            onClick={() => { setMode("tarot"); setTarotRevealed(null); setShuffleNonce((n) => n + 1); }}
             className={`px-4 sm:px-5 py-2 rounded-full transition ${mode === "tarot" ? "bg-[var(--card)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"}`}
           >
             让命运决定 ✶
