@@ -15,6 +15,7 @@ function Index() {
   const [mode, setMode] = useState<Mode>("agent");
   const [selected, setSelected] = useState<PersonaCard | null>(null);
   const [tarotRevealed, setTarotRevealed] = useState<PersonaCard | null>(null);
+  const [shuffleNonce, setShuffleNonce] = useState(0);
 
   // 浮动花瓣
   const petals = useMemo(
@@ -92,7 +93,7 @@ function Index() {
             我自己选
           </button>
           <button
-            onClick={() => { setMode("tarot"); setTarotRevealed(null); }}
+            onClick={() => { setMode("tarot"); setTarotRevealed(null); setShuffleNonce((n) => n + 1); }}
             className={`px-4 sm:px-5 py-2 rounded-full transition ${mode === "tarot" ? "bg-[var(--card)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"}`}
           >
             让命运决定 ✶
@@ -111,6 +112,7 @@ function Index() {
       ) : (
         <TarotView
           revealed={tarotRevealed}
+          shuffleNonce={shuffleNonce}
           onDraw={() => setTarotRevealed(drawCard())}
           onAccept={handleAccept}
           onReset={() => setTarotRevealed(null)}
@@ -245,9 +247,10 @@ function MiniCardFront({ card }: { card: PersonaCard }) {
 
 /* -------- 塔罗模式：扇形展开 + 在位翻牌 -------- */
 function TarotView({
-  revealed, onDraw, onAccept, onReset,
+  revealed, shuffleNonce = 0, onDraw, onAccept, onReset,
 }: {
   revealed: PersonaCard | null;
+  shuffleNonce?: number;
   onDraw: () => void;
   onAccept: (c: PersonaCard) => void;
   onReset: () => void;
@@ -302,6 +305,17 @@ function TarotView({
     setTimeout(() => setOrder((arr) => [...arr].sort(() => Math.random() - 0.5)), 380);
     setTimeout(() => setShuffling(false), 760);
   }
+
+  // 切到"让命运决定"或再次点击该 tab 时，自动播一次洗牌动画
+  useEffect(() => {
+    setHover(null);
+    setShuffling(true);
+    const t1 = setTimeout(() => setOrder((arr) => [...arr].sort(() => Math.random() - 0.5)), 380);
+    const t2 = setTimeout(() => setShuffling(false), 820);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shuffleNonce]);
+
 
   function pointerToIndex(clientX: number, clientY: number) {
     const el = fanRef.current;
