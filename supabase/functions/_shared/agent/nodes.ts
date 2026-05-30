@@ -151,15 +151,19 @@ export async function planPois(state: QuestStateType) {
 
   const elapsed = Date.now() - startTime;
 
+  // 安全检查：确保 result 有效
+  const keywords = result?.keywords || [];
+  const candidates = result?.candidates || [];
+
   log("planPois", "✅ Agent 执行完成", {
     elapsed: `${elapsed}ms`,
-    keywordsCount: result.keywords.length,
-    candidatesCount: result.candidates.length,
-    keywords: result.keywords,
+    keywordsCount: keywords.length,
+    candidatesCount: candidates.length,
+    keywords,
   });
 
-  if (result.candidates.length > 0) {
-    log("planPois", "📍 候选 POI 示例", result.candidates.slice(0, 3).map(p => ({
+  if (candidates.length > 0) {
+    log("planPois", "📍 候选 POI 示例", candidates.slice(0, 3).map(p => ({
       name: p.name,
       type: p.type,
       address: p.address?.slice(0, 30),
@@ -167,8 +171,8 @@ export async function planPois(state: QuestStateType) {
   }
 
   return {
-    poiKeywords: result.keywords,
-    poiCandidates: result.candidates,
+    poiKeywords: keywords,
+    poiCandidates: candidates,
   };
 }
 
@@ -255,13 +259,13 @@ export async function generateJourney(state: QuestStateType) {
 
   log("generateJourney", "✅ Agent 执行完成", {
     elapsed: `${elapsed}ms`,
-    scenesCount: journey.scenes.length,
+    scenesCount: journey.scenes?.length || 0,
     emotionArc: journey.emotion_arc,
   });
 
   log("generateJourney", "📖 故事开篇", journey.story_opening?.slice(0, 100) + "...");
 
-  log("generateJourney", "🎬 场景列表", journey.scenes.map(s => ({
+  log("generateJourney", "🎬 场景列表", (journey.scenes || []).map(s => ({
     order: s.order,
     scene_name: s.scene_name,
     location: s.location_name,
