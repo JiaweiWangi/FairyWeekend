@@ -30,64 +30,106 @@ async function rateLimit() {
 }
 
 export const searchPoiTool = tool(
-  async ({ keyword, radius = 3000, lng, lat }) => {
+  async ({ keywords, city, radius = 3000, lng, lat }) => {
     try {
-      // 限流
-      await rateLimit();
+      const allPois: POI[] = [];
+      const errors: string[] = [];
 
-      const url = new URL("https://restapi.amap.com/v3/place/around");
-      url.searchParams.set("key", AMAP_KEY);
-      url.searchParams.set("location", `${lng},${lat}`);
-      url.searchParams.set("keywords", keyword);
-      url.searchParams.set("radius", String(radius));
-      url.searchParams.set("offset", "5");
-      url.searchParams.set("extensions", "base");
+      // 决定搜索模式：有坐标用 place/around，否则用 place/text
+      const useLocationSearch = lng !== undefined && lat !== undefined;
 
-      const res = await fetch(url.toString()).then((r) => r.json());
+      // 循环搜索每个关键词
+      for (const keyword of keywords) {
+        // 限流
+        await rateLimit();
 
-      if (res.status !== "1" || !Array.isArray(res.pois)) {
-        console.warn("POI search failed:", keyword, res);
-
-        // 返回错误信息，让 Agent 知道出错了
-        if (res.info === "CUQPS_HAS_EXCEEDED_THE_LIMIT") {
-          return JSON.stringify({ error: "API限流，请稍后再试或使用其他关键词" });
+        let url: URL;
+        if (useLocationSearch) {
+          // 按坐标搜索
+          url = new URL("https://restapi.amap.com/v3/place/around");
+          url.searchParams.set("key", AMAP_KEY);
+          url.searchParams.set("location", `${lng},${lat}`);
+          url.searchParams.set("keywords", keyword);
+          url.searchParams.set("radius", String(radius));
+        } else {
+          // 按城市搜索
+          url = new URL("https://restapi.amap.com/v3/place/text");
+          url.searchParams.set("key", AMAP_KEY);
+          url.searchParams.set("keywords", keyword);
+          url.searchParams.set("city", city || "北京");
         }
-        return JSON.stringify({ error: `搜索失败: ${res.info || "未知错误"}` });
+        url.searchParams.set("offset", "10");
+        url.searchParams.set("extensions", "base");
+
+        const res = await fetch(url.toString()).then((r) => r.json());
+
+        if (res.status !== "1" || !Array.isArray(res.pois)) {
+          console.warn("POI search failed:", keyword, res);
+
+          if (res.info === "CUQPS_HAS_EXCEEDED_THE_LIMIT") {
+            errors.push(`${keyword}: API限流`);
+          } else {
+            errors.push(`${keyword}: ${res.info || "未知错误"}`);
+          }
+          continue;
+        }
+
+        const pois: POI[] = res.pois
+          .slice(0, 8)
+          .map((p: Record<string, unknown>) => ({
+            name: String(p.name ?? ""),
+            type: String(p.type ?? "").split(";")[0] || "",
+            address: String(p.address ?? ""),
+            location: String(p.location ?? ""),
+            distance: p.distance ? String(p.distance) : undefined,
+          }))
+          .filter((p: POI) => p.name);
+
+        allPois.push(...pois);
       }
 
-      const pois: POI[] = res.pois
-        .slice(0, 5)
-        .map((p: Record<string, unknown>) => ({
-          name: String(p.name ?? ""),
-          type: String(p.type ?? "").split(";")[0] || "",
-          address: String(p.address ?? ""),
-          location: String(p.location ?? ""),
-          distance: p.distance ? String(p.distance) : undefined,
-        }))
-        .filter((p: POI) => p.name);
+      // 去重（按 location）
+      const seen = new Set<string>();
+      const uniquePois = allPois.filter((p) => {
+        if (seen.has(p.location)) return false;
+        seen.add(p.location);
+        return true;
+      });
 
-      // 返回 JSON 字符串，避免通义千问不支持复杂类型
-      return JSON.stringify(pois);
+      // 返回结果
+      const result = {
+        pois: uniquePois,
+        searchedKeywords: keywords,
+        searchMode: useLocationSearch ? "around" : "text",
+        city: city || "北京",
+        errors: errors.length > 0 ? errors : undefined,
+      };
+
+      return JSON.stringify(result);
     } catch (e) {
-      console.warn("search_poi tool error:", keyword, e);
-      return "[]";
+      console.warn("search_poi tool error:", keywords, e);
+      return JSON.stringify({ pois: [], error: String(e) });
     }
   },
   {
     name: "search_poi",
     description:
-      "搜索附近的兴趣点（POI）。返回真实地点列表，包含名称、类型、地址。用于寻找咖啡馆、公园、书店等具体场所。",
+      "批量搜索兴趣点（POI）。支持按坐标搜索或按城市名搜索。返回所有地点列表。",
     schema: z.object({
-      keyword: z
+      keywords: z
+        .array(z.string())
+        .describe("搜索关键词数组，如：['小馆子', '本地菜', '老字号']"),
+      city: z
         .string()
-        .describe("搜索关键词，如：独立咖啡馆、小众公园、独立书店、花店"),
+        .optional()
+        .describe("城市名称，如：北京、上海。无坐标时必填"),
       radius: z
         .number()
         .optional()
         .default(3000)
-        .describe("搜索半径（米），默认3000米"),
-      lng: z.number().describe("中心点经度（GCJ02坐标）"),
-      lat: z.number().describe("中心点纬度（GCJ02坐标）"),
+        .describe("搜索半径（米），仅按坐标搜索时有效"),
+      lng: z.number().optional().describe("中心点经度（GCJ02坐标）"),
+      lat: z.number().optional().describe("中心点纬度（GCJ02坐标）"),
     }),
   }
 );

@@ -35,7 +35,7 @@ function log(message: string, data?: unknown) {
 export const POI_PLANNER_PROMPT = `你是一位城市探索规划师。
 
 ## 目标
-根据用户的人设卡和偏好，找到 5-10 个适合的城市场景候选地点。
+根据用户的人设卡和偏好，找到 15 个左右适合的城市场景候选地点。
 
 ## 专业背景
 - 深谙城市肌理，擅长从人的情绪和身份出发找到有故事的角落
@@ -46,14 +46,13 @@ export const POI_PLANNER_PROMPT = `你是一位城市探索规划师。
 1. 分析人设的 identity、mood、mission，推断适合的地点类型
 2. 考虑玩家的历史偏好（如果有）
 3. 根据稀有度调整地点隐秘程度
-4. 调用 search_poi 工具搜索（调用 2-4 次不同关键词即可）
+4. 调用 search_poi 工具，一次传入 3-5 个关键词数组（如 ['独立咖啡馆', '小众公园', '独立书店', '花店', '艺术空间']）
 5. 完成搜索后，直接回复用户，列出候选地点
 
 ## 停止条件
-当完成以下步骤后，必须停止并回复用户：
-- 已调用 search_poi 工具 2-4 次
-- 已收集到足够的地点信息
-- 不要继续分析或追问，直接给出结果
+- 调用 search_poi 工具 1 次即可（传入多个关键词）
+- 收集到足够的地点信息后直接给出结果
+- 不要多次调用工具，不要继续分析或追问
 
 ## 输出格式
 完成搜索后，用以下格式回复：
@@ -107,7 +106,8 @@ export async function runPOIPlanner(input: POIPlannerInput): Promise<POIPlannerO
 
   log("🚀 开始执行 POI 规划");
 
-  const coords = gcjCoords || { lng: 121.4737, lat: 31.2304 }; // 默认上海
+  // 不再用默认坐标，让工具根据城市搜索
+  const hasCoords = gcjCoords !== undefined;
 
   // 构建用户提示
   const userPrompt = `请为以下人设规划今天的城市探索路线：
@@ -121,7 +121,7 @@ export async function runPOIPlanner(input: POIPlannerInput): Promise<POIPlannerO
 **环境信息**
 - 城市：${city}
 - 时间段：${timePeriod}
-- 坐标：经度 ${coords.lng}，纬度 ${coords.lat}
+${hasCoords ? `- 坐标：经度 ${gcjCoords!.lng}，纬度 ${gcjCoords!.lat}` : "- 无坐标，请按城市名搜索"}
 
 ${playerProfile ? `**玩家偏好**
 - 画像：${playerProfile.profile}
@@ -135,7 +135,8 @@ ${playerProfile ? `**玩家偏好**
     identity: card.identity,
     city,
     hasProfile: !!playerProfile,
-    coords,
+    hasCoords,
+    coords: gcjCoords,
   });
 
   try {
@@ -151,7 +152,7 @@ ${playerProfile ? `**玩家偏好**
         messages: [{ role: "user", content: userPrompt }],
       },
       {
-        recursionLimit: 50, // 增加限制，但 prompt 已优化应该不会达到
+        recursionLimit: 10, // 一次调用即可，降低限制
       }
     );
 
@@ -250,14 +251,22 @@ function extractPOIsFromResult(result: unknown): POI[] {
   const messages = (result as { messages: unknown[] }).messages || [];
 
   for (const msg of messages) {
-    // 检查是否是 ToolMessage
     const content = (msg as { content: unknown }).content;
 
-    // 工具现在返回 JSON 字符串
     if (typeof content === "string") {
       try {
         const parsed = JSON.parse(content);
-        if (Array.isArray(parsed)) {
+
+        // 新格式：{ pois: POI[], searchedKeywords: string[] }
+        if (parsed && Array.isArray(parsed.pois)) {
+          for (const item of parsed.pois) {
+            if (item && typeof item === "object" && "name" in item && "location" in item) {
+              pois.push(item as POI);
+            }
+          }
+        }
+        // 兼容旧格式：直接是数组
+        else if (Array.isArray(parsed)) {
           for (const item of parsed) {
             if (item && typeof item === "object" && "name" in item && "location" in item) {
               pois.push(item as POI);
@@ -268,7 +277,7 @@ function extractPOIsFromResult(result: unknown): POI[] {
         // 解析失败，跳过
       }
     }
-    // 兼容旧格式（数组）
+    // 兼容数组格式
     else if (Array.isArray(content)) {
       for (const item of content) {
         if (item && typeof item === "object" && "name" in item && "location" in item) {
