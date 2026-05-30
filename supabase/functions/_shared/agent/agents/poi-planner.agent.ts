@@ -106,7 +106,8 @@ export async function runPOIPlanner(input: POIPlannerInput): Promise<POIPlannerO
 
   log("🚀 开始执行 POI 规划");
 
-  const coords = gcjCoords || { lng: 121.4737, lat: 31.2304 }; // 默认上海
+  // 不再用默认坐标，让工具根据城市搜索
+  const hasCoords = gcjCoords !== undefined;
 
   // 构建用户提示
   const userPrompt = `请为以下人设规划今天的城市探索路线：
@@ -120,7 +121,7 @@ export async function runPOIPlanner(input: POIPlannerInput): Promise<POIPlannerO
 **环境信息**
 - 城市：${city}
 - 时间段：${timePeriod}
-- 坐标：经度 ${coords.lng}，纬度 ${coords.lat}
+${hasCoords ? `- 坐标：经度 ${gcjCoords!.lng}，纬度 ${gcjCoords!.lat}` : "- 无坐标，请按城市名搜索"}
 
 ${playerProfile ? `**玩家偏好**
 - 画像：${playerProfile.profile}
@@ -134,7 +135,8 @@ ${playerProfile ? `**玩家偏好**
     identity: card.identity,
     city,
     hasProfile: !!playerProfile,
-    coords,
+    hasCoords,
+    coords: gcjCoords,
   });
 
   try {

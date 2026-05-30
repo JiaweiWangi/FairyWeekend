@@ -30,22 +30,35 @@ async function rateLimit() {
 }
 
 export const searchPoiTool = tool(
-  async ({ keywords, radius = 3000, lng, lat }) => {
+  async ({ keywords, city, radius = 3000, lng, lat }) => {
     try {
       const allPois: POI[] = [];
       const errors: string[] = [];
+
+      // 决定搜索模式：有坐标用 place/around，否则用 place/text
+      const useLocationSearch = lng !== undefined && lat !== undefined;
 
       // 循环搜索每个关键词
       for (const keyword of keywords) {
         // 限流
         await rateLimit();
 
-        const url = new URL("https://restapi.amap.com/v3/place/around");
-        url.searchParams.set("key", AMAP_KEY);
-        url.searchParams.set("location", `${lng},${lat}`);
-        url.searchParams.set("keywords", keyword);
-        url.searchParams.set("radius", String(radius));
-        url.searchParams.set("offset", "5");
+        let url: URL;
+        if (useLocationSearch) {
+          // 按坐标搜索
+          url = new URL("https://restapi.amap.com/v3/place/around");
+          url.searchParams.set("key", AMAP_KEY);
+          url.searchParams.set("location", `${lng},${lat}`);
+          url.searchParams.set("keywords", keyword);
+          url.searchParams.set("radius", String(radius));
+        } else {
+          // 按城市搜索
+          url = new URL("https://restapi.amap.com/v3/place/text");
+          url.searchParams.set("key", AMAP_KEY);
+          url.searchParams.set("keywords", keyword);
+          url.searchParams.set("city", city || "北京");
+        }
+        url.searchParams.set("offset", "10");
         url.searchParams.set("extensions", "base");
 
         const res = await fetch(url.toString()).then((r) => r.json());
@@ -87,6 +100,8 @@ export const searchPoiTool = tool(
       const result = {
         pois: uniquePois,
         searchedKeywords: keywords,
+        searchMode: useLocationSearch ? "around" : "text",
+        city: city || "北京",
         errors: errors.length > 0 ? errors : undefined,
       };
 
@@ -99,18 +114,22 @@ export const searchPoiTool = tool(
   {
     name: "search_poi",
     description:
-      "批量搜索附近的兴趣点（POI）。支持一次传入多个关键词，返回所有地点列表。用于寻找咖啡馆、公园、书店等具体场所。",
+      "批量搜索兴趣点（POI）。支持按坐标搜索或按城市名搜索。返回所有地点列表。",
     schema: z.object({
       keywords: z
         .array(z.string())
-        .describe("搜索关键词数组，如：['独立咖啡馆', '小众公园', '独立书店', '花店']"),
+        .describe("搜索关键词数组，如：['小馆子', '本地菜', '老字号']"),
+      city: z
+        .string()
+        .optional()
+        .describe("城市名称，如：北京、上海。无坐标时必填"),
       radius: z
         .number()
         .optional()
         .default(3000)
-        .describe("搜索半径（米），默认3000米"),
-      lng: z.number().describe("中心点经度（GCJ02坐标）"),
-      lat: z.number().describe("中心点纬度（GCJ02坐标）"),
+        .describe("搜索半径（米），仅按坐标搜索时有效"),
+      lng: z.number().optional().describe("中心点经度（GCJ02坐标）"),
+      lat: z.number().optional().describe("中心点纬度（GCJ02坐标）"),
     }),
   }
 );
