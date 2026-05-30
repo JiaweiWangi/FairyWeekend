@@ -136,7 +136,7 @@ ${candidatesText}
   const llmWithSchema = storyGenerator.withStructuredOutput(journeySchema);
 
   try {
-    log("⚡ 调用 LLM (流式输出)...");
+    log("⚡ 调用 LLM...");
 
     const startTime = Date.now();
     const messages = [
@@ -144,50 +144,11 @@ ${candidatesText}
       { role: "user", content: userPrompt },
     ];
 
-    // 先流式输出，显示进度
-    let fullContent = "";
-    let lastLogTime = 0;
-
-    for await (const chunk of await storyGenerator.stream(messages)) {
-      const content = chunk.content;
-      if (typeof content === "string") {
-        fullContent += content;
-        // 每 500ms 打印一次进度
-        const now = Date.now();
-        if (now - lastLogTime > 500) {
-          log(`📝 生成中... (${fullContent.length} 字符)`);
-          lastLogTime = now;
-        }
-      }
-    }
-
-    log(`📝 生成完成，共 ${fullContent.length} 字符`);
+    // 直接使用 withStructuredOutput，避免流式输出的兼容性问题
+    const result = await llmWithSchema.invoke(messages);
 
     const elapsed = Date.now() - startTime;
     log(`⏱️ LLM 执行耗时: ${elapsed}ms`);
-
-    // 解析 JSON
-    let result;
-    try {
-      // 清理可能的 markdown 代码块
-      let cleaned = fullContent.trim();
-      if (cleaned.startsWith("```json")) {
-        cleaned = cleaned.slice(7);
-      } else if (cleaned.startsWith("```")) {
-        cleaned = cleaned.slice(3);
-      }
-      if (cleaned.endsWith("```")) {
-        cleaned = cleaned.slice(0, -3);
-      }
-      cleaned = cleaned.trim();
-
-      result = JSON.parse(cleaned);
-    } catch (parseError) {
-      log(`❌ JSON 解析失败，尝试用 withStructuredOutput 重试...`);
-      // 回退到 withStructuredOutput
-      const llmWithSchema = storyGenerator.withStructuredOutput(journeySchema);
-      result = await llmWithSchema.invoke(messages);
-    }
 
     log("✅ 生成完成", {
       scenesCount: result.scenes?.length || 0,
