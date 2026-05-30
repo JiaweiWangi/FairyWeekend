@@ -15,6 +15,7 @@ function Index() {
   const [mode, setMode] = useState<Mode>("agent");
   const [selected, setSelected] = useState<PersonaCard | null>(null);
   const [tarotRevealed, setTarotRevealed] = useState<PersonaCard | null>(null);
+  const [shuffleNonce, setShuffleNonce] = useState(0);
 
   // 浮动花瓣
   const petals = useMemo(
