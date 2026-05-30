@@ -247,9 +247,10 @@ function MiniCardFront({ card }: { card: PersonaCard }) {
 
 /* -------- 塔罗模式：扇形展开 + 在位翻牌 -------- */
 function TarotView({
-  revealed, onDraw, onAccept, onReset,
+  revealed, shuffleNonce = 0, onDraw, onAccept, onReset,
 }: {
   revealed: PersonaCard | null;
+  shuffleNonce?: number;
   onDraw: () => void;
   onAccept: (c: PersonaCard) => void;
   onReset: () => void;
