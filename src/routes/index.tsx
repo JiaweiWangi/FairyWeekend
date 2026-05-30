@@ -306,6 +306,17 @@ function TarotView({
     setTimeout(() => setShuffling(false), 760);
   }
 
+  // 切到"让命运决定"或再次点击该 tab 时，自动播一次洗牌动画
+  useEffect(() => {
+    setHover(null);
+    setShuffling(true);
+    const t1 = setTimeout(() => setOrder((arr) => [...arr].sort(() => Math.random() - 0.5)), 380);
+    const t2 = setTimeout(() => setShuffling(false), 820);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shuffleNonce]);
+
+
   function pointerToIndex(clientX: number, clientY: number) {
     const el = fanRef.current;
     if (!el) return null;
