@@ -5,11 +5,15 @@
  * 使用方式：
  *   import { createLLM } from "./langchain-client.ts";
  *   const llm = createLLM();
- *   const llmWithSchema = llm.withStructuredOutput(schema);
- *   const result = await llmWithSchema.invoke(messages);
  *
  * 环境变量：
- *   LLM_PROVIDER=openai
+ *   LLM_PROVIDER=lovable (默认) | openai
+ *
+ *   # Lovable (默认)
+ *   LOVABLE_API_KEY=xxx
+ *   LOVABLE_MODEL=google/gemini-2.5-flash (可选)
+ *
+ *   # OpenAI / 第三方
  *   OPENAI_API_KEY=xxx
  *   OPENAI_BASE_URL=https://... (可选)
  *   OPENAI_MODEL=gpt-4o-mini (可选)
@@ -32,34 +36,69 @@ const getEnv = (key: string): string | undefined => {
 };
 
 // 供应商类型
-export type LLMProvider = "openai" | "deepseek" | "qwen";
+export type LLMProvider = "lovable" | "openai";
 
 /**
  * 创建 LangChain 兼容的 LLM 客户端
  */
 export function createLLM(provider?: LLMProvider): BaseChatModel {
-  const selectedProvider = provider || (getEnv("LLM_PROVIDER") as LLMProvider) || "openai";
+  const selectedProvider = provider || (getEnv("LLM_PROVIDER") as LLMProvider) || "lovable";
 
   console.log(`[LLM] 使用供应商: ${selectedProvider}`);
 
+  if (selectedProvider === "lovable") {
+    return createLovableLLM();
+  }
+
+  return createOpenAILLM();
+}
+
+/**
+ * 创建 Lovable AI Gateway 客户端
+ */
+function createLovableLLM(): BaseChatModel {
+  const apiKey = getEnv("LOVABLE_API_KEY");
+  const model = getEnv("LOVABLE_MODEL") || "google/gemini-2.5-flash";
+
+  if (!apiKey) {
+    console.warn("[LLM] 警告: 未配置 LOVABLE_API_KEY 环境变量");
+  }
+
+  console.log(`[LLM] Model: ${model}`);
+  console.log(`[LLM] Base URL: https://ai.gateway.lovable.dev/v1`);
+
+  return new ChatOpenAI({
+    apiKey,
+    configuration: {
+      baseURL: "https://ai.gateway.lovable.dev/v1",
+    },
+    model,
+    temperature: 0.7,
+  });
+}
+
+/**
+ * 创建 OpenAI / 第三方兼容客户端
+ */
+function createOpenAILLM(): BaseChatModel {
   const apiKey = getEnv("OPENAI_API_KEY");
   const baseUrl = getEnv("OPENAI_BASE_URL");
   const model = getEnv("OPENAI_MODEL") || "gpt-4o-mini";
+
+  if (!apiKey) {
+    console.warn("[LLM] 警告: 未配置 OPENAI_API_KEY 环境变量");
+  }
 
   console.log(`[LLM] Model: ${model}`);
   if (baseUrl) {
     console.log(`[LLM] Base URL: ${baseUrl}`);
   }
 
-  // 统一使用 ChatOpenAI（支持 OpenAI 协议）
   return new ChatOpenAI({
     apiKey,
     configuration: baseUrl ? { baseURL: baseUrl } : undefined,
     model,
     temperature: 0.7,
-    modelKwargs: {
-      enable_thinking: false,
-    },
   });
 }
 
