@@ -178,7 +178,7 @@
 }
 .btn-ghost:hover { color: var(--ink); border-color: var(--ink-soft); }
 
-/* === Card back (before flip) === */
+/* === Card back (legacy, used elsewhere) === */
 .card-back {
   background:
     radial-gradient(circle at 30% 20%, oklch(0.96 0.04 30 / 0.7), transparent 50%),
@@ -293,19 +293,71 @@
   50%      { opacity: 1;   transform: scale(1.05); }
 }
 
-.tarot-shuffle {
-  animation: tarot-shuffle 1.3s cubic-bezier(0.4, 0, 0.2, 1) both;
+/* === Tarot card (fan + flip) === */
+.tarot-flip {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  border-radius: 10px;
+  will-change: transform;
 }
-@keyframes tarot-shuffle {
-  0%   { transform: translateX(0) rotate(0deg); }
-  25%  { transform: translateX(-60px) rotate(-8deg) translateY(-10px); }
-  55%  { transform: translateX(70px) rotate(10deg) translateY(-6px); }
-  80%  { transform: translateX(-15px) rotate(-3deg); }
-  100% { transform: translateX(0) rotate(0deg); }
+.tarot-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
+.tarot-back-face {
+  background:
+    radial-gradient(ellipse at 50% 38%, oklch(0.92 0.06 18) 0%, oklch(0.84 0.085 15) 55%, oklch(0.74 0.09 12) 100%);
+  border: 1px solid oklch(0.86 0.09 85 / 0.7);
+  box-shadow:
+    inset 0 0 0 1px oklch(1 0 0 / 0.35),
+    inset 0 -20px 40px -10px oklch(0.65 0.08 10 / 0.35);
+}
+.tarot-back-frame {
+  position: absolute; inset: 5px;
+  border: 1px solid oklch(0.86 0.09 85 / 0.85);
+  border-radius: 7px;
+  background:
+    radial-gradient(circle at 50% 50%, oklch(0.96 0.06 80 / 0.35) 0%, transparent 60%),
+    repeating-linear-gradient(45deg, transparent 0 6px, oklch(0.86 0.09 85 / 0.10) 6px 7px),
+    repeating-linear-gradient(-45deg, transparent 0 6px, oklch(0.86 0.09 85 / 0.10) 6px 7px);
+  box-shadow:
+    inset 0 0 0 1px oklch(1 0 0 / 0.25),
+    inset 0 0 16px oklch(0.86 0.09 85 / 0.25);
+}
+.tarot-back-mark {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-display);
+  font-size: 30px;
+  color: oklch(0.55 0.12 50 / 0.95);
+  text-shadow:
+    0 0 8px oklch(0.95 0.10 85 / 0.7),
+    0 0 18px oklch(0.86 0.13 80 / 0.45);
+  letter-spacing: 0.1em;
+  line-height: 1;
+}
+.tarot-back-corner {
+  position: absolute;
+  font-family: var(--font-display);
+  font-size: 10px;
+  color: oklch(0.55 0.10 45 / 0.75);
+  line-height: 1;
+}
+.tarot-back-corner.top-left     { top: 10px;    left: 10px; }
+.tarot-back-corner.top-right    { top: 10px;    right: 10px; }
+.tarot-back-corner.bottom-left  { bottom: 10px; left: 10px; }
+.tarot-back-corner.bottom-right { bottom: 10px; right: 10px; }
 
-.tarot-fly {
-  box-shadow: 0 30px 70px -20px rgba(0,0,0,0.55), 0 0 40px oklch(0.92 0.13 80 / 0.5) !important;
+.tarot-front-face {
+  transform: rotateY(180deg);
+  border-radius: 16px;
 }
 
 /* === Scene interactive hotspots === */

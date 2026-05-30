@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PERSONA_CARDS, RARITY_LABEL } from "@/lib/cards";
 import type { PersonaCard } from "@/lib/persona-types";
+import { pickEmoji } from "@/lib/text-emoji";
 
 /* -------- 卡片标签映射（用于快速匹配推荐） -------- */
 const CARD_TAGS: Record<string, string[]> = {
@@ -12,6 +13,8 @@ const CARD_TAGS: Record<string, string[]> = {
   card_006: ["感伤", "独处", "复古", "怀旧"],
   card_007: ["感伤", "怀旧", "记录", "随性"],
   card_008: ["好奇", "热闹", "冒险", "陌生"],
+  card_009: ["热闹", "治愈", "随性"],
+  card_010: ["复古", "安静", "怀旧", "独处"],
 };
 
 type Step = "mood" | "duration" | "vibe" | "extra" | "result";
@@ -46,6 +49,7 @@ interface ChatMsg {
   chips?: { label: string; tag: string }[];
   step?: Step;
   freeInput?: boolean;
+  multi?: boolean;
   card?: PersonaCard;
 }
 
@@ -75,9 +79,80 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
   const [recIdx, setRecIdx] = useState(0);
+  const [listening, setListening] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [picked, setPicked] = useState<number[]>([]);
+  const recognitionRef = useRef<any>(null);
+  const manualStopRef = useRef(false);
+  const baselineRef = useRef("");
   const ranking = useRef<PersonaCard[]>([]);
   const idRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const voiceSupported =
+    typeof window !== "undefined" &&
+    ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+
+  function toggleVoice() {
+    if (!voiceSupported) {
+      setVoiceError("当前浏览器不支持语音输入");
+      return;
+    }
+    if (listening) {
+      manualStopRef.current = true;
+      recognitionRef.current?.stop();
+      return;
+    }
+    try {
+      const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const rec = new SR();
+      rec.lang = "zh-CN";
+      rec.interimResults = true;
+      rec.continuous = true;
+      // 以当前输入框内容为基线，新识别的内容追加在后面
+      baselineRef.current = input ? input.replace(/\s+$/, "") + " " : "";
+      manualStopRef.current = false;
+      rec.onresult = (e: any) => {
+        let text = "";
+        for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
+        setInput(baselineRef.current + text);
+      };
+      rec.onerror = (e: any) => {
+        if (e.error === "no-speech" || e.error === "aborted") return; // 忽略静音/中断，让 onend 自动重启
+        setVoiceError(e.error === "not-allowed" ? "麦克风权限被拒绝" : "语音识别失败");
+        manualStopRef.current = true;
+        setListening(false);
+      };
+      rec.onend = () => {
+        // 把刚才识别到的最终文本固化进基线，下次继续追加
+        baselineRef.current = (document.activeElement as HTMLInputElement)?.value
+          ? baselineRef.current // 占位，下面用 setInput 的最新值更可靠
+          : baselineRef.current;
+        // 用回调拿最新 input 作为新的基线
+        setInput((cur) => {
+          baselineRef.current = cur ? cur.replace(/\s+$/, "") + " " : "";
+          return cur;
+        });
+        if (manualStopRef.current) {
+          setListening(false);
+          return;
+        }
+        // 用户没手动停止 —— 自动重启，扛住停顿
+        try {
+          rec.start();
+        } catch {
+          setListening(false);
+        }
+      };
+      recognitionRef.current = rec;
+      setVoiceError(null);
+      setListening(true);
+      rec.start();
+    } catch {
+      setVoiceError("无法开启语音输入");
+      setListening(false);
+    }
+  }
 
   const nextId = () => ++idRef.current;
 
@@ -100,8 +175,9 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
     initedRef.current = true;
     // 首屏立即给出全部初始内容，不让用户等
     push({ who: "agent", text: "嗨，我是今日小说的策划助理 ❦" }, 0);
-    push({ who: "agent", text: "今天想成为谁？先告诉我——你现在大概是什么状态？" }, 0);
-    push({ who: "agent", chips: MOOD_CHIPS, step: "mood", freeInput: true }, 0);
+    push({ who: "agent", text: "这个周末，你想过成什么样？随便讲就行——\n· 此刻的状态（累瘫了 / 有点闷 / 想撒野…）\n· 想待在什么环境（窝在房间 / 想出门晒太阳 / 找个安静角落…）\n· 想和谁、做点什么、或者只是想被什么样的氛围包住\n\n想到哪说到哪，下面也可以点气泡让我一步步带你选。" }, 0);
+    push({ who: "agent", text: "要不先从这个开始：你现在大概是什么状态？（可多选）" }, 0);
+    push({ who: "agent", chips: MOOD_CHIPS, step: "mood", freeInput: true, multi: true }, 0);
   }, []);
 
   // 自动滚到底
@@ -113,7 +189,7 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
     // 把这条消息的 chips 标记为已选并隐藏（通过移除 chips 字段）
     setMsgs((m) =>
       m.map((x) =>
-        x.step === step && x.chips ? { ...x, chips: undefined, freeInput: false } : x,
+        x.step === step && x.chips ? { ...x, chips: undefined, freeInput: false, multi: false } : x,
       ),
     );
     // 显示用户气泡
@@ -123,10 +199,28 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
     advance(step, newTags, freeText);
   }
 
+  function handleMultiSubmit(step: Step, chips: { label: string; tag: string }[]) {
+    if (picked.length === 0) return;
+    const chosen = picked.map((i) => chips[i]);
+    const label = chosen.map((c) => c.label).join("、");
+    const addTags = chosen.map((c) => c.tag).filter(Boolean);
+    setMsgs((m) =>
+      m.map((x) =>
+        x.step === step && x.chips ? { ...x, chips: undefined, freeInput: false, multi: false } : x,
+      ),
+    );
+    setMsgs((m) => [...m, { id: nextId(), who: "user", text: label }]);
+    const newTags = [...tags, ...addTags];
+    setTags(newTags);
+    setPicked([]);
+    advance(step, newTags, freeText);
+  }
+
   function handleFreeSubmit(currentStep: Step) {
     const text = input.trim();
     if (!text) return;
     setInput("");
+    setPicked([]);
     setMsgs((m) =>
       m.map((x) =>
         x.step === currentStep && x.chips ? { ...x, chips: undefined, freeInput: false } : x,
@@ -143,13 +237,32 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
       push({ who: "agent", text: "好嘞。今天大概有多少时间？" }, 250);
       push({ who: "agent", chips: DURATION_CHIPS, step: "duration", freeInput: false }, 450);
     } else if (fromStep === "duration") {
-      push({ who: "agent", text: "想要的氛围是哪种？" }, 250);
-      push({ who: "agent", chips: VIBE_CHIPS, step: "vibe", freeInput: false }, 450);
+      push({ who: "agent", text: "想要的氛围是哪种？（可多选）" }, 250);
+      push({ who: "agent", chips: VIBE_CHIPS, step: "vibe", freeInput: false, multi: true }, 450);
     } else if (fromStep === "vibe") {
       push({ who: "agent", text: "想再用一句话补充吗？（可选）" }, 250);
       push({ who: "agent", chips: [{ label: "不用了，给我推荐吧 →", tag: "" }], step: "extra", freeInput: true }, 450);
     } else if (fromStep === "extra") {
       finalize(curTags, curText);
+    }
+  }
+
+  function presentCard(card: PersonaCard, intro: string) {
+    push({ who: "agent", text: intro }, 250);
+    push({ who: "agent", card, step: "result" }, 500);
+    if (card.story) {
+      const storyEmoji = pickEmoji(card.story) || pickEmoji(card.mood) || "✨";
+      push({ who: "agent", text: `${storyEmoji}「${card.identity}」\n\n${card.story}` }, 900);
+    }
+    if (card.routes && card.routes.length) {
+      const numIcons = ["①", "②", "③", "④", "⑤"];
+      const lines = card.routes
+        .map((r, i) => {
+          const e = pickEmoji(r) || "🌿";
+          return `${numIcons[i] || `${i + 1}.`} ${r} ${e}`;
+        })
+        .join("\n");
+      push({ who: "agent", text: `🗺️ 如果走进 TA 的一天，可能会是这样——\n\n${lines}\n\n💌 要不要就选 TA？` }, 1300);
     }
   }
 
@@ -159,8 +272,7 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
       const ranked = scoreCards(curTags, curText);
       ranking.current = ranked;
       setRecIdx(0);
-      push({ who: "agent", text: "为你挑了这张卡 ✦" }, 250);
-      push({ who: "agent", card: ranked[0], step: "result" }, 500);
+      presentCard(ranked[0], "为你挑了这张卡 ✦");
     }, 600);
   }
 
@@ -168,8 +280,7 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
     const next = (recIdx + 1) % ranking.current.length;
     setRecIdx(next);
     setMsgs((m) => [...m, { id: nextId(), who: "user", text: "再换一张" }]);
-    push({ who: "agent", text: "好，这张如何？" }, 200);
-    push({ who: "agent", card: ranking.current[next], step: "result" }, 450);
+    presentCard(ranking.current[next], "好，这张如何？");
   }
 
   // 找到最后一条等待输入的 agent 消息
@@ -186,7 +297,7 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
 
       <div
         ref={scrollRef}
-        className="bg-[var(--muted)]/40 rounded-3xl border border-[var(--border)] p-4 sm:p-5 max-h-[62vh] overflow-y-auto"
+        className="bg-[var(--muted)]/40 rounded-3xl border border-[var(--border)] p-4 sm:p-5"
       >
         <div className="flex flex-col gap-3">
           {msgs.map((m) => (
@@ -202,16 +313,41 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
 
           {/* chips */}
           {lastInteractive?.chips && (
-            <div className="flex flex-wrap gap-2 mt-1 pl-1">
-              {lastInteractive.chips.map((c, i) => (
-                <button
-                  key={i}
-                  className="chip"
-                  onClick={() => handleChip(lastInteractive.step!, c.label, c.tag)}
-                >
-                  {c.label}
-                </button>
-              ))}
+            <div className="mt-1 pl-1">
+              <div className="flex flex-wrap gap-2">
+                {lastInteractive.chips.map((c, i) => {
+                  const isPicked = lastInteractive.multi && picked.includes(i);
+                  return (
+                    <button
+                      key={i}
+                      className={`chip ${isPicked ? "is-active" : ""}`}
+                      onClick={() => {
+                        if (lastInteractive.multi) {
+                          setPicked((p) => (p.includes(i) ? p.filter((x) => x !== i) : [...p, i]));
+                        } else {
+                          handleChip(lastInteractive.step!, c.label, c.tag);
+                        }
+                      }}
+                    >
+                      {isPicked && <span className="mr-1">✓</span>}{c.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {lastInteractive.multi && (
+                <div className="flex flex-wrap items-center gap-2 mt-3">
+                  <button
+                    type="button"
+                    disabled={picked.length === 0}
+                    onClick={() => handleMultiSubmit(lastInteractive.step!, lastInteractive.chips!)}
+                    className="px-4 py-2 rounded-full bg-[var(--ink)] text-[var(--card)] cn-serif text-[13px] disabled:opacity-40 transition"
+                  >
+                    确定（{picked.length}）
+                  </button>
+                  <span className="cn-serif text-[11px] text-[var(--ink-soft)] leading-snug">可以选多个，或者直接打字也行</span>
+                </div>
+              )}
+
             </div>
           )}
 
@@ -219,23 +355,59 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
           {lastInteractive?.freeInput && (
             <form
               onSubmit={(e) => { e.preventDefault(); handleFreeSubmit(lastInteractive.step!); }}
-              className="mt-2 flex gap-2"
+              className="mt-3 flex flex-col gap-2"
             >
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="也可以自己说一句…"
-                className="flex-1 px-4 py-2.5 rounded-full bg-[var(--card)] border border-[var(--border)] cn-serif text-[14px] text-[var(--ink)] placeholder:text-[var(--ink-soft)]"
-              />
-              <button
-                type="submit"
-                disabled={!input.trim()}
-                className="px-4 py-2.5 rounded-full bg-[var(--ink)] text-[var(--card)] cn-serif text-[13px] disabled:opacity-40"
-              >
-                发送
-              </button>
+              <div className="rounded-full sm:rounded-3xl bg-[var(--card)] border border-[var(--border)] focus-within:border-[var(--primary)] focus-within:shadow-[0_6px_18px_-12px_rgba(0,0,0,0.2)] transition shadow-sm flex items-end gap-1.5 px-2 py-1.5">
+                {voiceSupported && (
+                  <button
+                    type="button"
+                    onClick={toggleVoice}
+                    aria-label={listening ? "停止语音" : "开始语音输入"}
+                    className={`w-9 h-9 shrink-0 rounded-full border text-[14px] flex items-center justify-center transition self-end ${
+                      listening
+                        ? "bg-[oklch(0.6_0.18_25)] text-white border-transparent animate-pulse"
+                        : "bg-[var(--background)] border-[var(--border)] text-[var(--ink)] hover:border-[var(--primary)]"
+                    }`}
+                  >
+                    🎤
+                  </button>
+                )}
+                <textarea
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      if (input.trim()) handleFreeSubmit(lastInteractive.step!);
+                    }
+                  }}
+                  rows={1}
+                  placeholder={
+                    listening
+                      ? "听着呢…说吧"
+                      : "聊聊你的状态…"
+                  }
+                  className="flex-1 min-w-0 px-1 py-2 bg-transparent cn-serif text-[15px] leading-snug text-[var(--ink)] placeholder:text-[var(--ink-soft)] resize-none outline-none min-h-[36px] max-h-[140px]"
+                />
+                <button
+                  type="submit"
+                  disabled={!input.trim()}
+                  aria-label="发送"
+                  className="w-9 h-9 shrink-0 rounded-full bg-[var(--ink)] text-[var(--card)] cn-serif text-[13px] disabled:opacity-40 transition flex items-center justify-center self-end"
+                >
+                  ↑
+                </button>
+              </div>
+              <div className="hidden sm:block px-2 text-[11px] cn-serif text-[var(--ink-soft)]">
+                Enter 发送 · Shift+Enter 换行
+              </div>
+
+              {voiceError && (
+                <div className="px-1 text-[11px] cn-serif text-[oklch(0.55_0.15_25)]">{voiceError}</div>
+              )}
             </form>
           )}
+
         </div>
       </div>
 
@@ -278,15 +450,15 @@ function RecCard({
   const [a, b, c] = card.colors;
   return (
     <div
-      className="persona-card overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] w-[260px] shadow-[0_14px_36px_-20px_rgba(0,0,0,0.25)] fade-up"
+      className="persona-card overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] w-[min(260px,100%)] shadow-[0_14px_36px_-20px_rgba(0,0,0,0.25)] fade-up"
       data-rarity={card.rarity}
     >
       <div
-        className="relative h-36 overflow-hidden"
+        className="relative aspect-[3/4] w-full overflow-hidden"
         style={card.cover ? undefined : { background: `linear-gradient(160deg, ${a}, ${b})` }}
       >
         {card.cover ? (
-          <img src={card.cover} alt={card.identity} className="absolute inset-0 w-full h-full object-cover" />
+          <img src={card.cover} alt={card.identity} loading="lazy" className="absolute inset-0 w-full h-full object-cover object-center" />
         ) : (
           <div
             className="absolute inset-0 opacity-70"

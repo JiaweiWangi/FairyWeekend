@@ -3,6 +3,9 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { loadRun, recordScene, clearSceneRecord } from "@/lib/persona-store";
 import type { JourneyRunState, JourneyScene, SceneRecord } from "@/lib/persona-types";
 import { VenueIcon, detectVenue } from "@/components/VenueIcon";
+import { getVenuePhotos } from "@/lib/venue-gallery";
+import { buildBundle, isBundlePurchased, markBundlePurchased, type JourneyBundle } from "@/lib/bundle";
+import { getSceneDeals, type SceneDeal } from "@/lib/scene-deals";
 import { toast } from "sonner";
 
 
@@ -13,22 +16,31 @@ function JourneyPage() {
   const [run, setRun] = useState<JourneyRunState | null>(null);
   const [openScene, setOpenScene] = useState<JourneyScene | null>(null);
   const [openingShown, setOpeningShown] = useState("");
+  const [bundleOpen, setBundleOpen] = useState(false);
+  const [bundlePurchased, setBundlePurchased] = useState(false);
 
   useEffect(() => {
     const r = loadRun();
     if (!r) { navigate({ to: "/" }); return; }
     setRun(r);
+    setBundlePurchased(isBundlePurchased(r.card.id));
     const text = r.journey.story_opening;
     let i = 0;
     const t = setInterval(() => {
       i += 1;
       setOpeningShown(text.slice(0, i));
       if (i >= text.length) clearInterval(t);
-    }, 50);
+    }, 32);
     return () => clearInterval(t);
   }, [navigate]);
 
-  if (!run) return null;
+  function skipOpening() {
+    if (run) setOpeningShown(run.journey.story_opening);
+  }
+
+  const bundle = useMemo(() => (run ? buildBundle(run) : null), [run]);
+
+  if (!run || !bundle) return null;
 
   const { card, journey, city, completedSceneOrders } = run;
   const allDone = completedSceneOrders.length >= journey.scenes.length;
@@ -57,12 +69,25 @@ function JourneyPage() {
         <div className="cn-serif text-[13px] text-[var(--ink-soft)] mt-1">
           「{card.mission}」{city && <span className="display italic text-[11px] ml-1.5">· {city}</span>}
         </div>
-        <p className="cn-serif text-[14px] leading-[1.85] text-[var(--ink)] mt-3 cursor-blink">
+        <p
+          onClick={skipOpening}
+          className="cn-serif text-[14px] leading-[1.85] text-[var(--ink)] mt-3 cursor-blink select-none"
+          title="点击跳过"
+        >
           {openingShown}
         </p>
         <div className="display italic text-[11px] text-[var(--ink-soft)] mt-2">
           {journey.emotion_arc.start} → {journey.emotion_arc.end}
         </div>
+      </div>
+
+      {/* ✦ 全程套装 Bundle */}
+      <div className="max-w-xl mx-auto px-5 mt-5">
+        <BundleCard
+          bundle={bundle}
+          purchased={bundlePurchased}
+          onOpen={() => setBundleOpen(true)}
+        />
       </div>
 
       {/* Map */}
@@ -75,16 +100,43 @@ function JourneyPage() {
       </div>
 
       {/* Legend / progress */}
-      <div className="max-w-xl mx-auto px-5 mt-4 text-center">
-        <div className="cn-serif text-[12px] text-[var(--ink-soft)]">
-          点击地图上的光点查看场景 · 已打卡 {completedSceneOrders.length}/{journey.scenes.length}
+      <div className="max-w-xl mx-auto px-5 mt-5 text-center">
+        <div className="display italic text-[10.5px] tracking-[0.25em] text-[var(--ink-soft)]">
+          TODAY · PROGRESS
+        </div>
+        <div className="flex items-center justify-center gap-2 mt-2.5">
+          {journey.scenes.map((s) => {
+            const done = completedSceneOrders.includes(s.order);
+            return (
+              <div key={s.order} className="flex items-center gap-2">
+                <button
+                  onClick={() => setOpenScene(s)}
+                  className={`w-7 h-7 rounded-full cn-serif text-[11px] flex items-center justify-center transition ${
+                    done
+                      ? "bg-[var(--ink)] text-[var(--card)] shadow-[0_4px_12px_-4px_rgba(60,40,30,0.5)]"
+                      : "bg-[var(--card)] border border-dashed border-[var(--ink-soft)]/50 text-[var(--ink-soft)]"
+                  }`}
+                  aria-label={`场景 ${s.order}`}
+                >
+                  {done ? "✓" : s.order}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+        <div className="cn-serif text-[12px] text-[var(--ink-soft)] mt-3">
+          {allDone
+            ? "今天的剧本走完了 ✶"
+            : `点亮全部 ${journey.scenes.length} 处，今日结语就会浮现`}
         </div>
         <button
           onClick={() => navigate({ to: "/finale" })}
           disabled={!allDone}
           className="btn-soft mt-4"
         >
-          {allDone ? "解锁今日结语 ✶" : "全部打卡后解锁结语"}
+          {allDone
+            ? "解锁今日结语 ✶"
+            : `还差 ${journey.scenes.length - completedSceneOrders.length} 处 · 继续打卡`}
         </button>
       </div>
 
@@ -97,8 +149,369 @@ function JourneyPage() {
           city={city}
           onClose={() => setOpenScene(null)}
           onUpdated={refresh}
+          bundlePurchased={bundlePurchased}
         />
       )}
+
+      {/* Bundle purchase sheet */}
+      {bundleOpen && (
+        <BundleSheet
+          bundle={bundle}
+          scenes={journey.scenes}
+          city={city}
+          purchased={bundlePurchased}
+          onClose={() => setBundleOpen(false)}
+          onPurchased={() => {
+            markBundlePurchased(card.id);
+            setBundlePurchased(true);
+            toast.success("已锁定今日全程套装 · 到店出示二维码核销");
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ============ Bundle Card & Sheet ============ */
+
+function BundleCard({
+  bundle, purchased, onOpen,
+}: { bundle: JourneyBundle; purchased: boolean; onOpen: () => void }) {
+  const save = bundle.originalPrice - bundle.dealPrice;
+  return (
+    <button
+      onClick={onOpen}
+      className="w-full text-left rounded-2xl overflow-hidden relative fade-up bg-[var(--card)] border border-[var(--border)] hover:border-[var(--ink-soft)] transition"
+      style={{
+        boxShadow: "0 1px 0 rgba(0,0,0,0.02), 0 8px 24px -16px rgba(60,40,30,0.18)",
+        padding: "18px 20px",
+      }}
+    >
+      {/* 顶部细金线，呼应编辑/出版气质 */}
+      <div
+        className="absolute top-0 left-5 right-5 h-px"
+        style={{ background: "linear-gradient(90deg, transparent, var(--ink-soft), transparent)", opacity: 0.45 }}
+      />
+      <div className="flex items-center justify-between">
+        <div className="display italic text-[10px] tracking-[0.3em] text-[var(--ink-soft)]">
+          {purchased ? "✓ ALREADY UNLOCKED" : "✦ TODAY ONLY · BUNDLE"}
+        </div>
+        <div className="display italic text-[10px] text-[var(--ink-soft)]/70">#{bundle.dealId}</div>
+      </div>
+
+      <h3 className="cn-serif text-[18px] text-[var(--ink)] mt-2 leading-snug">{bundle.title}</h3>
+      <div className="cn-serif text-[12.5px] italic text-[var(--ink-soft)] mt-0.5">{bundle.subtitle}</div>
+
+      <div className="flex flex-wrap gap-1.5 mt-3">
+        {bundle.highlights.map((h, i) => (
+          <span
+            key={i}
+            className="cn-serif text-[11px] px-2 py-0.5 rounded-full bg-[var(--muted)] text-[var(--ink)]"
+          >
+            {h}
+          </span>
+        ))}
+      </div>
+
+      {/* 分隔虚线 */}
+      <div className="mt-4 border-t border-dashed border-[var(--border)]" />
+
+      <div className="flex items-end justify-between mt-3">
+        <div>
+          {!purchased && (
+            <div className="display italic text-[11px] text-[var(--ink-soft)] line-through">
+              ¥{bundle.originalPrice}
+            </div>
+          )}
+          <div className="flex items-baseline gap-2">
+            <span className="cn-serif text-[26px] text-[var(--ink)] leading-none">
+              ¥{bundle.dealPrice}
+            </span>
+            {!purchased && (
+              <span className="display italic text-[10px] tracking-[0.15em] text-[oklch(0.55_0.13_50)]">
+                省 ¥{save}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="cn-serif text-[12px] px-4 py-2 rounded-full bg-[var(--ink)] text-[var(--card)]">
+          {purchased ? "查看核销 →" : "锁定 →"}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function BundleSheet({
+  bundle, scenes, city, purchased, onClose, onPurchased,
+}: {
+  bundle: JourneyBundle;
+  scenes: JourneyScene[];
+  city?: string;
+  purchased: boolean;
+  onClose: () => void;
+  onPurchased: () => void;
+}) {
+  const saved = Math.max(0, bundle.originalPrice - bundle.dealPrice);
+  const discount = bundle.originalPrice > 0
+    ? (bundle.dealPrice / bundle.originalPrice * 10).toFixed(1)
+    : "9.9";
+  // 演示数据 — 给套装一些可信的"团购感"
+  const stats = useMemo(() => {
+    const seed = bundle.dealId.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+    const sold = 800 + (seed % 1800);
+    const rating = (4.6 + ((seed % 4) / 10)).toFixed(1);
+    const reviews = 120 + (seed % 360);
+    return { sold, rating, reviews };
+  }, [bundle.dealId]);
+
+  // 场景缩略图：用 VenueIcon 检测到的 kind 拿到 unsplash 图
+  const sceneThumbs = useMemo(
+    () => scenes.map((s) => {
+      const kind = detectVenue(s.location_type, s.location_name);
+      const photos = getVenuePhotos(kind);
+      return photos[s.order % photos.length] || photos[0];
+    }),
+    [scenes],
+  );
+
+  // 套装顶部封面：用第一个场景的图
+  const heroImage = sceneThumbs[0];
+
+  // 福利图标
+  const perkIcons = ["🎟", "🎁", "✨", "🍃", "📍", "♻︎"];
+
+  // 推荐加购（演示）
+  const addOns = useMemo(() => {
+    const seed = bundle.dealId.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+    return [
+      { title: "纪念明信片 × 3", price: 9, original: 18, sold: 420 + (seed % 200), img: sceneThumbs[1] || heroImage },
+      { title: "城市气味小样盒", price: 29, original: 49, sold: 180 + (seed % 120), img: sceneThumbs[2] || heroImage },
+    ];
+  }, [bundle.dealId, sceneThumbs, heroImage]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center fade-in" onClick={onClose}>
+      <div className="absolute inset-0" style={{ background: "rgba(40,35,30,0.55)", backdropFilter: "blur(6px)" }} />
+      <div
+        className="relative w-full max-w-xl rounded-t-[32px] overflow-hidden bg-[var(--card)] fade-up flex flex-col"
+        style={{ maxHeight: "92vh" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* ============ Hero cover ============ */}
+        <div className="relative shrink-0" style={{ height: 240 }}>
+          <img
+            src={heroImage}
+            alt={bundle.title}
+            className="absolute inset-0 w-full h-full object-cover"
+            loading="lazy"
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background: purchased
+                ? "linear-gradient(180deg, rgba(45,58,42,0.2) 0%, rgba(45,58,42,0.55) 55%, rgba(20,28,18,0.92) 100%)"
+                : "linear-gradient(180deg, rgba(40,25,45,0.15) 0%, rgba(60,30,55,0.55) 55%, rgba(30,15,30,0.92) 100%)",
+            }}
+          />
+          {/* close */}
+          <button
+            onClick={onClose}
+            aria-label="关闭"
+            className="absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center"
+            style={{ background: "rgba(255,255,255,0.2)", backdropFilter: "blur(8px)", color: "#fff" }}
+          >
+            ✕
+          </button>
+          {/* badges */}
+          <div className="absolute top-4 left-4 flex gap-2">
+            <span className="display italic text-[10px] tracking-[0.25em] px-2.5 py-1 rounded-full"
+              style={{ background: "rgba(255,255,255,0.18)", color: "#fff", backdropFilter: "blur(6px)" }}>
+              {purchased ? "✓ UNLOCKED" : "✦ BUNDLE"}
+            </span>
+            {!purchased && (
+              <span className="cn-serif text-[11px] px-2.5 py-1 rounded-full"
+                style={{ background: "#e85d3a", color: "#fff" }}>
+                限今日 · {discount}折
+              </span>
+            )}
+          </div>
+          {/* title block */}
+          <div className="absolute left-5 right-5 bottom-4 text-white">
+            <h3 className="cn-serif text-[22px] leading-snug">{bundle.title}</h3>
+            <div className="cn-serif text-[13px] text-white/85 mt-1">{bundle.subtitle}</div>
+            {/* stats row */}
+            <div className="flex items-center gap-3 mt-3 cn-serif text-[12px] text-white/90">
+              <span>★ {stats.rating}</span>
+              <span className="opacity-50">·</span>
+              <span>{stats.reviews} 条评价</span>
+              <span className="opacity-50">·</span>
+              <span>月售 {stats.sold}</span>
+            </div>
+            <div className="display italic text-[10px] text-white/55 mt-2">
+              #{bundle.dealId}{city ? ` · ${city}` : ""}
+            </div>
+          </div>
+        </div>
+
+        {/* ============ Scroll body ============ */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Price strip */}
+          <div className="px-5 pt-4 pb-3 flex items-end justify-between border-b border-dashed"
+            style={{ borderColor: "rgba(60,40,30,0.12)" }}>
+            <div className="flex items-baseline gap-2">
+              <span className="cn-serif text-[12px] text-[var(--ink-soft)]">套装价</span>
+              <span className="cn-serif text-[32px] text-[#c44a2a] leading-none">¥{bundle.dealPrice}</span>
+              {!purchased && saved > 0 && (
+                <span className="display italic text-[12px] text-[var(--ink-soft)] line-through">
+                  ¥{bundle.originalPrice}
+                </span>
+              )}
+            </div>
+            {!purchased && saved > 0 && (
+              <span className="cn-serif text-[12px] px-2 py-0.5 rounded"
+                style={{ background: "#fbe8d6", color: "#c44a2a" }}>
+                立省 ¥{saved}
+              </span>
+            )}
+          </div>
+
+          {/* Perks chips */}
+          <div className="px-5 pt-4">
+            <div className="cn-serif text-[12px] text-[var(--ink-soft)] mb-2">套装福利</div>
+            <div className="flex flex-wrap gap-2">
+              {bundle.perks.map((p, i) => (
+                <span key={i} className="cn-serif text-[12px] px-3 py-1.5 rounded-full inline-flex items-center gap-1.5"
+                  style={{ background: "var(--muted)", color: "var(--ink)" }}>
+                  <span>{perkIcons[i % perkIcons.length]}</span>{p}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Scenes — 横向相册 + 列表 */}
+          <div className="px-5 pt-5">
+            <div className="flex items-center justify-between mb-2">
+              <div className="cn-serif text-[14px] text-[var(--ink)]">行程 · {scenes.length} 个场景</div>
+              <div className="display italic text-[10px] text-[var(--ink-soft)] tracking-widest">
+                {scenes.reduce((s, x) => s + (x.stay_minutes || 0), 0)} MIN TOTAL
+              </div>
+            </div>
+
+            {/* 横向预览相册 */}
+            <div className="flex gap-2 overflow-x-auto pb-2 -mx-5 px-5 snap-x snap-mandatory">
+              {scenes.map((s, i) => (
+                <div key={s.order} className="shrink-0 snap-start" style={{ width: 140 }}>
+                  <div className="relative rounded-2xl overflow-hidden" style={{ height: 100 }}>
+                    <img src={sceneThumbs[i]} alt={s.scene_name} className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+                    <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.65) 100%)" }} />
+                    <div className="absolute top-1.5 left-1.5 display italic text-[10px] text-white/95 px-1.5 py-0.5 rounded"
+                      style={{ background: "rgba(0,0,0,0.4)" }}>
+                      0{s.order}
+                    </div>
+                    <div className="absolute bottom-1.5 left-2 right-2 cn-serif text-[11px] text-white truncate">
+                      「{s.scene_name}」
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* 详细列表 */}
+            <ul className="mt-2 space-y-2">
+              {scenes.map((s, i) => (
+                <li key={s.order} className="flex items-center gap-3 p-2.5 rounded-2xl"
+                  style={{ background: "rgba(60,40,30,0.04)" }}>
+                  <img src={sceneThumbs[i]} alt="" className="w-14 h-14 rounded-xl object-cover shrink-0" loading="lazy" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="display italic text-[10px] text-[var(--ink-soft)]">0{s.order}</span>
+                      <span className="cn-serif text-[14px] text-[var(--ink)] truncate">「{s.scene_name}」</span>
+                    </div>
+                    <div className="cn-serif text-[12px] text-[var(--ink-soft)] truncate">
+                      {s.location_name} · ~{s.stay_minutes}min
+                    </div>
+                  </div>
+                  <span className="cn-serif text-[11px] px-2 py-0.5 rounded shrink-0"
+                    style={{ background: "#e3ebda", color: "#3d4a2a" }}>已含</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* 推荐加购 */}
+          <div className="px-5 pt-5">
+            <div className="cn-serif text-[14px] text-[var(--ink)] mb-2">常被一起买</div>
+            <div className="grid grid-cols-2 gap-3">
+              {addOns.map((a, i) => (
+                <div key={i} className="rounded-2xl overflow-hidden border" style={{ borderColor: "rgba(60,40,30,0.1)" }}>
+                  <div className="relative" style={{ height: 90 }}>
+                    <img src={a.img} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+                  </div>
+                  <div className="p-2.5">
+                    <div className="cn-serif text-[12px] text-[var(--ink)] truncate">{a.title}</div>
+                    <div className="flex items-baseline gap-1.5 mt-1">
+                      <span className="cn-serif text-[14px] text-[#c44a2a]">¥{a.price}</span>
+                      <span className="display italic text-[10px] text-[var(--ink-soft)] line-through">¥{a.original}</span>
+                    </div>
+                    <div className="display italic text-[10px] text-[var(--ink-soft)] mt-0.5">月售 {a.sold}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 评价 */}
+          <div className="px-5 pt-5 pb-6">
+            <div className="flex items-center justify-between mb-2">
+              <div className="cn-serif text-[14px] text-[var(--ink)]">最新评价</div>
+              <span className="cn-serif text-[12px] text-[var(--ink-soft)]">★ {stats.rating} · {stats.reviews} 条</span>
+            </div>
+            <div className="space-y-2">
+              {[
+                { name: "把生活过成诗", text: "三个场景串得很顺，最后一站咖啡馆刚好接住傍晚的光。" },
+                { name: "城南的老周", text: "比单买便宜不少，老城墙那段意外好评，安静得想哭。" },
+              ].map((c, i) => (
+                <div key={i} className="p-3 rounded-2xl" style={{ background: "rgba(60,40,30,0.04)" }}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="cn-serif text-[12px] text-[var(--ink)]">{c.name}</span>
+                    <span className="display italic text-[10px] text-[#c9a84c]">★★★★★</span>
+                  </div>
+                  <div className="cn-serif text-[12px] text-[var(--ink-soft)] leading-relaxed">{c.text}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ============ Sticky CTA ============ */}
+        <div className="shrink-0 px-5 py-3 border-t flex items-center gap-3"
+          style={{ borderColor: "rgba(60,40,30,0.1)", background: "var(--card)" }}>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline gap-1.5">
+              <span className="cn-serif text-[22px] text-[#c44a2a] leading-none">¥{bundle.dealPrice}</span>
+              {!purchased && saved > 0 && (
+                <span className="display italic text-[11px] text-[var(--ink-soft)] line-through">¥{bundle.originalPrice}</span>
+              )}
+            </div>
+            <div className="display italic text-[10px] text-[var(--ink-soft)] mt-1">
+              未到的场景自动退 · 演示流程，不真实扣款
+            </div>
+          </div>
+          {purchased ? (
+            <div className="cn-serif text-[13px] px-5 py-3 rounded-full"
+              style={{ background: "#e3ebda", color: "#3d4a2a" }}>
+              ✓ 已锁定 · 到店出示
+            </div>
+          ) : (
+            <button onClick={onPurchased}
+              className="cn-serif text-[13px] px-5 py-3 rounded-full shadow-lg"
+              style={{ background: "linear-gradient(135deg, #e85d3a, #c44a2a)", color: "#fff" }}>
+              立即锁定 ¥{bundle.dealPrice}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -241,7 +654,7 @@ function JourneyMap({
 /* ============ Scene bottom sheet ============ */
 
 function SceneSheet({
-  scene, done, record, city, onClose, onUpdated,
+  scene, done, record, city, onClose, onUpdated, bundlePurchased,
 }: {
   scene: JourneyScene;
   done: boolean;
@@ -249,6 +662,7 @@ function SceneSheet({
   city?: string;
   onClose: () => void;
   onUpdated: () => void;
+  bundlePurchased?: boolean;
 }) {
   const mapHref = `https://uri.amap.com/marker?name=${encodeURIComponent(scene.location_name)}&src=todaypersona&coordinate=gaode&callnative=1`;
   const meituanHref = `https://i.meituan.com/s/${encodeURIComponent(scene.meituan_keyword || scene.location_name)}`;
@@ -310,6 +724,30 @@ function SceneSheet({
             </div>
           )}
 
+          {bundlePurchased && (
+            <div
+              className="mt-3 px-3 py-2 rounded-2xl flex items-center justify-between gap-2"
+              style={{ background: "linear-gradient(135deg,#2d3a2a 0%,#4a5a3d 100%)", color: "#fff" }}
+            >
+              <div className="cn-serif text-[12px] leading-tight">
+                ✓ 已包含在「今日全程套装」
+                <span className="display italic text-[10px] text-white/70 ml-1">到店出示即可核销</span>
+              </div>
+              <div className="display italic text-[10px] px-2 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.18)" }}>
+                BUNDLE
+              </div>
+            </div>
+          )}
+
+          {/* ✦ 第一眼吸引：实景大图 + 卖点 hook */}
+          <AppealHook
+            kind={kind}
+            sceneName={scene.scene_name}
+            narrative={scene.persona_narrative}
+            emotionTags={scene.emotion_tags}
+            stayMinutes={scene.stay_minutes}
+          />
+
           {/* Decorative divider */}
           <div className="flex items-center gap-3 my-4">
             <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg,transparent,#d8c8b8,transparent)" }} />
@@ -320,6 +758,24 @@ function SceneSheet({
           <p className="cn-serif text-[15px] leading-[1.95] text-[var(--ink)] first-letter:text-[26px] first-letter:font-serif first-letter:mr-1">
             {scene.persona_narrative}
           </p>
+
+          <SceneBuzz
+            sceneName={scene.scene_name}
+            locationName={scene.location_name}
+            locationType={scene.location_type}
+            kind={kind}
+            city={city}
+          />
+
+
+
+          {/* ✦ 本场团购 & 推荐 */}
+          <SceneDeals
+            kind={kind}
+            sceneOrder={scene.order}
+            meituanHref={meituanHref}
+            bundlePurchased={bundlePurchased}
+          />
 
           {/* Task card */}
           <div
@@ -364,6 +820,78 @@ function SceneSheet({
       </div>
     </div>
 
+  );
+}
+
+/* ============ Per-scene deals & recommendations ============ */
+
+function SceneDeals({
+  kind, sceneOrder, meituanHref, bundlePurchased,
+}: {
+  kind: string;
+  sceneOrder: number;
+  meituanHref: string;
+  bundlePurchased?: boolean;
+}) {
+  const deals = useMemo<SceneDeal[]>(() => getSceneDeals(kind, sceneOrder), [kind, sceneOrder]);
+  if (!deals.length) return null;
+  return (
+    <div className="mt-5">
+      <div className="flex items-baseline justify-between mb-2">
+        <div className="display text-[10px] tracking-[0.35em] text-[var(--ink-soft)]">
+          TODAY&apos;S DEALS · 本场优惠
+        </div>
+        <a
+          href={meituanHref}
+          target="_blank"
+          rel="noreferrer"
+          className="display italic text-[11px] text-[var(--ink-soft)] hover:underline underline-offset-4"
+        >
+          更多 →
+        </a>
+      </div>
+      <div className="grid grid-cols-1 gap-2">
+        {deals.map((d, i) => {
+          const save = d.original - d.price;
+          return (
+            <a
+              key={i}
+              href={meituanHref}
+              target="_blank"
+              rel="noreferrer"
+              className="group flex items-center gap-3 p-3 rounded-2xl bg-[var(--card)] border border-[var(--border)] hover:border-[var(--ink-soft)] transition"
+            >
+              <div
+                className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 cn-serif text-[10px] tracking-[0.15em]"
+                style={{
+                  background: "linear-gradient(135deg, oklch(0.95 0.05 60), oklch(0.92 0.07 40))",
+                  color: "oklch(0.45 0.12 50)",
+                }}
+              >
+                {d.tag}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="cn-serif text-[13.5px] text-[var(--ink)] leading-snug truncate">
+                  {d.title}
+                </div>
+                <div className="flex items-baseline gap-2 mt-0.5">
+                  <span className="cn-serif text-[15px] text-[var(--ink)] leading-none">¥{d.price}</span>
+                  <span className="display italic text-[10.5px] text-[var(--ink-soft)] line-through">¥{d.original}</span>
+                  <span className="display italic text-[10px] text-[oklch(0.55_0.18_30)]">省 ¥{save}</span>
+                  <span className="ml-auto display italic text-[10px] text-[var(--ink-soft)]">{d.sold}</span>
+                </div>
+              </div>
+              <span className="cn-serif text-[12px] text-[var(--ink-soft)] group-hover:translate-x-0.5 transition">→</span>
+            </a>
+          );
+        })}
+      </div>
+      {bundlePurchased && (
+        <p className="cn-serif text-[11px] text-[var(--ink-soft)] italic mt-2 text-center">
+          已锁定「今日全程套装」· 本场可直接核销，无需额外下单
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -608,10 +1136,12 @@ function SceneHero({
   );
 }
 
-/* ============ Check-in panel: note + photo + mood ============ */
+/* ============ Check-in panel: note + photos + mood + rating + companion ============ */
 
 const MOODS = ["✨", "🌿", "☕", "🌊", "🌸", "🔥", "🌙", "🍃"];
+const COMPANIONS = ["独自", "朋友", "恋人", "家人", "同事", "宠物"];
 const NOTE_MAX = 240;
+const PHOTO_MAX = 3;
 
 async function fileToCompressedDataUrl(file: File, maxDim = 900, quality = 0.78): Promise<string> {
   const dataUrl = await new Promise<string>((res, rej) => {
@@ -639,6 +1169,12 @@ async function fileToCompressedDataUrl(file: File, maxDim = 900, quality = 0.78)
   return canvas.toDataURL("image/jpeg", quality);
 }
 
+function initialPhotos(record?: SceneRecord): string[] {
+  if (record?.photos?.length) return record.photos.slice(0, PHOTO_MAX);
+  if (record?.photo) return [record.photo];
+  return [];
+}
+
 function CheckInPanel({
   sceneOrder, done, record, onUpdated,
 }: {
@@ -647,28 +1183,37 @@ function CheckInPanel({
   record?: SceneRecord;
   onUpdated: () => void;
 }) {
-  const [editing, setEditing] = useState(!done);
+  const [editing, setEditing] = useState(false);
   const [note, setNote] = useState(record?.note ?? "");
-  const [photo, setPhoto] = useState<string | undefined>(record?.photo);
+  const [photos, setPhotos] = useState<string[]>(initialPhotos(record));
   const [mood, setMood] = useState<string | undefined>(record?.mood);
+  const [rating, setRating] = useState<number>(record?.rating ?? 0);
+  const [companion, setCompanion] = useState<string | undefined>(record?.companion);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Reset state when switching scenes
   useEffect(() => {
     setNote(record?.note ?? "");
-    setPhoto(record?.photo);
+    setPhotos(initialPhotos(record));
     setMood(record?.mood);
-    setEditing(!done);
-  }, [sceneOrder, done, record?.note, record?.photo, record?.mood]);
+    setRating(record?.rating ?? 0);
+    setCompanion(record?.companion);
+    setEditing(false);
+  }, [sceneOrder, done, record?.note, record?.photo, record?.mood, record?.rating, record?.companion, record?.photos]);
 
   async function handlePhoto(e: ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    if (!f) return;
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
     setBusy(true);
     try {
-      const url = await fileToCompressedDataUrl(f);
-      setPhoto(url);
+      const slots = PHOTO_MAX - photos.length;
+      const picked = files.slice(0, slots);
+      const urls = await Promise.all(picked.map((f) => fileToCompressedDataUrl(f)));
+      setPhotos((p) => [...p, ...urls].slice(0, PHOTO_MAX));
+      if (files.length > slots) {
+        toast(`最多 ${PHOTO_MAX} 张哦`, { description: "已保留前几张" });
+      }
     } catch (err) {
       console.error(err);
       toast.error("照片读不出来，换一张试试？");
@@ -678,11 +1223,18 @@ function CheckInPanel({
     }
   }
 
+  function removePhotoAt(i: number) {
+    setPhotos((p) => p.filter((_, idx) => idx !== i));
+  }
+
   function save() {
     recordScene(sceneOrder, {
       note: note.trim() || undefined,
-      photo,
+      photo: photos[0],            // 兼容旧字段
+      photos: photos.length ? photos : undefined,
       mood,
+      rating: rating || undefined,
+      companion,
     });
     toast.success(done ? "已更新这条记录 ✦" : "打卡完成 ✦", {
       description: note ? `「${note.slice(0, 24)}${note.length > 24 ? "…" : ""}」` : undefined,
@@ -691,14 +1243,40 @@ function CheckInPanel({
     onUpdated();
   }
 
-  function removePhoto() { setPhoto(undefined); }
-
   function undo() {
     clearSceneRecord(sceneOrder);
-    setNote(""); setPhoto(undefined); setMood(undefined);
+    setNote(""); setPhotos([]); setMood(undefined); setRating(0); setCompanion(undefined);
     setEditing(true);
     onUpdated();
     toast("已取消打卡");
+  }
+
+  // ============ Quick check-in view (not done, not editing) ============
+  if (!done && !editing) {
+    return (
+      <div
+        className="mt-6 rounded-2xl border p-5 fade-up text-center"
+        style={{ background: "linear-gradient(160deg,#fffdf6 0%,#fdf3ea 100%)", borderColor: "#f0e1c8" }}
+      >
+        <div className="cn-serif text-[11px] tracking-[0.3em] text-[var(--ink-soft)] mb-3">
+          CHECK IN · 来过这里
+        </div>
+        <button
+          onClick={save}
+          disabled={busy}
+          className="btn-soft w-full justify-center"
+        >
+          完成打卡 ✦
+        </button>
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="cn-serif text-[12px] text-[var(--ink-soft)] mt-3 underline-offset-4 hover:underline"
+        >
+          顺便记录一下 · 心情 / 随笔 / 照片 ↓
+        </button>
+      </div>
+    );
   }
 
   // ============ Recap view (done & not editing) ============
@@ -720,11 +1298,27 @@ function CheckInPanel({
           </div>
         </div>
 
-        {mood && <div className="text-[28px] mt-2 leading-none">{mood}</div>}
+        <div className="flex items-center gap-3 mt-2">
+          {mood && <div className="text-[28px] leading-none">{mood}</div>}
+          {rating > 0 && (
+            <div className="display text-[13px] text-[oklch(0.72_0.15_60)] tracking-[0.1em]">
+              {"★".repeat(rating)}<span className="opacity-25">{"★".repeat(5 - rating)}</span>
+            </div>
+          )}
+          {companion && (
+            <span className="cn-serif text-[11px] px-2 py-0.5 rounded-full" style={{ background: "#fdf0d6", color: "#7a5a30" }}>
+              与{companion}
+            </span>
+          )}
+        </div>
 
-        {photo && (
-          <div className="mt-3 overflow-hidden rounded-xl" style={{ boxShadow: "0 8px 24px -12px rgba(80,60,40,0.35)" }}>
-            <img src={photo} alt="打卡照片" className="block w-full h-auto" />
+        {photos.length > 0 && (
+          <div className={`mt-3 grid gap-2 ${photos.length === 1 ? "grid-cols-1" : "grid-cols-3"}`}>
+            {photos.map((p, i) => (
+              <div key={i} className="overflow-hidden rounded-xl" style={{ boxShadow: "0 8px 24px -12px rgba(80,60,40,0.35)" }}>
+                <img src={p} alt={`打卡照片 ${i + 1}`} className={`block w-full ${photos.length === 1 ? "h-auto" : "h-24 object-cover"}`} />
+              </div>
+            ))}
           </div>
         )}
 
@@ -732,7 +1326,7 @@ function CheckInPanel({
           <p className="cn-serif text-[14px] leading-[1.85] text-[var(--ink)] mt-3 whitespace-pre-wrap">
             {note}
           </p>
-        ) : !photo && !mood ? (
+        ) : !photos.length && !mood && !rating && !companion ? (
           <p className="cn-serif text-[13px] text-[var(--ink-soft)] mt-2 italic">
             只是来过一下，没留下什么。
           </p>
@@ -751,6 +1345,23 @@ function CheckInPanel({
       style={{ background: "linear-gradient(160deg,#fffdf6 0%,#fdf3ea 100%)", borderColor: "#f0e1c8" }}>
       <div className="cn-serif text-[11px] tracking-[0.3em] text-[var(--ink-soft)] mb-3">
         {done ? "EDIT · 修改打卡" : "CHECK IN · 记录这一刻"}
+      </div>
+
+      {/* Rating */}
+      <div className="cn-serif text-[11px] text-[var(--ink-soft)] mb-1.5">值得几颗星</div>
+      <div className="flex gap-1 mb-3">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            onClick={() => setRating(rating === n ? 0 : n)}
+            className="text-[26px] leading-none transition-transform hover:scale-110"
+            style={{ color: n <= rating ? "oklch(0.78 0.17 65)" : "#dccdb4" }}
+            aria-label={`${n} 星`}
+          >
+            ★
+          </button>
+        ))}
       </div>
 
       {/* Mood */}
@@ -773,6 +1384,25 @@ function CheckInPanel({
         ))}
       </div>
 
+      {/* Companion */}
+      <div className="cn-serif text-[11px] text-[var(--ink-soft)] mb-1.5">和谁一起</div>
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {COMPANIONS.map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => setCompanion(companion === c ? undefined : c)}
+            className={`cn-serif text-[12px] px-3 py-1.5 rounded-full transition ${
+              companion === c
+                ? "bg-[oklch(0.92_0.08_60)] text-[var(--ink)] ring-1 ring-[oklch(0.78_0.12_60)]"
+                : "bg-white/70 text-[var(--ink-soft)] hover:bg-white"
+            }`}
+          >
+            {c}
+          </button>
+        ))}
+      </div>
+
       {/* Note */}
       <div className="cn-serif text-[11px] text-[var(--ink-soft)] mb-1.5 flex justify-between">
         <span>随笔</span>
@@ -787,46 +1417,51 @@ function CheckInPanel({
         style={{ borderColor: "#e8dcc4" }}
       />
 
-      {/* Photo */}
-      <div className="cn-serif text-[11px] text-[var(--ink-soft)] mt-3 mb-1.5">照片</div>
-      {photo ? (
-        <div className="relative overflow-hidden rounded-xl" style={{ boxShadow: "0 8px 24px -12px rgba(80,60,40,0.35)" }}>
-          <img src={photo} alt="预览" className="block w-full h-auto" />
-          <button
-            type="button"
-            onClick={removePhoto}
-            className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center text-[12px] bg-black/55 text-white"
-            aria-label="移除照片"
+      {/* Photos (multi) */}
+      <div className="cn-serif text-[11px] text-[var(--ink-soft)] mt-3 mb-1.5 flex justify-between">
+        <span>照片</span>
+        <span className="display tracking-[0.2em] text-[10px]">{photos.length}/{PHOTO_MAX}</span>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {photos.map((p, i) => (
+          <div key={i} className="relative aspect-square overflow-hidden rounded-xl" style={{ boxShadow: "0 6px 18px -10px rgba(80,60,40,0.35)" }}>
+            <img src={p} alt={`预览 ${i + 1}`} className="w-full h-full object-cover" />
+            <button
+              type="button"
+              onClick={() => removePhotoAt(i)}
+              className="absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center text-[11px] bg-black/55 text-white"
+              aria-label="移除照片"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        {photos.length < PHOTO_MAX && (
+          <label
+            className={`aspect-square flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed cursor-pointer transition ${busy ? "opacity-60" : "hover:bg-white/60"}`}
+            style={{ borderColor: "#e0cfb0", background: "rgba(255,255,255,0.5)" }}
           >
-            ✕
-          </button>
-        </div>
-      ) : (
-        <label
-          className={`flex flex-col items-center justify-center gap-1 py-6 rounded-xl border-2 border-dashed cursor-pointer transition ${busy ? "opacity-60" : "hover:bg-white/60"}`}
-          style={{ borderColor: "#e0cfb0", background: "rgba(255,255,255,0.5)" }}
-        >
-          <span className="text-[22px]">📷</span>
-          <span className="cn-serif text-[12px] text-[var(--ink-soft)]">
-            {busy ? "处理中…" : "拍一张 / 选一张"}
-          </span>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={handlePhoto}
-          />
-        </label>
-      )}
+            <span className="text-[20px]">📷</span>
+            <span className="cn-serif text-[11px] text-[var(--ink-soft)] text-center px-1">
+              {busy ? "处理中…" : "加一张"}
+            </span>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              capture="environment"
+              className="hidden"
+              onChange={handlePhoto}
+            />
+          </label>
+        )}
+      </div>
 
       <div className="flex gap-2 mt-4">
-        {done && (
-          <button onClick={() => setEditing(false)} className="btn-ghost flex-1 justify-center">
-            取消
-          </button>
-        )}
+        <button onClick={() => setEditing(false)} className="btn-ghost flex-1 justify-center">
+          {done ? "取消" : "← 返回"}
+        </button>
         <button onClick={save} disabled={busy} className="btn-soft flex-1 justify-center">
           {done ? "保存修改 ✦" : "完成打卡 ✦"}
         </button>
@@ -834,3 +1469,282 @@ function CheckInPanel({
     </div>
   );
 }
+
+/* ============ Scene buzz: 实景画廊 + AI 生成的食客短评 ============ */
+
+type SceneReview = { name: string; rating: number; tag: string; text: string };
+
+const BUZZ_CACHE_KEY = "todaypersona.scene_buzz_v1";
+
+function readBuzzCache(): Record<string, SceneReview[]> {
+  if (typeof window === "undefined") return {};
+  try { return JSON.parse(localStorage.getItem(BUZZ_CACHE_KEY) || "{}"); } catch { return {}; }
+}
+function writeBuzzCache(map: Record<string, SceneReview[]>) {
+  if (typeof window === "undefined") return;
+  try { localStorage.setItem(BUZZ_CACHE_KEY, JSON.stringify(map)); } catch { /* quota */ }
+}
+
+function SceneBuzz({
+  sceneName, locationName, locationType, kind, city,
+}: {
+  sceneName: string;
+  locationName: string;
+  locationType: string;
+  kind: string;
+  city?: string;
+}) {
+  const photos = useMemo(() => getVenuePhotos(kind), [kind]);
+  const cacheKey = `${locationName}|${sceneName}`;
+  const [reviews, setReviews] = useState<SceneReview[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const cache = readBuzzCache();
+    if (cache[cacheKey]?.length) {
+      setReviews(cache[cacheKey]);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    fetch("/api/public/scene-buzz", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scene_name: sceneName,
+        location_name: locationName,
+        location_type: locationType,
+        city,
+      }),
+    })
+      .then((r) => r.ok ? r.json() : Promise.reject(r.statusText))
+      .then((j: { reviews?: SceneReview[] }) => {
+        if (cancelled) return;
+        const list = (j.reviews ?? []).filter((r) => r?.text);
+        setReviews(list);
+        if (list.length) {
+          const next = { ...readBuzzCache(), [cacheKey]: list };
+          writeBuzzCache(next);
+        }
+      })
+      .catch(() => { if (!cancelled) setReviews([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [cacheKey, sceneName, locationName, locationType, city]);
+
+  return (
+    <div className="mt-5">
+      {/* 实景画廊 */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="display text-[10px] tracking-[0.35em] text-[var(--ink-soft)]">
+          实景一瞥 · GLIMPSE
+        </div>
+        <div className="cn-serif text-[10px] text-[var(--ink-soft)] opacity-70">
+          参考实景，非该店实拍
+        </div>
+      </div>
+      <div className="flex gap-2 overflow-x-auto -mx-1 px-1 pb-1 snap-x snap-mandatory">
+        {photos.map((src, i) => (
+          <div
+            key={i}
+            className="relative shrink-0 rounded-2xl overflow-hidden snap-start"
+            style={{ width: 168, height: 124, boxShadow: "0 8px 22px -14px rgba(60,50,40,0.45)" }}
+          >
+            <img
+              src={src}
+              alt={`${locationName} 参考实景 ${i + 1}`}
+              loading="lazy"
+              className="w-full h-full object-cover"
+              onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = "none"; }}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* 食客说 */}
+      <div className="mt-4 flex items-center justify-between mb-2">
+        <div className="display text-[10px] tracking-[0.35em] text-[var(--ink-soft)]">
+          大家说 · WORD OF MOUTH
+        </div>
+        {reviews && reviews.length > 0 && (
+          <div className="cn-serif text-[11px] text-[var(--ink-soft)]">
+            {(reviews.reduce((s, r) => s + (r.rating || 0), 0) / reviews.length).toFixed(1)} ★
+          </div>
+        )}
+      </div>
+
+      {loading && !reviews && (
+        <div className="space-y-2">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-16 rounded-xl bg-white/60 animate-pulse" />
+          ))}
+        </div>
+      )}
+
+      {reviews && reviews.length === 0 && !loading && (
+        <div className="cn-serif text-[12px] text-[var(--ink-soft)] italic">
+          暂时没有声音，去成为第一个留言的人。
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {reviews?.map((r, i) => (
+          <div
+            key={i}
+            className="rounded-xl p-3 border bg-white/70"
+            style={{ borderColor: "#ece1c8" }}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center cn-serif text-[12px]"
+                  style={{
+                    background: `linear-gradient(135deg, hsl(${(i * 97) % 360} 55% 80%), hsl(${(i * 97 + 60) % 360} 55% 70%))`,
+                    color: "#3d3530",
+                  }}
+                >
+                  {r.name?.slice(-1) || "?"}
+                </div>
+                <div className="cn-serif text-[13px] text-[var(--ink)]">{r.name}</div>
+                <span
+                  className="cn-serif text-[10px] px-1.5 py-0.5 rounded-full"
+                  style={{ background: "#fdf0d6", color: "#7a5a30" }}
+                >
+                  {r.tag}
+                </span>
+              </div>
+              <div className="display text-[11px] text-[oklch(0.72_0.15_60)]">
+                {"★".repeat(Math.max(1, Math.min(5, r.rating || 5)))}
+              </div>
+            </div>
+            <p className="cn-serif text-[13px] leading-[1.7] text-[var(--ink)] mt-1.5">
+              {r.text}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ============ AppealHook: 第一眼吸引 —— 实景大图 + 卖点 hook ============ */
+
+const APPEAL_PRESETS: Record<string, { hook: string; tags: string[] }> = {
+  cafe:       { hook: "光线、慢拍、一杯能坐很久的咖啡",   tags: ["手冲单品", "靠窗位",   "可久坐"] },
+  bakery:     { hook: "出炉那一刻，整条街都是麦香",       tags: ["现烤可颂",   "天然酵母", "外带方便"] },
+  dessert:    { hook: "为这一口糖分专程而来",             tags: ["招牌限定",   "适合拍照", "下午茶位"] },
+  noodle:     { hook: "一碗热汤把今天烫平",               tags: ["现熬高汤",   "本地老味",   "排队也值"] },
+  restaurant: { hook: "一顿正经饭，把心慢慢沉下来",       tags: ["主厨推荐",   "适合两人",   "氛围加分"] },
+  bar:        { hook: "灯一暗，世界就变小了",             tags: ["招牌特调", "live 现场", "适合夜聊"] },
+  market:     { hook: "新鲜、烟火气、活着的声音",         tags: ["当季食材", "本地小贩", "随手就买"] },
+  bookstore:  { hook: "一本书的距离，世界安静下来",       tags: ["独立选书", "可阅读区", "周末有讲座"] },
+  gallery:    { hook: "在一幅画前停三分钟",               tags: ["小型展览", "免费观展", "拍照友好"] },
+  museum:     { hook: "把今天放进更长的时间里",           tags: ["镇馆之宝", "讲解动线", "适合放空"] },
+  cinema:     { hook: "灯一灭，故事就开始了",             tags: ["IMAX 厅",   "靠后排位",   "饮料自由"] },
+  flower:     { hook: "捧一束回家，今天就温柔一点",       tags: ["当季花束", "可定制",     "小束起订"] },
+  plant:      { hook: "看一会儿绿色，眼睛就松了",         tags: ["稀有品种", "新手友好", "可托养"] },
+  park:       { hook: "脚踩在草上，时间就慢了",           tags: ["大片草坪", "适合发呆", "傍晚最美"] },
+  spa:        { hook: "把肩膀和今天，都放下来",           tags: ["招牌项目", "环境安静", "可预约"] },
+  temple:     { hook: "走进去，喧嚣自己就退后了",         tags: ["香火清净", "建筑细节", "免费入院"] },
+  river:      { hook: "看水流过，心事也跟着走一段",       tags: ["开阔视野", "拍照点位", "傍晚风好"] },
+  street:     { hook: "走一段路，把这座城闻一遍",         tags: ["市井烟火", "随手好拍", "适合慢逛"] },
+  shop:       { hook: "为自己挑一件小礼物",               tags: ["小众设计", "性价比高", "限定款"] },
+  default:    { hook: "来过这里的人，都说值得",           tags: ["氛围加分", "适合此刻", "拍照好看"] },
+};
+
+function AppealHook({
+  kind, sceneName, narrative, emotionTags, stayMinutes,
+}: {
+  kind: string;
+  sceneName: string;
+  narrative: string;
+  emotionTags?: string[];
+  stayMinutes?: number;
+}) {
+  const photos = useMemo(() => getVenuePhotos(kind), [kind]);
+  const preset = APPEAL_PRESETS[kind] || APPEAL_PRESETS.default;
+
+  const chips = useMemo(() => {
+    const fromScene = (emotionTags ?? []).slice(0, 2);
+    const fromPreset = preset.tags.filter((t) => !fromScene.includes(t));
+    return [...fromScene, ...fromPreset].slice(0, 3);
+  }, [emotionTags, preset.tags]);
+
+  const hook = useMemo(() => {
+    const first = (narrative || "").split(/[。！？\n]/)[0]?.trim();
+    if (first && first.length >= 8 && first.length <= 36) return first;
+    return preset.hook;
+  }, [narrative, preset.hook]);
+
+  const cover = photos[0];
+  const more = photos.slice(1, 3);
+
+  return (
+    <div className="mt-4 -mx-6">
+      <div className="relative overflow-hidden" style={{ height: 180 }}>
+        {cover ? (
+          <img
+            src={cover}
+            alt={`${sceneName} 参考实景`}
+            className="absolute inset-0 w-full h-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div className="absolute inset-0" style={{ background: "linear-gradient(160deg,#f3e6d2,#e8c2a0)" }} />
+        )}
+        <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(20,15,10,0.05) 0%, rgba(20,15,10,0.55) 75%, rgba(20,15,10,0.78) 100%)" }} />
+
+        <div
+          className="absolute top-3 right-4 cn-serif text-[10px] px-2 py-0.5 rounded-full"
+          style={{ background: "rgba(255,253,243,0.85)", color: "#5a4a3a" }}
+        >
+          参考实景
+        </div>
+
+        {more.length > 0 && (
+          <div className="absolute top-12 right-4 flex flex-col gap-1.5">
+            {more.map((src, i) => (
+              <div
+                key={i}
+                className="w-12 h-12 rounded-lg overflow-hidden"
+                style={{ boxShadow: "0 4px 12px rgba(0,0,0,0.25)", outline: "2px solid rgba(255,253,243,0.85)" }}
+              >
+                <img src={src} alt="" className="w-full h-full object-cover" loading="lazy" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="absolute left-5 right-5 bottom-3">
+          <div className="display text-[10px] tracking-[0.35em] mb-1" style={{ color: "rgba(255,253,243,0.8)" }}>
+            WHY HERE · 为什么来这里
+          </div>
+          <p className="cn-serif text-[15px] leading-snug" style={{ color: "#fffdf3", textShadow: "0 2px 8px rgba(0,0,0,0.5)" }}>
+            {hook}
+          </p>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {chips.map((t) => (
+              <span
+                key={t}
+                className="cn-serif text-[11px] px-2 py-0.5 rounded-full"
+                style={{ background: "rgba(255,253,243,0.92)", color: "#3d3530" }}
+              >
+                ✦ {t}
+              </span>
+            ))}
+            {stayMinutes ? (
+              <span
+                className="cn-serif text-[11px] px-2 py-0.5 rounded-full"
+                style={{ background: "rgba(0,0,0,0.35)", color: "#fffdf3", backdropFilter: "blur(4px)" }}
+              >
+                建议停留 ~{stayMinutes}min
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+

@@ -4,8 +4,32 @@ import { loadPendingCard, startRun } from "@/lib/persona-store";
 import { RARITY_LABEL } from "@/lib/cards";
 import type { PersonaCard, Journey } from "@/lib/persona-types";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  getUserPhoto,
+  subscribeUserPhoto,
+  getPersonalizedCard,
+  setPersonalizedCard,
+  clearPersonalizedCard,
+} from "@/lib/user-photo";
+import { toSimplified } from "@/lib/zh-simplify";
+import { pickEmoji } from "@/lib/text-emoji";
 
 export const Route = createFileRoute("/card")({ component: CardPage });
+
+function MetaRow({ label, value }: { label: string; value: string }) {
+  const emoji = pickEmoji(value);
+  return (
+    <div className="flex gap-3 items-baseline">
+      <span className="display italic text-[10.5px] tracking-[0.25em] text-[var(--ink-soft)] shrink-0 w-20">
+        {label}
+      </span>
+      <span className="cn-serif text-[13.5px] text-[var(--ink)] leading-relaxed">
+        {value}
+        {emoji && <span className="ml-1.5 text-[14px] align-[-1px]">{emoji}</span>}
+      </span>
+    </div>
+  );
+}
 
 const LOADING_LINES = [
   "正在打开今日的剧本……",
@@ -27,7 +51,64 @@ function CardPage() {
   const [city, setCity] = useState("");
   const [locating, setLocating] = useState(false);
   const [autoLocated, setAutoLocated] = useState(false);
+  const [locatedName, setLocatedName] = useState<string | null>(null);
   const [loadingIdx, setLoadingIdx] = useState(0);
+  const [userPhoto, setUserPhotoState] = useState<string | null>(null);
+  const [personalCover, setPersonalCover] = useState<string | null>(null);
+  const [personalizing, setPersonalizing] = useState(false);
+  const [personalizeErr, setPersonalizeErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    setUserPhotoState(getUserPhoto());
+    return subscribeUserPhoto(setUserPhotoState);
+  }, []);
+
+  useEffect(() => {
+    if (card) setPersonalCover(getPersonalizedCard(card.id));
+  }, [card]);
+
+  async function urlToDataUrl(url: string): Promise<string> {
+    if (url.startsWith("data:")) return url;
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+  }
+
+  async function handlePersonalize() {
+    if (!card || !userPhoto) return;
+    setPersonalizing(true);
+    setPersonalizeErr(null);
+    try {
+      const coverDataUrl = card.cover ? await urlToDataUrl(card.cover) : "";
+      const res = await fetch("/api/public/personalize-card", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userPhoto,
+          cardCover: coverDataUrl,
+          identity: card.identity,
+          mood: card.mood,
+          illustration_keyword: card.illustration_keyword,
+        }),
+      });
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || `合成失败 (${res.status})`);
+      }
+      const { image } = (await res.json()) as { image: string };
+      setPersonalizedCard(card.id, image);
+      setPersonalCover(image);
+    } catch (e) {
+      setPersonalizeErr(e instanceof Error ? e.message : "合成失败");
+    } finally {
+      setPersonalizing(false);
+    }
+  }
   const coordsRef = useRef<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
@@ -45,11 +126,48 @@ function CardPage() {
     setLocating(true);
     setError(null);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        coordsRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        coordsRef.current = { lat, lng };
         setAutoLocated(true);
         setCity("");
         setLocating(false);
+        setLocatedName("正在识别…");
+        // 反向地理编码：优先 Nominatim（中文简体），失败再 fallback BigDataCloud
+        try {
+          let name = "";
+          let cityName = "";
+          try {
+            const r = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=zh-CN&zoom=12`,
+              { headers: { Accept: "application/json" } },
+            );
+            const j = await r.json();
+            const a = j.address || {};
+            cityName = a.city || a.town || a.county || a.state || "";
+            const parts = [a.state, cityName, a.city_district || a.district || a.suburb].filter(Boolean);
+            name = Array.from(new Set(parts)).join(" · ");
+          } catch { /* fallback below */ }
+
+          if (!name) {
+            const r2 = await fetch(
+              `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=zh-CN`,
+            );
+            const j2 = await r2.json();
+            cityName = j2.city || j2.locality || cityName;
+            const parts = [
+              j2.principalSubdivision,
+              cityName,
+              j2.localityInfo?.administrative?.find((a: any) => a.adminLevel === 6)?.name,
+            ].filter(Boolean);
+            name = Array.from(new Set(parts)).join(" · ") || cityName || "未知位置";
+          }
+          setLocatedName(toSimplified(name));
+          if (cityName) setCity(toSimplified(cityName));
+        } catch {
+          setLocatedName(`约 ${lat.toFixed(3)}, ${lng.toFixed(3)}`);
+        }
       },
       (err) => {
         setLocating(false);
@@ -109,16 +227,18 @@ function CardPage() {
         ← 再抽一次
       </button>
 
-      <div className="persona-card relative" data-rarity={card.rarity} style={{ minHeight: 540 }}>
+      <div className="persona-card relative" data-rarity={card.rarity}>
         <div
-          className="relative h-72 overflow-hidden"
+          className="relative aspect-[4/5] w-full overflow-hidden"
           style={
             card.cover
               ? undefined
               : { background: `linear-gradient(160deg, ${a} 0%, ${b} 100%)` }
           }
         >
-          {card.cover ? (
+          {personalCover ? (
+            <img src={personalCover} alt={card.identity} className="absolute inset-0 w-full h-full object-cover" />
+          ) : card.cover ? (
             <img src={card.cover} alt={card.identity} className="absolute inset-0 w-full h-full object-cover" />
           ) : (
             <div
@@ -132,10 +252,17 @@ function CardPage() {
           <div className="absolute top-4 left-4 rarity-chip" data-rarity={card.rarity}>
             ✦ {card.rarity} · {RARITY_LABEL[card.rarity]}
           </div>
+          {personalCover && (
+            <div className="absolute top-4 right-4 display italic text-[10.5px] tracking-[0.25em] text-white/90 drop-shadow bg-black/30 rounded-full px-2.5 py-1">
+              ✦ YOU
+            </div>
+          )}
           <div className="absolute bottom-4 right-4 display italic text-sm text-white/90 drop-shadow">
             {card.id.replace("card_", "No.")}
           </div>
         </div>
+
+
 
         <div className="p-7">
           <div className="cn-serif text-[11px] tracking-[0.3em] text-[var(--ink-soft)]">
@@ -156,8 +283,88 @@ function CardPage() {
           <p className="cn-serif text-[16px] italic text-[var(--ink)] mt-1">
             「{card.mission}」
           </p>
+
+          {card.catchphrase && (
+            <p className="mt-5 cn-serif text-[15px] italic text-[var(--ink)] leading-relaxed border-l-2 border-[var(--primary)] pl-3">
+              「{card.catchphrase}」
+            </p>
+          )}
+
+          {card.story && (
+            <>
+              <div className="mt-6 cn-serif text-[11px] tracking-[0.3em] text-[var(--ink-soft)]">
+                STORY
+              </div>
+              <p className="cn-serif text-[14.5px] leading-relaxed text-[var(--ink)] mt-2">
+                {card.story}
+              </p>
+            </>
+          )}
+
+          {card.keywords && card.keywords.length > 0 && (
+            <div className="mt-5 flex flex-wrap gap-1.5">
+              {card.keywords.map((k) => (
+                <span
+                  key={k}
+                  className="px-2.5 py-1 rounded-full bg-[var(--muted)] cn-serif text-[11.5px] text-[var(--ink-soft)]"
+                >
+                  #{k}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {(card.best_time || card.companion || card.soundtrack || card.avoid || card.gift_from_city) && (
+            <div className="mt-6 grid grid-cols-1 gap-3">
+              {card.best_time && (
+                <MetaRow label="推荐时段" value={card.best_time} />
+              )}
+              {card.companion && (
+                <MetaRow label="同行建议" value={card.companion} />
+              )}
+              {card.soundtrack && (
+                <MetaRow label="今日 BGM" value={card.soundtrack} />
+              )}
+              {card.avoid && (
+                <MetaRow label="今天别做" value={card.avoid} />
+              )}
+              {card.gift_from_city && (
+                <MetaRow label="城市赠礼" value={card.gift_from_city} />
+              )}
+            </div>
+          )}
+
+          {card.routes && card.routes.length > 0 && (
+            <>
+              <div className="mt-6 cn-serif text-[11px] tracking-[0.3em] text-[var(--ink-soft)]">
+                POSSIBLE ROUTES
+              </div>
+              <ul className="mt-2 space-y-1.5">
+                {card.routes.map((r, i) => {
+                  const emoji = pickEmoji(r);
+                  return (
+                    <li
+                      key={i}
+                      className="cn-serif text-[14px] text-[var(--ink)] leading-relaxed flex gap-2"
+                    >
+                      <span className="display italic text-[var(--ink-soft)] shrink-0">
+                        {String(i + 1).padStart(2, "0")}
+                      </span>
+                      <span>
+                        {r}
+                        {emoji && <span className="ml-1.5 text-[15px] align-[-1px]">{emoji}</span>}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
         </div>
       </div>
+
+      {/* 个性化入口已移至「开始今日剧情」按钮上方 */}
+
 
       {/* City picker */}
       <div className="mt-8">
@@ -174,7 +381,7 @@ function CardPage() {
               : "bg-[var(--card)] border-[var(--border)] text-[var(--ink)] hover:bg-[var(--muted)]"
           }`}
         >
-          {locating ? "定位中…" : autoLocated ? "✓ 已用我当前的位置" : "📍 用我现在的位置"}
+          {locating ? "定位中…" : autoLocated ? `✓ ${locatedName ?? "已用我当前的位置"}` : "📍 用我现在的位置"}
         </button>
 
         <div className="text-[11px] cn-serif text-[var(--ink-soft)] mb-2 text-center">
@@ -186,7 +393,7 @@ function CardPage() {
             return (
               <button
                 key={c}
-                onClick={() => { setCity(c); setAutoLocated(false); coordsRef.current = null; }}
+                onClick={() => { setCity(c); setAutoLocated(false); setLocatedName(null); coordsRef.current = null; }}
                 className={`chip ${active ? "is-active" : ""}`}
               >
                 {c}

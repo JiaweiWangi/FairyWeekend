@@ -29,6 +29,7 @@ async function importPostchainModules() {
     entry,
     `
       export {
+        analyzePostchainTextRisks,
         buildPostchainReport,
         validatePostchainShareText,
         validatePostchainEditedReport,
@@ -157,6 +158,7 @@ test("postchain privacy hides merchant and city in generated report", async () =
   assert.equal(report.factCheck.ok, true);
   assert.equal(report.storyFragments.join(" ").includes("梧桐咖啡"), false);
   assert.equal(report.poemLines.join(" ").includes("上海"), false);
+  assert.equal(report.contentVariants.some((variant) => variant.body.includes("上海")), false);
 });
 
 test("postchain edited report rejects invented amount", async () => {
@@ -226,6 +228,11 @@ test("city preference profile exposes trend and recommendation proof", async () 
   assert.match(profile.trendSummary, /品类/);
   assert.match(profile.nextRouteBrief, /上海/);
   assert.ok(profile.recommendationProof.some((item) => item.includes("避开倾向")));
+  assert.match(profile.routeAssetSummary, /路线资产|单次报告/);
+  assert.equal(profile.routeAssetReports.length, 2);
+  assert.ok(profile.routeAssetReports[0].evidence.some((item) => item.includes("路线品类")));
+  assert.equal(profile.periodStats.totalRoutes, 2);
+  assert.ok(profile.periodStats.summary.includes("出门"));
 });
 
 test("serial insights summarize multi-trip arc", async () => {
@@ -235,4 +242,79 @@ test("serial insights summarize multi-trip arc", async () => {
   assert.match(insights.personaShift, /慢镜头情绪收藏家/);
   assert.ok(insights.chapterTitles["ch-test-2"].includes("第 2 章"));
   assert.notEqual(insights.monthlyRecap, "暂无月度复盘");
+});
+
+test("postchain report generates two motive-based content asset types", async () => {
+  const { buildPostchainReport } = await importPostchainModules();
+  const report = buildPostchainReport(chapterFixture(), {
+    authLevel: "personal",
+    reportStyle: "moments",
+    privacy: {
+      showMerchantNames: true,
+      showVisitTime: false,
+      showLocation: true,
+      showPhotos: false,
+      showAmount: false,
+      showDiscount: false,
+    },
+  });
+  assert.deepEqual(
+    report.contentVariants.map((variant) => variant.format),
+    ["self_expression", "route_spread"],
+  );
+  assert.match(
+    report.contentVariants.find((variant) => variant.format === "self_expression").body,
+    /状态表达/,
+  );
+  assert.equal(
+    report.contentVariants.every((variant) => variant.sections.length === 1),
+    true,
+  );
+  assert.ok(
+    report.contentVariants
+      .flatMap((variant) => variant.sections)
+      .every((section) => section.title === "最终报告"),
+  );
+  assert.deepEqual(
+    report.contentVariants.find((variant) => variant.format === "self_expression").sections.map((section) => section.title),
+    ["最终报告"],
+  );
+  assert.equal(
+    report.contentVariants
+      .flatMap((variant) => variant.sections)
+      .some((section) => section.text.includes("用户")),
+    false,
+  );
+  assert.match(
+    report.contentVariants.find((variant) => variant.format === "self_expression").sections[0].text,
+    /启动节点|收尾节点|清晰闭环/,
+  );
+  assert.deepEqual(
+    report.contentVariants.find((variant) => variant.format === "route_spread").sections.map((section) => section.title),
+    ["最终报告"],
+  );
+  assert.ok(
+    report.contentVariants
+      .find((variant) => variant.format === "route_spread")
+      .hashtags.includes("#可复刻路线"),
+  );
+  assert.equal(report.contentVariants.some((variant) => variant.hashtags.includes("#SR")), false);
+});
+
+test("text risk scanner blocks order and redemption claims", async () => {
+  const { analyzePostchainTextRisks } = await importPostchainModules();
+  const risks = analyzePostchainTextRisks(
+    chapterFixture(),
+    {
+      showMerchantNames: true,
+      showVisitTime: false,
+      showLocation: true,
+      showPhotos: false,
+      showAmount: false,
+      showDiscount: false,
+    },
+    "今天已核销优惠券，实付 88 元。",
+  );
+  assert.ok(risks.some((risk) => risk.label.includes("金额")));
+  assert.ok(risks.some((risk) => risk.label.includes("订单")));
 });

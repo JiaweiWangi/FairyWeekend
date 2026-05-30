@@ -9,32 +9,55 @@ import {
   type LibraryEntry,
 } from "@/lib/persona-store";
 import { VenueIcon, detectVenue } from "@/components/VenueIcon";
+import { UserPhotoCard } from "@/components/UserPhotoCard";
+import type * as ExportPdf from "@/lib/export-pdf";
+const loadExportPdf = () => import("@/lib/export-pdf");
+const elementToImageBlob: typeof ExportPdf.elementToImageBlob = (...args) =>
+  loadExportPdf().then((m) => m.elementToImageBlob(...args));
+const elementToPdfBlob: typeof ExportPdf.elementToPdfBlob = (...args) =>
+  loadExportPdf().then((m) => m.elementToPdfBlob(...args));
+const downloadBlob: typeof ExportPdf.downloadBlob = (...args) => {
+  void loadExportPdf().then((m) => m.downloadBlob(...args));
+};
+const shareImageOrDownload: typeof ExportPdf.shareImageOrDownload = (...args) =>
+  loadExportPdf().then((m) => m.shareImageOrDownload(...args));
+const shareOrDownload: typeof ExportPdf.shareOrDownload = (...args) =>
+  loadExportPdf().then((m) => m.shareOrDownload(...args));
 import {
-  elementToImageBlob,
-  elementToPdfBlob,
-  downloadBlob,
-  shareImageOrDownload,
-  shareOrDownload,
-} from "@/lib/export-pdf";
-import {
+  analyzePostchainTextRisks,
   buildPostchainReport,
   validatePostchainEditedReport,
   validatePostchainShareText,
+  type PostchainContentFormat,
   type PostchainAuthLevel,
   type PostchainPrivacySettings,
   type PostchainReport,
   type PostchainReportStyle,
 } from "@/lib/postchain-report";
-import { savePublicPostchainShareCloud } from "@/lib/postchain-share";
-import { loadPostchainConsentCloud, savePostchainConsentCloud } from "@/lib/postchain-consent";
+// postchain-share / postchain-consent 只在分享/授权流程用，动态加载避免进 me.tsx 首屏 chunk
+import type * as PostchainShareModule from "@/lib/postchain-share";
+import type * as PostchainConsentModule from "@/lib/postchain-consent";
+const loadPostchainShare = () => import("@/lib/postchain-share");
+const loadPostchainConsent = () => import("@/lib/postchain-consent");
+const savePublicPostchainShareCloud: typeof PostchainShareModule.savePublicPostchainShareCloud =
+  (...args) => loadPostchainShare().then((m) => m.savePublicPostchainShareCloud(...args));
+const loadPostchainConsentCloud: typeof PostchainConsentModule.loadPostchainConsentCloud =
+  (...args) => loadPostchainConsent().then((m) => m.loadPostchainConsentCloud(...args));
+const savePostchainConsentCloud: typeof PostchainConsentModule.savePostchainConsentCloud =
+  (...args) => loadPostchainConsent().then((m) => m.savePostchainConsentCloud(...args));
+
 import { buildCityPreferenceProfile, type DmMemorySnapshot } from "@/lib/city-preference";
 import { supabase } from "@/integrations/supabase/client";
 import { qrSvgDataUrl } from "@/lib/qr";
 import { buildSerialInsights } from "@/lib/serial-insights";
+import { reportPagePerf } from "@/lib/perf-monitor";
+
 
 export const Route = createFileRoute("/me")({ component: MePage });
 
-type Tab = "novel" | "comic" | "poster" | "library" | "profile";
+type AssetMode = "single" | "longterm";
+type Tab = "novel" | "poster" | "library" | "profile";
+type RangeKey = "30d" | "90d" | "year" | "all";
 type SortKey = "recent" | "enhanced" | "order";
 export type MeFilters = {
   sort: SortKey;
@@ -79,15 +102,43 @@ function loadPostchainPrivacy(): PostchainPrivacySettings {
   }
 }
 
+function filterSagasByRange(sagas: ArchivedChapter[], range: RangeKey): ArchivedChapter[] {
+  if (range === "all") return sagas;
+  const now = Date.now();
+  const days = range === "30d" ? 30 : range === "90d" ? 90 : 365;
+  const start = now - days * 24 * 60 * 60 * 1000;
+  return sagas.filter((chapter) => (chapter.archivedAt ?? chapter.createdAt) >= start);
+}
+
+function describeRange(range: RangeKey): string {
+  if (range === "30d") return "近 30 天";
+  if (range === "90d") return "近 90 天";
+  if (range === "year") return "近 1 年";
+  return "全部时间";
+}
+
 function MePage() {
   const navigate = useNavigate();
-  const [tabs, setTabs] = useState<Set<Tab>>(() => {
+
+  // 性能监测：首屏 / Web Vitals / 资源体积，控制台输出
+  useEffect(() => {
+    reportPagePerf("me");
+  }, []);
+
+  const [assetMode, setAssetMode] = useState<AssetMode>(() => {
+    if (typeof window !== "undefined" && localStorage.getItem(POSTCHAIN_ENTRY_KEY) === "1") {
+      return "single";
+    }
+    return "single";
+  });
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
     if (typeof window !== "undefined" && localStorage.getItem(POSTCHAIN_ENTRY_KEY) === "1") {
       localStorage.removeItem(POSTCHAIN_ENTRY_KEY);
-      return new Set(["poster"]);
+      return "poster";
     }
-    return new Set(["novel"]);
+    return "novel";
   });
+  const [rangeKey, setRangeKey] = useState<RangeKey>("90d");
   const [reloadKey, setReloadKey] = useState(0);
   const [filters, setFilters] = useState<MeFilters>({
     sort: "recent",
@@ -99,10 +150,14 @@ function MePage() {
   const [cloudStatus, setCloudStatus] = useState<"idle" | "syncing" | "synced" | "local">("idle");
 
   const sagas = loadSagas();
-  const library = buildLibrary();
+  const scopedSagas = useMemo(() => {
+    if (assetMode === "single") return sagas.slice(0, 1);
+    return filterSagasByRange(sagas, rangeKey);
+  }, [assetMode, rangeKey, sagas]);
+  const library = useMemo(() => buildLibrary(scopedSagas), [scopedSagas]);
   const preferenceProfile = useMemo(
-    () => buildCityPreferenceProfile(sagas, dmMemory),
-    [sagas, dmMemory],
+    () => buildCityPreferenceProfile(scopedSagas, dmMemory),
+    [scopedSagas, dmMemory],
   );
 
   useEffect(() => {
@@ -148,22 +203,28 @@ function MePage() {
     return { chapters, scenes, enhanced, rarities: rarities.size };
   }, [sagas]);
 
-  function toggleTab(t: Tab) {
-    setTabs((prev) => {
-      const next = new Set(prev);
-      if (next.has(t)) {
-        if (next.size > 1) next.delete(t);
-      } else next.add(t);
-      return next;
-    });
-  }
+  const showNovel = activeTab === "novel";
+  const showPoster = activeTab === "poster";
+  const showLibrary = activeTab === "library";
+  const showProfile = activeTab === "profile";
+  const showFilters = assetMode === "longterm" && (showNovel || showLibrary);
+  const visibleTabs: Array<[Tab, string]> =
+    assetMode === "single"
+      ? [
+          ["novel", "单次小说"],
+          ["poster", "复盘海报"],
+          ["library", "单次收藏"],
+        ]
+      : [
+          ["novel", "长期连载"],
+          ["profile", "长期报告"],
+          ["library", "路线资产"],
+        ];
 
-  const showNovel = tabs.has("novel");
-  const showComic = tabs.has("comic");
-  const showPoster = tabs.has("poster");
-  const showLibrary = tabs.has("library");
-  const showProfile = tabs.has("profile");
-  const showFilters = showNovel || showLibrary;
+  function switchMode(mode: AssetMode) {
+    setAssetMode(mode);
+    setActiveTab("novel");
+  }
 
   return (
     <div
@@ -204,70 +265,119 @@ function MePage() {
         </div>
       </header>
 
-      {/* Tabs (multi-select) */}
-      <div className="max-w-xl mx-auto px-5 mt-6 flex justify-center">
-        <div className="inline-flex flex-wrap justify-center gap-1 rounded-full bg-[var(--muted)] border border-[var(--border)] p-1 text-[12px] cn-serif">
+      {/* 我的照片 */}
+      <section className="max-w-xl mx-auto px-5 mt-6">
+        <div className="display text-[10.5px] tracking-[0.35em] text-[var(--ink-soft)] mb-2">
+          MY · PHOTO
+        </div>
+        <UserPhotoCard />
+      </section>
+
+
+      <div className="max-w-xl mx-auto px-5 mt-6 space-y-3">
+        <div className="grid grid-cols-2 gap-2 rounded-2xl bg-[var(--muted)] border border-[var(--border)] p-1 cn-serif text-[12px]">
           {(
             [
-              ["novel", "连载小说"],
-              ["comic", "漫画分镜"],
-              ["poster", "复盘海报"],
-              ["library", "收藏馆"],
-              ["profile", "偏好档案"],
+              ["single", "单次路线资产"],
+              ["longterm", "长期路线资产"],
             ] as const
-          ).map(([k, l]) => {
-            const active = tabs.has(k);
-            return (
-              <button
-                key={k}
-                onClick={() => toggleTab(k)}
-                className={`px-4 py-1.5 rounded-full transition ${active ? "bg-[var(--card)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"}`}
-              >
-                {l}
-              </button>
-            );
-          })}
+          ).map(([mode, label]) => (
+            <button
+              key={mode}
+              onClick={() => switchMode(mode)}
+              className={`px-3 py-2 rounded-xl transition ${
+                assetMode === mode
+                  ? "bg-[var(--card)] text-[var(--ink)] shadow-sm"
+                  : "text-[var(--ink-soft)]"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-      </div>
-      <div className="max-w-xl mx-auto px-5 mt-2 text-center">
-        <div className="cn-serif text-[10px] text-[var(--ink-soft)]">点选可同时切换多个视图</div>
+
+        {assetMode === "longterm" && (
+          <div className="flex flex-wrap justify-center gap-1 rounded-2xl bg-[var(--card)] border border-[var(--border)] p-1 cn-serif text-[11px]">
+            {(
+              [
+                ["30d", "近30天"],
+                ["90d", "近90天"],
+                ["year", "近1年"],
+                ["all", "全部"],
+              ] as const
+            ).map(([range, label]) => (
+              <button
+                key={range}
+                onClick={() => setRangeKey(range)}
+                className={`px-3 py-1.5 rounded-xl transition ${
+                  rangeKey === range
+                    ? "bg-[var(--ink)] text-[var(--card)]"
+                    : "text-[var(--ink-soft)] hover:text-[var(--ink)]"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="flex justify-center">
+          <div className="inline-flex flex-wrap justify-center gap-1 rounded-full bg-[var(--muted)] border border-[var(--border)] p-1 text-[12px] cn-serif">
+            {visibleTabs.map(([k, l]) => {
+              const active = activeTab === k;
+              return (
+                <button
+                  key={k}
+                  onClick={() => setActiveTab(k)}
+                  className={`px-4 py-1.5 rounded-full transition ${active ? "bg-[var(--card)] text-[var(--ink)] shadow-sm" : "text-[var(--ink-soft)]"}`}
+                >
+                  {l}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="text-center cn-serif text-[10px] text-[var(--ink-soft)]">
+          当前范围：{assetMode === "single" ? "最近一次完成路线" : describeRange(rangeKey)}
+        </div>
       </div>
 
       {/* Filter / Sort bar */}
-      {showFilters && sagas.length > 0 && (
+      {showFilters && scopedSagas.length > 0 && (
         <div className="max-w-xl mx-auto px-5 mt-4">
           <FilterBar filters={filters} onChange={setFilters} />
         </div>
       )}
 
       <main className="max-w-xl mx-auto px-5 mt-6 space-y-10">
-        {sagas.length === 0 && !showLibrary && !showProfile && (
+        {scopedSagas.length === 0 && !showLibrary && !showProfile && (
           <EmptyState onGo={() => navigate({ to: "/" })} />
         )}
-        {showNovel && sagas.length > 0 && (
+        {showNovel && scopedSagas.length > 0 && (
           <NovelView
-            sagas={sagas}
+            sagas={scopedSagas}
             filters={filters}
+            mode={assetMode}
             onDelete={(id) => {
               deleteChapter(id);
               setReloadKey((k) => k + 1);
             }}
           />
         )}
-        {showComic && sagas.length > 0 && <ComicView sagas={sagas} />}
         {showPoster && (
           <PostchainView
-            sagas={sagas}
-            empty={sagas.length === 0}
+            sagas={scopedSagas}
+            empty={scopedSagas.length === 0}
             onGo={() => navigate({ to: "/" })}
           />
         )}
         {showLibrary && (
           <LibraryView
             library={library}
-            sagas={sagas}
+            sagas={scopedSagas}
             filters={filters}
-            empty={sagas.length === 0}
+            mode={assetMode}
+            empty={scopedSagas.length === 0}
             onGo={() => navigate({ to: "/" })}
           />
         )}
@@ -275,7 +385,8 @@ function MePage() {
           <CityPreferenceView
             profile={preferenceProfile}
             memory={dmMemory}
-            empty={sagas.length === 0 && !dmMemory}
+            rangeLabel={describeRange(rangeKey)}
+            empty={scopedSagas.length === 0 && !dmMemory}
             onGo={() => navigate({ to: "/" })}
           />
         )}
@@ -409,10 +520,12 @@ function chapterMeta(ch: ArchivedChapter) {
 function NovelView({
   sagas,
   filters,
+  mode,
   onDelete,
 }: {
   sagas: ArchivedChapter[];
   filters: MeFilters;
+  mode: AssetMode;
   onDelete: (id: string) => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
@@ -457,10 +570,39 @@ function NovelView({
     setExporting(true);
   }
 
+  if (mode === "single") {
+    const entry = indexed[0];
+    if (!entry) return null;
+    return (
+      <SingleChapterNovel
+        ch={entry.ch}
+        chapterNo={entry.chapterNo}
+        onDelete={() => onDelete(entry.ch.chapterId)}
+        onExport={(exportMode) => runChapterExport(entry.ch, exportMode)}
+        exporting={
+          exporting &&
+          exportJob?.kind === "chapter" &&
+          exportJob.ch.chapterId === entry.ch.chapterId
+        }
+        exportRunner={
+          exportJob ? (
+            <ExportRunner
+              job={exportJob}
+              onDone={() => {
+                setExporting(false);
+                setExportJob(null);
+              }}
+            />
+          ) : null
+        }
+      />
+    );
+  }
+
   return (
     <>
       <section className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-4 mb-5">
-        <div className="display text-[10px] tracking-[0.35em] text-[var(--ink-soft)]">
+        <div className="display text-[10px] tracking-[0.35em] opacity-60">
           SERIAL ARC · 连载主线
         </div>
         <h2 className="cn-serif text-[20px] leading-snug text-[var(--ink)] mt-2">
@@ -617,6 +759,133 @@ function NovelView({
         </div>
       )}
     </>
+  );
+}
+
+function buildNextRouteIdea(ch: ArchivedChapter) {
+  const completed = ch.journey.scenes.filter((scene) => ch.completedSceneOrders.includes(scene.order));
+  const categories = Array.from(new Set(completed.map((scene) => scene.location_type))).slice(0, 3);
+  const emotions = Array.from(new Set(completed.flatMap((scene) => scene.emotion_tags))).slice(0, 3);
+  const city = ch.city || "当前城市";
+  const base = categories[0] || "城市漫游";
+  return {
+    title: `${city} · ${base}延展路线`,
+    body: `下一次可以沿着这次的${categories.join("、") || "路线气质"}继续走，但换一个商圈或加入一个更明确的收尾节点。`,
+    proof: [
+      completed.length ? `本次已完成 ${completed.length}/${ch.journey.scenes.length} 个节点` : "",
+      categories.length ? `可延展品类：${categories.join("、")}` : "",
+      emotions.length ? `延续情绪：${emotions.join("、")}` : "",
+    ].filter(Boolean),
+  };
+}
+
+function SingleChapterNovel({
+  ch,
+  chapterNo,
+  onDelete,
+  onExport,
+  exporting,
+  exportRunner,
+}: {
+  ch: ArchivedChapter;
+  chapterNo: number;
+  onDelete: () => void;
+  onExport: (mode: "download" | "share") => void;
+  exporting: boolean;
+  exportRunner: React.ReactNode;
+}) {
+  const date = new Date(ch.createdAt);
+  const dateStr = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+  const nextIdea = buildNextRouteIdea(ch);
+
+  return (
+    <div className="space-y-5">
+      <section className="persona-card overflow-hidden" data-rarity={ch.card.rarity}>
+        <div
+          className="relative h-44 overflow-hidden"
+          style={
+            ch.card.cover
+              ? undefined
+              : { background: `linear-gradient(135deg, ${ch.card.colors[0]}, ${ch.card.colors[1]})` }
+          }
+        >
+          {ch.card.cover && <img src={ch.card.cover} alt={ch.card.identity} className="w-full h-full object-cover" />}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+          <div className="absolute top-3 left-3 right-3 flex items-start justify-between">
+            <div className="rarity-chip" data-rarity={ch.card.rarity}>✦ {ch.card.rarity}</div>
+            <div className="display text-[10px] tracking-[0.3em] text-white/90">
+              CH.{String(chapterNo).padStart(2, "0")}
+            </div>
+          </div>
+          <div className="absolute bottom-4 left-4 right-4 text-white">
+            <div className="display italic text-[11px] opacity-80">
+              {dateStr} {ch.city && `· ${ch.city}`}
+            </div>
+            <h2 className="cn-serif text-[22px] leading-snug mt-1">「{ch.card.identity}」</h2>
+          </div>
+        </div>
+        <div className="p-4 space-y-4">
+          <p className="cn-serif text-[14px] leading-relaxed text-[var(--ink)]">
+            {ch.journey.story_opening}
+          </p>
+          <div className="grid gap-3">
+            {ch.journey.scenes.map((scene) => {
+              const done = ch.completedSceneOrders.includes(scene.order);
+              const rec = ch.sceneRecords?.[scene.order];
+              return (
+                <div
+                  key={scene.order}
+                  className={`rounded-2xl border px-3 py-3 ${
+                    done
+                      ? "bg-[var(--card)] border-[var(--border)]"
+                      : "bg-[var(--muted)]/45 border-dashed border-[var(--border)] opacity-70"
+                  }`}
+                >
+                  <div className="display text-[9px] tracking-[0.28em] text-[var(--ink-soft)]">
+                    STEP {scene.order} · {done ? "已完成" : "未完成"}
+                  </div>
+                  <div className="cn-serif text-[15px] text-[var(--ink)] mt-1">
+                    {scene.scene_name}
+                  </div>
+                  <p className="cn-serif text-[12px] leading-relaxed text-[var(--ink-soft)] mt-1">
+                    {rec?.note || scene.persona_narrative}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+          <p className="cn-serif text-[14px] leading-relaxed text-[var(--ink)]">
+            {ch.journey.closing}
+          </p>
+          <div className="flex gap-2">
+            <button onClick={() => onExport("download")} disabled={exporting} className="btn-soft text-[12px] flex-1 justify-center">
+              {exporting ? "导出中…" : "导出本章 PDF"}
+            </button>
+            <button onClick={onDelete} className="btn-ghost text-[12px] px-3">
+              删除
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-4">
+        <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)]">
+          NEXT ROUTE · 下一次可以走什么
+        </div>
+        <h3 className="cn-serif text-[18px] text-[var(--ink)] mt-2">{nextIdea.title}</h3>
+        <p className="cn-serif text-[13px] leading-relaxed text-[var(--ink)] mt-2">
+          {nextIdea.body}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {nextIdea.proof.map((item) => (
+            <span key={item} className="cn-serif text-[11px] px-2.5 py-1 rounded-full bg-[var(--muted)] text-[var(--ink-soft)] border border-[var(--border)]">
+              {item}
+            </span>
+          ))}
+        </div>
+      </section>
+      {exportRunner}
+    </div>
   );
 }
 
@@ -884,118 +1153,6 @@ function MiniStat({ n, label, small }: { n: React.ReactNode; label: string; smal
   );
 }
 
-/* ============ 漫画分镜 ============ */
-function ComicView({ sagas }: { sagas: ArchivedChapter[] }) {
-  return (
-    <div className="space-y-8">
-      {sagas.map((ch, idx) => {
-        const date = new Date(ch.createdAt);
-        const chapterNo = sagas.length - idx;
-        return (
-          <section key={ch.chapterId}>
-            <div className="flex items-baseline justify-between mb-2">
-              <div>
-                <div className="display italic text-[11px] text-[var(--ink-soft)]">
-                  EPISODE {String(chapterNo).padStart(2, "0")} · {date.getMonth() + 1}/
-                  {date.getDate()}
-                </div>
-                <div className="cn-serif text-[15px] text-[var(--ink)]">「{ch.card.identity}」</div>
-              </div>
-              <div className="rarity-chip" data-rarity={ch.card.rarity}>
-                ✦ {ch.card.rarity}
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2.5">
-              {/* Cover panel */}
-              <ComicPanel
-                className="col-span-2 aspect-[2/1]"
-                bg={ch.card.cover}
-                colors={ch.card.colors}
-              >
-                <div className="absolute inset-0 bg-gradient-to-t from-black/65 to-transparent" />
-                <div className="absolute bottom-2 left-3 right-3 text-white">
-                  <div className="cn-serif text-[13px] leading-tight">
-                    {ch.journey.story_opening.slice(0, 38)}…
-                  </div>
-                </div>
-              </ComicPanel>
-              {ch.journey.scenes.map((s) => {
-                const rec = ch.sceneRecords?.[s.order];
-                const venue = detectVenue(s.location_type, s.scene_name);
-                return (
-                  <ComicPanel
-                    key={s.order}
-                    className="aspect-square"
-                    photo={rec?.photo}
-                    colors={ch.card.colors}
-                  >
-                    {!rec?.photo && (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <VenueIcon kind={venue} size={72} />
-                      </div>
-                    )}
-                    <div className="absolute top-1.5 left-1.5 display text-[9px] tracking-widest bg-white/85 rounded px-1.5 py-0.5">
-                      §{s.order}
-                    </div>
-                    {rec?.mood && (
-                      <div className="absolute top-1.5 right-1.5 text-[18px] drop-shadow">
-                        {rec.mood}
-                      </div>
-                    )}
-                    {(rec?.note || s.scene_name) && (
-                      <div className="absolute bottom-0 left-0 right-0 bg-white/92 backdrop-blur px-2 py-1.5 border-t border-[var(--border)]">
-                        <div className="cn-serif text-[11px] text-[var(--ink)] leading-snug line-clamp-2">
-                          {rec?.note || s.scene_name}
-                        </div>
-                      </div>
-                    )}
-                  </ComicPanel>
-                );
-              })}
-              {/* Closing panel */}
-              <ComicPanel className="col-span-2 aspect-[2/1]" colors={ch.card.colors}>
-                <div className="absolute inset-0 flex items-center justify-center px-4 text-center">
-                  <p className="cn-serif text-[13px] text-[var(--ink)] italic leading-snug">
-                    {ch.journey.closing.slice(0, 60)}…
-                  </p>
-                </div>
-              </ComicPanel>
-            </div>
-          </section>
-        );
-      })}
-    </div>
-  );
-}
-
-function ComicPanel({
-  children,
-  className = "",
-  bg,
-  photo,
-  colors,
-}: {
-  children?: React.ReactNode;
-  className?: string;
-  bg?: string;
-  photo?: string;
-  colors: string[];
-}) {
-  const style: React.CSSProperties = photo
-    ? { backgroundImage: `url(${photo})`, backgroundSize: "cover", backgroundPosition: "center" }
-    : bg
-      ? { backgroundImage: `url(${bg})`, backgroundSize: "cover", backgroundPosition: "center" }
-      : { background: `linear-gradient(135deg, ${colors[0]}, ${colors[1]})` };
-  return (
-    <div
-      className={`relative overflow-hidden rounded-xl border-2 border-[var(--ink)]/85 shadow-[3px_3px_0_0_rgba(61,53,48,0.85)] ${className}`}
-      style={style}
-    >
-      {children}
-    </div>
-  );
-}
-
 /* ============ 后链路复盘海报 ============ */
 function PostchainView({
   sagas,
@@ -1009,11 +1166,11 @@ function PostchainView({
   const [chapterId, setChapterId] = useState(sagas[0]?.chapterId ?? "");
   const [authLevel, setAuthLevel] = useState<PostchainAuthLevel>(() => loadPostchainAuth() ?? "basic");
   const [draftAuthLevel, setDraftAuthLevel] = useState<PostchainAuthLevel>(authLevel);
-  const [authorized, setAuthorized] = useState(() => loadPostchainAuth() !== null);
+  const [authorized, setAuthorized] = useState(true);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [privacy, setPrivacy] = useState<PostchainPrivacySettings>(loadPostchainPrivacy);
   const [reportStyle, setReportStyle] = useState<PostchainReportStyle>("moments");
-  const [generated, setGenerated] = useState(false);
+  const [generated, setGenerated] = useState(true);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [editableShareText, setEditableShareText] = useState("");
   const [reportEdits, setReportEdits] = useState<ReportEdits>({});
@@ -1044,7 +1201,7 @@ function PostchainView({
   useEffect(() => {
     localStorage.setItem(POSTCHAIN_PRIVACY_KEY, JSON.stringify(privacy));
     if (authorized) void savePostchainConsentCloud(authLevel, privacy);
-    setGenerated(false);
+    setGenerated(true);
     setPreviewOpen(false);
   }, [authLevel, authorized, privacy]);
 
@@ -1068,7 +1225,7 @@ function PostchainView({
   function openPreview(nextReport = report) {
     setGenerated(true);
     setPreviewOpen(true);
-    setEditableShareText(nextReport.shareText);
+    setEditableShareText(nextReport.contentVariants[0]?.sections[0]?.text ?? nextReport.shareText);
     setReportEdits({});
     setShareUrl("");
   }
@@ -1109,12 +1266,12 @@ function PostchainView({
     }
   }
 
-  async function copyShareText() {
+  async function copyShareText(text = editableShareText || editedReport.shareText) {
     try {
-      await navigator.clipboard.writeText(editableShareText || editedReport.shareText);
+      await navigator.clipboard.writeText(text);
       alert("分享文案已复制。");
     } catch {
-      alert(editableShareText || editedReport.shareText);
+      alert(text);
     }
   }
 
@@ -1165,7 +1322,9 @@ function PostchainView({
     localStorage.setItem(POSTCHAIN_AUTH_KEY, draftAuthLevel);
     void savePostchainConsentCloud(draftAuthLevel, privacy);
     setAuthDialogOpen(false);
-    openPreview(nextReport);
+    setGenerated(true);
+    setPreviewOpen(false);
+    setEditableShareText(nextReport.contentVariants[0]?.sections[0]?.text ?? nextReport.shareText);
   }
 
   if (generated && previewOpen) {
@@ -1177,15 +1336,6 @@ function PostchainView({
         report={editedReport}
         privacy={privacy}
         posterRef={posterRef}
-        reportStyle={reportStyle}
-        onStyleChange={(value) => {
-          setReportStyle(value);
-          setReportEdits({});
-          setShareUrl("");
-          setEditableShareText(
-            buildPostchainReport(chapter, { authLevel, reportStyle: value, privacy }).shareText,
-          );
-        }}
         shareText={editableShareText || editedReport.shareText}
         onShareTextChange={setEditableShareText}
         edits={reportEdits}
@@ -1203,234 +1353,16 @@ function PostchainView({
 
   return (
     <div className="space-y-5">
-      <section className="rounded-3xl border border-[var(--border)] bg-[var(--card)]/80 backdrop-blur p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="display text-[10px] tracking-[0.35em] text-[var(--ink-soft)]">
-              POSTCHAIN · 后链路
-            </div>
-            <h2 className="cn-serif text-[18px] text-[var(--ink)] mt-1">从真实连载生成分享资产</h2>
-          </div>
-          <button
-            onClick={() => {
-              if (authorized) {
-                openPreview();
-              } else {
-                openAuthDialog();
-              }
-            }}
-            className="btn-soft shrink-0 px-4 py-2 text-[13px]"
-          >
-            生成复盘
-          </button>
-        </div>
-
-        <div className="mt-4 grid gap-3">
-          <div>
-            <div className="display text-[9px] tracking-[0.3em] text-[var(--ink-soft)] mb-2">
-              CHAPTER
-            </div>
-            <div className="grid gap-2">
-              {sagas.slice(0, 4).map((item, idx) => {
-                const no = sagas.length - idx;
-                const active = item.chapterId === chapter.chapterId;
-                return (
-                  <button
-                    key={item.chapterId}
-                    onClick={() => {
-                      setChapterId(item.chapterId);
-                      setGenerated(false);
-                      setPreviewOpen(false);
-                    }}
-                    className={`w-full text-left rounded-2xl border px-3 py-2.5 flex items-center gap-3 transition ${
-                      active
-                        ? "bg-[var(--ink)] text-[var(--card)] border-[var(--ink)]"
-                        : "bg-[var(--card)] text-[var(--ink)] border-[var(--border)] hover:bg-[var(--muted)]"
-                    }`}
-                  >
-                    <span className="display text-[11px] tracking-[0.2em] shrink-0">
-                      CH.{String(no).padStart(2, "0")}
-                    </span>
-                    <span className="cn-serif text-[13px] truncate flex-1">
-                      「{item.card.identity}」
-                    </span>
-                    <span className="cn-serif text-[11px] opacity-70 shrink-0">
-                      {item.completedSceneOrders.length}/{item.journey.scenes.length}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div>
-            <div className="display text-[9px] tracking-[0.3em] text-[var(--ink-soft)] mb-2">
-              DATA AUTH
-            </div>
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] px-3 py-3 flex items-center justify-between gap-3">
-              <div>
-                <div className="cn-serif text-[13px] text-[var(--ink)]">
-                  {authLevel === "basic"
-                    ? "基础授权"
-                    : authLevel === "personal"
-                      ? "标准授权"
-                      : "高级授权"}
-                  <span className="ml-2 text-[11px] text-[var(--ink-soft)]">
-                    {authorized ? "已保存" : "待确认"}
-                  </span>
-                </div>
-                <div className="cn-serif text-[11px] text-[var(--ink-soft)] mt-0.5">
-                  {authLevel === "basic"
-                    ? "仅使用路线完成数据。"
-                    : authLevel === "personal"
-                      ? "使用点位、品类、照片/随笔等本次记录。"
-                      : "使用完整本次记录，并预留订单、优惠和历史偏好字段。"}
-                </div>
-              </div>
-              <button onClick={openAuthDialog} className="btn-ghost text-[12px] px-3 py-1.5">
-                调整授权
-              </button>
-            </div>
-          </div>
-
-          <SegmentedControl<PostchainReportStyle>
-            label="STYLE"
-            value={reportStyle}
-            options={[
-              ["moments", "朋友圈"],
-              ["literary", "文艺漫游"],
-              ["saving", "省心攻略"],
-              ["niche", "小众人格"],
-            ]}
-            onChange={(v) => {
-              setReportStyle(v);
-              setGenerated(false);
-              setPreviewOpen(false);
-            }}
-          />
-
-          <PrivacySettingsPanel
-            value={privacy}
-            onChange={(next) => setPrivacy(next)}
-          />
-        </div>
-      </section>
-
       {authDialogOpen && (
-        <PostchainAuthDialog
-          value={draftAuthLevel}
-          onChange={setDraftAuthLevel}
-          onCancel={() => setAuthDialogOpen(false)}
-          onConfirm={confirmAuth}
-        />
+      <PostchainAuthDialog
+        value={draftAuthLevel}
+        privacy={privacy}
+        onChange={setDraftAuthLevel}
+        onPrivacyChange={setPrivacy}
+        onCancel={() => setAuthDialogOpen(false)}
+        onConfirm={confirmAuth}
+      />
       )}
-
-      <section className="grid gap-4">
-        <div className="rounded-3xl border border-[var(--border)] bg-[var(--card)]/80 p-4">
-          <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)] mb-2">
-            FACTS · 真实数据摘要
-          </div>
-          <div className="grid gap-2">
-            {report.factSummary.map((fact) => (
-              <div
-                key={fact}
-                className="cn-serif text-[12px] text-[var(--ink)] rounded-2xl bg-[var(--muted)]/60 border border-[var(--border)] px-3 py-2"
-              >
-                {fact}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-3xl border border-[var(--border)] bg-[var(--card)]/80 p-4">
-          <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)] mb-2">
-            ROUTE STATUS · 路线状态
-          </div>
-          <div className="rounded-2xl bg-[var(--muted)]/60 border border-[var(--border)] px-3 py-3">
-            <div className="flex items-end justify-between gap-3">
-              <div>
-                <div className="cn-serif text-[13px] text-[var(--ink)]">{report.completionText}</div>
-                <div className="cn-serif text-[11px] text-[var(--ink-soft)] mt-1">
-                  主题：{report.routeTheme}
-                </div>
-              </div>
-              <strong className="display text-[26px] leading-none text-[var(--accent)]">
-                {report.completionPercent}%
-              </strong>
-            </div>
-            <div className="mt-3 h-1.5 rounded-full bg-[var(--card)] overflow-hidden">
-              <div
-                className="h-full bg-[var(--accent)] transition-all"
-                style={{ width: `${report.completionPercent}%` }}
-              />
-            </div>
-          </div>
-
-          {report.incompleteNodes.length > 0 && (
-            <div className="mt-3">
-              <div className="display text-[9px] tracking-[0.28em] text-[var(--ink-soft)] mb-2">
-                TODO · 未完成节点
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {report.incompleteNodes.map((node) => (
-                  <span
-                    key={node.order}
-                    className="cn-serif text-[11px] px-2.5 py-1 rounded-full bg-[var(--muted)] text-[var(--ink-soft)] border border-[var(--border)]"
-                  >
-                    {node.order}. {node.displayName}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="mt-3">
-            <div className="display text-[9px] tracking-[0.28em] text-[var(--ink-soft)] mb-2">
-              KEYWORDS · 路线关键词
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {report.routeKeywords.map((keyword) => (
-                <span
-                  key={keyword}
-                  className="cn-serif text-[11px] px-2.5 py-1 rounded-full bg-[var(--card)] text-[var(--ink-soft)] border border-[var(--border)]"
-                >
-                  {keyword}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-3">
-            <div className="display text-[9px] tracking-[0.28em] text-[var(--ink-soft)] mb-2">
-              TRAITS · 行为特征
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {report.behaviorTraits.map((trait) => (
-                <span
-                  key={trait}
-                  className="cn-serif text-[11px] px-2.5 py-1 rounded-full bg-[var(--ink)] text-[var(--card)]"
-                >
-                  {trait}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-3xl border border-[var(--border)] bg-[var(--card)]/80 p-4">
-          <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)] mb-2">
-            SIGNALS · 自动沉淀
-          </div>
-          <ul className="grid gap-1.5">
-            {report.dataSignals.map((signal) => (
-              <li key={signal} className="cn-serif text-[12px] text-[var(--ink-soft)] flex gap-2">
-                <span className="text-[var(--accent)]">✦</span>
-                <span>{signal}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
 
       <section>
         <div className="flex items-center justify-between gap-3 mb-3">
@@ -1443,8 +1375,9 @@ function PostchainView({
           <div className="flex gap-2">
             <button
               onClick={() => {
-                setEditableShareText(report.shareText);
-                copyShareText();
+                const text = report.contentVariants[0]?.sections[0]?.text ?? report.shareText;
+                setEditableShareText(text);
+                void copyShareText(text);
               }}
               disabled={!generated}
               className="btn-ghost text-[12px] px-3 py-1.5 disabled:opacity-40"
@@ -1452,11 +1385,14 @@ function PostchainView({
               复制文案
             </button>
             <button
-              onClick={exportPoster}
+              onClick={() => exportPoster()}
               disabled={!generated || exporting}
               className="btn-soft text-[12px] px-3 py-1.5"
             >
               {exporting ? "导出中…" : "导出图片"}
+            </button>
+            <button onClick={() => openPreview()} className="btn-ghost text-[12px] px-3 py-1.5">
+              编辑发布
             </button>
           </div>
         </div>
@@ -1469,6 +1405,7 @@ function PostchainView({
             dateStr={dateStr}
             report={report}
             privacy={privacy}
+            shareText={editableShareText || report.contentVariants[0]?.sections[0]?.text || report.shareText}
           />
         ) : (
           <div className="rounded-3xl border border-dashed border-[var(--border)] bg-[var(--card)]/60 min-h-[360px] flex items-center justify-center text-center px-8">
@@ -1525,6 +1462,34 @@ function PostchainView({
           </div>
         </section>
       )}
+
+      <section className="rounded-3xl border border-[var(--border)] bg-[var(--card)]/80 p-4">
+        <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)]">
+          DATA SETTINGS · 授权与隐私
+        </div>
+        <div className="mt-3 rounded-2xl border border-[var(--border)] bg-[var(--muted)]/45 px-3 py-3 flex items-center justify-between gap-3">
+          <div>
+            <div className="cn-serif text-[13px] text-[var(--ink)]">
+              {authLevel === "basic"
+                ? "基础授权"
+                : authLevel === "personal"
+                  ? "标准授权"
+                  : "高级授权"}
+              <span className="ml-2 text-[11px] text-[var(--ink-soft)]">当前版本</span>
+            </div>
+            <div className="cn-serif text-[11px] text-[var(--ink-soft)] mt-0.5">
+              {authLevel === "basic"
+                ? "仅使用路线完成数据生成海报。"
+                : authLevel === "personal"
+                  ? "使用点位、品类、照片/随笔等本次记录生成海报。"
+                  : "使用完整本次记录，并预留订单、优惠和历史偏好字段。"}
+            </div>
+          </div>
+          <button onClick={openAuthDialog} className="btn-ghost text-[12px] px-3 py-1.5 shrink-0">
+            重新生成
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -1536,8 +1501,6 @@ function ReportPreviewFlow({
   report,
   privacy,
   posterRef,
-  reportStyle,
-  onStyleChange,
   shareText,
   onShareTextChange,
   edits,
@@ -1556,8 +1519,6 @@ function ReportPreviewFlow({
   report: PostchainReport;
   privacy: PostchainPrivacySettings;
   posterRef: React.RefObject<HTMLDivElement | null>;
-  reportStyle: PostchainReportStyle;
-  onStyleChange: (value: PostchainReportStyle) => void;
   shareText: string;
   onShareTextChange: (value: string) => void;
   edits: ReportEdits;
@@ -1573,6 +1534,22 @@ function ReportPreviewFlow({
   const setEdit = <K extends keyof ReportEdits>(key: K, value: ReportEdits[K]) =>
     onEditsChange({ ...edits, [key]: value });
   const storyFragments = edits.storyFragments ?? report.storyFragments;
+  const [selectedFormat, setSelectedFormat] = useState<PostchainContentFormat>(
+    report.contentVariants[0]?.format ?? "self_expression",
+  );
+  const selectedVariant =
+    report.contentVariants.find((variant) => variant.format === selectedFormat) ??
+    report.contentVariants[0];
+  const shareTextRisks = analyzePostchainTextRisks(chapter, privacy, shareText);
+  const formatLabels: Record<PostchainContentFormat, string> = {
+    self_expression: "自我表达",
+    route_spread: "路线传播",
+  };
+  const generatedText = selectedVariant?.sections[0]?.text ?? report.shareText;
+  function applyVariant() {
+    if (!selectedVariant) return;
+    onShareTextChange(generatedText);
+  }
   return (
     <div className="space-y-5">
       <section className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-4">
@@ -1589,71 +1566,62 @@ function ReportPreviewFlow({
         </div>
 
         <div className="mt-4 grid gap-3">
-          <SegmentedControl<PostchainReportStyle>
-            label="STYLE"
-            value={reportStyle}
-            options={[
-              ["moments", "朋友圈"],
-              ["literary", "文艺漫游"],
-              ["saving", "省心攻略"],
-              ["niche", "小众人格"],
-            ]}
-            onChange={onStyleChange}
-          />
-
-          <div className="grid gap-3">
-            <div>
-              <div className="display text-[9px] tracking-[0.3em] text-[var(--ink-soft)] mb-2">
-                EDIT · 报告字段
-              </div>
-              <div className="grid gap-2">
-                {(
-                  [
-                    ["title", "报告标题", report.title],
-                    ["identityBadge", "人设标签", report.identityBadge],
-                    ["flexLine", "态度短句", report.flexLine],
-                    ["bragLine", "炫耀句", report.bragLine],
-                    ["ending", "结尾总结", report.ending],
-                    ["nextHook", "后续钩子", report.nextHook],
-                  ] as const
-                ).map(([key, label, fallback]) => (
-                  <label key={key} className="grid gap-1">
-                    <span className="cn-serif text-[11px] text-[var(--ink-soft)]">{label}</span>
-                    <input
-                      value={(edits[key] as string | undefined) ?? fallback}
-                      onChange={(e) => setEdit(key, e.target.value)}
-                      className="w-full rounded-xl border border-[var(--border)] bg-[var(--muted)]/40 px-3 py-2 cn-serif text-[12px] text-[var(--ink)]"
-                    />
-                  </label>
-                ))}
-              </div>
+          <div>
+            <div className="display text-[9px] tracking-[0.3em] text-[var(--ink-soft)] mb-2">
+              FORMAT · 内容资产类型
             </div>
-
-            <div>
-              <div className="display text-[9px] tracking-[0.3em] text-[var(--ink-soft)] mb-2">
-                EDIT · 节点故事
-              </div>
-              <div className="grid gap-2">
-                {storyFragments.map((fragment, index) => (
-                  <textarea
-                    key={`${index}-${report.completedNodes[index]?.order ?? index}`}
-                    value={fragment}
-                    rows={2}
-                    onChange={(e) => {
-                      const next = [...storyFragments];
-                      next[index] = e.target.value;
-                      setEdit("storyFragments", next);
-                    }}
-                    className="w-full rounded-xl border border-[var(--border)] bg-[var(--muted)]/40 px-3 py-2 cn-serif text-[12px] leading-relaxed text-[var(--ink)] resize-none"
-                  />
-                ))}
-              </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {report.contentVariants.map((variant) => (
+                <button
+                  key={variant.format}
+                  onClick={() => setSelectedFormat(variant.format)}
+                  className={`cn-serif text-[11px] px-2 py-1.5 rounded-xl border transition ${
+                    selectedFormat === variant.format
+                      ? "bg-[var(--ink)] text-[var(--card)] border-[var(--ink)]"
+                      : "bg-[var(--card)] text-[var(--ink-soft)] border-[var(--border)]"
+                  }`}
+                >
+                  {formatLabels[variant.format]}
+                </button>
+              ))}
             </div>
+            <p className="cn-serif text-[11px] leading-relaxed text-[var(--ink-soft)] mt-2">
+              选择一种报告方向，系统只生成一段最终文案。加入图片报告后，会显示在“三句半”下面。
+            </p>
+            {selectedVariant && (
+              <div className="mt-2 rounded-2xl border border-[var(--border)] bg-[var(--muted)]/45 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="cn-serif text-[13px] text-[var(--ink)]">
+                      {selectedVariant.title}
+                    </div>
+                    <p className="cn-serif text-[12px] leading-relaxed text-[var(--ink-soft)] mt-1 whitespace-pre-line">
+                      {selectedVariant.body}
+                    </p>
+                  </div>
+                  <button onClick={applyVariant} className="btn-ghost text-[11px] px-3 py-1.5 shrink-0">
+                    加入图片报告
+                  </button>
+                </div>
+                <p className="cn-serif text-[13px] leading-relaxed text-[var(--ink)] mt-3">
+                  {generatedText}
+                </p>
+                {selectedVariant.riskWarnings.length > 0 && (
+                  <div className="mt-2 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2">
+                    {selectedVariant.riskWarnings.map((warning) => (
+                      <div key={warning} className="cn-serif text-[11px] text-amber-700">
+                        {warning}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div>
             <div className="display text-[9px] tracking-[0.3em] text-[var(--ink-soft)] mb-2">
-              COPY · 分享文案
+              FINAL · 图片报告文案
             </div>
             <textarea
               value={shareText}
@@ -1662,6 +1630,18 @@ function ReportPreviewFlow({
               className="w-full rounded-2xl border border-[var(--border)] bg-[var(--muted)]/40 px-3 py-2.5 cn-serif text-[13px] leading-relaxed text-[var(--ink)] resize-none"
             />
           </div>
+          {shareTextRisks.length > 0 && (
+            <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2">
+              <div className="cn-serif text-[12px] text-amber-800">内容风险提示</div>
+              <div className="mt-1 grid gap-1">
+                {shareTextRisks.map((risk, index) => (
+                  <div key={`${risk.label}-${index}`} className="cn-serif text-[11px] leading-relaxed text-amber-700">
+                    图片报告文案 · {risk.label}：{risk.detail}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-2">
             <button onClick={onCopy} className="btn-ghost justify-center text-[12px]">
@@ -1717,6 +1697,7 @@ function ReportPreviewFlow({
         dateStr={dateStr}
         report={report}
         privacy={privacy}
+        shareText={shareText}
       />
 
       <section className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-4">
@@ -1745,15 +1726,20 @@ function ReportPreviewFlow({
 
 function PostchainAuthDialog({
   value,
+  privacy,
   onChange,
+  onPrivacyChange,
   onCancel,
   onConfirm,
 }: {
   value: PostchainAuthLevel;
+  privacy: PostchainPrivacySettings;
   onChange: (value: PostchainAuthLevel) => void;
+  onPrivacyChange: (value: PostchainPrivacySettings) => void;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const [detailLevel, setDetailLevel] = useState<PostchainAuthLevel | null>(null);
   const options: Array<{
     value: PostchainAuthLevel;
     title: string;
@@ -1796,20 +1782,44 @@ function PostchainAuthDialog({
           {options.map((option) => {
             const active = option.value === value;
             return (
-              <button
-                key={option.value}
-                onClick={() => onChange(option.value)}
-                className={`text-left rounded-2xl border px-4 py-3 transition ${
-                  active
-                    ? "bg-[var(--ink)] text-[var(--card)] border-[var(--ink)]"
-                    : "bg-[var(--card)] text-[var(--ink)] border-[var(--border)] hover:bg-[var(--muted)]"
-                }`}
-              >
-                <div className="cn-serif text-[14px]">{option.title}</div>
-                <div className={`cn-serif text-[12px] mt-0.5 ${active ? "opacity-75" : "text-[var(--ink-soft)]"}`}>
-                  {option.desc}
-                </div>
-              </button>
+              <div key={option.value} className="grid gap-2">
+                <button
+                  onClick={() => {
+                    onChange(option.value);
+                    setDetailLevel(option.value);
+                  }}
+                  className={`text-left rounded-2xl border px-4 py-3 transition ${
+                    active
+                      ? "bg-[var(--ink)] text-[var(--card)] border-[var(--ink)]"
+                      : "bg-[var(--card)] text-[var(--ink)] border-[var(--border)] hover:bg-[var(--muted)]"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="cn-serif text-[14px]">{option.title}</div>
+                      <div className={`cn-serif text-[12px] mt-0.5 ${active ? "opacity-75" : "text-[var(--ink-soft)]"}`}>
+                        {option.desc}
+                      </div>
+                    </div>
+                    <span className={`cn-serif text-[11px] shrink-0 ${active ? "opacity-70" : "text-[var(--ink-soft)]"}`}>
+                      设置展示内容 →
+                    </span>
+                  </div>
+                </button>
+                {detailLevel === option.value && (
+                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--muted)]/45 p-3">
+                    <div className="display text-[9px] tracking-[0.3em] text-[var(--ink-soft)]">
+                      ALLOWED FIELDS · 允许展示内容
+                    </div>
+                    <p className="cn-serif text-[11px] leading-relaxed text-[var(--ink-soft)] mt-1">
+                      这些开关只影响对外报告和海报展示，底层仍会作为事实校验数据源使用。
+                    </p>
+                    <div className="mt-3">
+                      <PrivacySettingsPanel value={privacy} onChange={onPrivacyChange} compact />
+                    </div>
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
@@ -1830,9 +1840,11 @@ function PostchainAuthDialog({
 function PrivacySettingsPanel({
   value,
   onChange,
+  compact = false,
 }: {
   value: PostchainPrivacySettings;
   onChange: (value: PostchainPrivacySettings) => void;
+  compact?: boolean;
 }) {
   const items: Array<[keyof PostchainPrivacySettings, string, string]> = [
     ["showMerchantNames", "展示商户名", "关闭后以节点名/品类替代。"],
@@ -1845,10 +1857,12 @@ function PrivacySettingsPanel({
 
   return (
     <div>
-      <div className="display text-[9px] tracking-[0.3em] text-[var(--ink-soft)] mb-2">
-        PRIVACY
-      </div>
-      <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3 grid gap-2">
+      {!compact && (
+        <div className="display text-[9px] tracking-[0.3em] text-[var(--ink-soft)] mb-2">
+          PRIVACY
+        </div>
+      )}
+      <div className={`${compact ? "grid gap-2" : "rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3 grid gap-2"}`}>
         {items.map(([key, title, desc]) => (
           <label key={key} className="flex items-start gap-3 cn-serif text-[12px] text-[var(--ink)]">
             <input
@@ -1908,6 +1922,7 @@ function PostchainPoster({
   dateStr,
   report,
   privacy,
+  shareText,
 }: {
   refEl: React.RefObject<HTMLDivElement | null>;
   chapter: ArchivedChapter;
@@ -1915,6 +1930,7 @@ function PostchainPoster({
   dateStr: string;
   report: PostchainReport;
   privacy: PostchainPrivacySettings;
+  shareText: string;
 }) {
   const coverPhoto = report.photoUrls[0] || chapter.card.cover;
   return (
@@ -1992,6 +2008,15 @@ function PostchainPoster({
           </div>
         </div>
 
+        <div className="mt-3 rounded-2xl bg-[var(--card)]/82 border border-[var(--border)] px-4 py-3">
+          <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)]">
+            ROUTE REPORT
+          </div>
+          <p className="cn-serif text-[13px] leading-relaxed text-[var(--ink)] mt-2">
+            {shareText}
+          </p>
+        </div>
+
         {report.photoUrls.length > 1 && (
           <div className="mt-4 grid grid-cols-3 gap-2">
             {report.photoUrls.slice(1, 4).map((url, i) => (
@@ -2060,14 +2085,18 @@ function LibraryView({
   empty,
   onGo,
   filters,
+  mode,
 }: {
   library: ReturnType<typeof buildLibrary>;
   sagas: ArchivedChapter[];
   empty: boolean;
   onGo: () => void;
   filters: MeFilters;
+  mode: AssetMode;
 }) {
   const [open, setOpen] = useState<{ entry: LibraryEntry; kind: LibKind } | null>(null);
+  const [showAllPlaces, setShowAllPlaces] = useState(false);
+  const [showAllActivities, setShowAllActivities] = useState(false);
   const places = useMemo(() => applyLibFilters(library.places, filters), [library.places, filters]);
   const activities = useMemo(
     () => applyLibFilters(library.activities, filters),
@@ -2075,6 +2104,125 @@ function LibraryView({
   );
 
   if (empty) return <EmptyState onGo={onGo} />;
+  if (mode === "longterm") {
+    const templateSource = [...sagas].sort((a, b) => {
+      if (filters.sort === "recent") return (b.archivedAt ?? b.createdAt) - (a.archivedAt ?? a.createdAt);
+      if (filters.sort === "enhanced") {
+        const enhanced = (chapter: ArchivedChapter) =>
+          Object.values(chapter.sceneRecords ?? {}).filter((record) => record.note || record.photo).length;
+        return enhanced(b) - enhanced(a);
+      }
+      return 0;
+    });
+    const templates = templateSource.slice(0, 3).map((chapter) => {
+      const completed = chapter.journey.scenes.filter((scene) =>
+        chapter.completedSceneOrders.includes(scene.order),
+      );
+      const categories = Array.from(new Set(completed.map((scene) => scene.location_type))).slice(0, 3);
+      return {
+        id: chapter.chapterId,
+        title: `${chapter.city || "城市"} · ${categories.slice(0, 2).join(" + ") || chapter.card.identity}`,
+        body: `来自「${chapter.card.identity}」这一章，完成 ${completed.length}/${chapter.journey.scenes.length} 个节点，可作为同类周末路线骨架。`,
+      };
+    });
+    const starPlaces = showAllPlaces ? places : places.slice(0, 5);
+    const actionSeeds = showAllActivities ? activities : activities.slice(0, 5);
+    return (
+      <>
+        <div className="space-y-5">
+          <section className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-4">
+            <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)]">
+              ASSET MAP · 路线资产整理
+            </div>
+            <h2 className="cn-serif text-[20px] text-[var(--ink)] mt-2">
+              先看能复用的路线，再看地点明细
+            </h2>
+            <p className="cn-serif text-[12px] leading-relaxed text-[var(--ink-soft)] mt-1">
+              当前资产已按上方时间区间和排序条件重新计算。
+            </p>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <MetricCard value={sagas.length} label="路线" detail="可复用骨架" />
+              <MetricCard value={starPlaces.length} label="地点" detail="优先整理" />
+              <MetricCard value={actionSeeds.length} label="行动" detail="可继续派生" />
+            </div>
+          </section>
+
+          <Section title="可复用路线骨架" subtitle="ROUTE TEMPLATES">
+            <div className="grid min-w-0 gap-2.5">
+              {templates.map((template) => (
+                <div
+                  key={template.id}
+                  className="rounded-2xl border border-[var(--border)] bg-[var(--card)] px-3 py-3"
+                >
+                  <div className="cn-serif text-[15px] text-[var(--ink)]">{template.title}</div>
+                  <p className="cn-serif text-[12px] leading-relaxed text-[var(--ink-soft)] mt-1">
+                    {template.body}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          <Section
+            title={showAllPlaces ? "全部地点资产" : "高频地点资产"}
+            subtitle={`PLACES · ${starPlaces.length}/${places.length}`}
+          >
+            <div className="grid min-w-0 gap-2.5">
+              {starPlaces.map((place) => (
+                <LibCard
+                  key={place.name}
+                  entry={place}
+                  kind="place"
+                  onOpen={() => setOpen({ entry: place, kind: "place" })}
+                />
+              ))}
+            </div>
+            {places.length > 5 && (
+              <button
+                onClick={() => setShowAllPlaces((value) => !value)}
+                className="mt-3 btn-ghost w-full justify-center text-[12px]"
+              >
+                {showAllPlaces ? "收起地点资产" : `查看全部 ${places.length} 个地点资产`}
+              </button>
+            )}
+          </Section>
+
+          <Section
+            title={showAllActivities ? "全部行动素材" : "行动素材库"}
+            subtitle={`ACTIONS · ${actionSeeds.length}/${activities.length}`}
+          >
+            <div className="grid gap-2.5">
+              {actionSeeds.map((activity) => (
+                <LibCard
+                  key={activity.name}
+                  entry={activity}
+                  kind="activity"
+                  onOpen={() => setOpen({ entry: activity, kind: "activity" })}
+                />
+              ))}
+            </div>
+            {activities.length > 5 && (
+              <button
+                onClick={() => setShowAllActivities((value) => !value)}
+                className="mt-3 btn-ghost w-full justify-center text-[12px]"
+              >
+                {showAllActivities ? "收起行动素材" : `查看全部 ${activities.length} 个行动素材`}
+              </button>
+            )}
+          </Section>
+        </div>
+
+        {open && (
+          <LibraryDetail
+            entry={open.entry}
+            kind={open.kind}
+            sagas={sagas}
+            onClose={() => setOpen(null)}
+          />
+        )}
+      </>
+    );
+  }
   return (
     <>
       <div className="space-y-7">
@@ -2156,11 +2304,13 @@ function Section({
 function CityPreferenceView({
   profile,
   memory,
+  rangeLabel,
   empty,
   onGo,
 }: {
   profile: ReturnType<typeof buildCityPreferenceProfile>;
   memory: DmMemorySnapshot | null;
+  rangeLabel: string;
   empty: boolean;
   onGo: () => void;
 }) {
@@ -2169,32 +2319,46 @@ function CityPreferenceView({
     profile.memorySource === "mixed" ? "云端画像 + 本地连载" : profile.memorySource === "cloud" ? "云端画像" : "本地连载";
   return (
     <div className="space-y-5">
-      <section className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-5">
+      <section className="rounded-3xl border border-[var(--ink)] bg-[var(--ink)] text-[var(--card)] p-5 shadow-[0_24px_60px_-34px_rgba(0,0,0,0.6)]">
         <div className="display text-[10px] tracking-[0.35em] text-[var(--ink-soft)]">
-          CITY PROFILE · 城市偏好档案
+          CITY PROFILE · {rangeLabel}
         </div>
-        <h2 className="cn-serif text-[22px] leading-snug text-[var(--ink)] mt-2">
+        <h2 className="cn-serif text-[24px] leading-snug mt-2">
           {profile.persona}
         </h2>
-        <div className="cn-serif text-[11px] text-[var(--ink-soft)] mt-2">
+        <p className="cn-serif text-[13px] leading-relaxed opacity-85 mt-3">
+          {profile.periodStats.summary}
+        </p>
+        <div className="cn-serif text-[11px] opacity-70 mt-3">
           来源：{sourceLabel}{memory ? ` · 累计 ${memory.total_runs} 次云端记录` : ""}
         </div>
       </section>
 
       <section className="grid grid-cols-2 gap-2">
-        <PreferenceCard title="常去城市" items={profile.topCities} empty="暂无城市" />
-        <PreferenceCard title="常去商圈/区域" items={profile.topDistricts} empty="暂无区域" />
-        <PreferenceCard title="偏好品类" items={profile.topCategories} empty="暂无品类" />
+        <MetricCard value={profile.periodStats.totalRoutes} label="出门次数" detail={`其中周末 ${profile.periodStats.weekendRoutes} 次`} />
+        <MetricCard value={profile.periodStats.completedNodes} label="点亮节点" detail={`增强记录 ${profile.periodStats.enhancedNodes} 条`} />
+        <PreferenceCard title="常去城市" items={profile.periodStats.cityStats} empty="暂无城市" />
         <PreferenceCard title="路线节奏" items={[profile.pace]} empty="暂无节奏" />
       </section>
 
       <section className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-4">
-        <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)]">
-          TREND · 偏好变化
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="display text-[10px] tracking-[0.3em] text-[var(--ink-soft)]">
+              ROUTE TASTE · 路线偏好
+            </div>
+            <p className="cn-serif text-[14px] leading-relaxed text-[var(--ink)] mt-2">
+              {profile.trendSummary}
+            </p>
+          </div>
+          <div className="w-16 h-16 rounded-2xl bg-[var(--muted)] border border-[var(--border)] flex items-center justify-center display text-[18px] text-[var(--accent)] shrink-0">
+            {profile.topCategories.length || 0}
+          </div>
         </div>
-        <p className="cn-serif text-[13px] leading-relaxed text-[var(--ink)] mt-2">
-          {profile.trendSummary}
-        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <PreferenceCard title="偏好品类" items={profile.topCategories} empty="暂无品类" />
+          <PreferenceCard title="常去商圈/区域" items={profile.topDistricts} empty="暂无区域" />
+        </div>
         <div className="mt-3 rounded-2xl border border-[var(--border)] bg-[var(--muted)]/50 px-3 py-2 cn-serif text-[12px] leading-relaxed text-[var(--ink-soft)]">
           {profile.paceReason}
         </div>
@@ -2212,6 +2376,30 @@ function CityPreferenceView({
             >
               {tag}
             </span>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-[var(--border)] bg-[#f8efe2] p-4 overflow-hidden shadow-[0_22px_60px_-46px_rgba(61,53,48,0.7)]">
+        <div className="rounded-2xl bg-[var(--ink)] text-[var(--card)] px-4 py-3 flex items-start justify-between gap-3">
+          <div>
+            <div className="display text-[10px] tracking-[0.3em] opacity-60">
+              ROUTE ASSETS · 长期路线资产
+            </div>
+            <h3 className="cn-serif text-[19px] mt-1">
+              已沉淀 {profile.routeAssetReports.length} 条路线资产
+            </h3>
+          </div>
+          <div className="display text-[30px] leading-none text-[#f0d48a]">
+            {profile.routeAssetReports.length}
+          </div>
+        </div>
+        <p className="cn-serif text-[13px] leading-relaxed text-[var(--ink)] mt-3 px-1">
+          {profile.routeAssetSummary}
+        </p>
+        <div className="mt-4 grid gap-3">
+          {profile.routeAssetReports.map((asset, index) => (
+            <RouteAssetReportCard key={asset.id} asset={asset} index={index} />
           ))}
         </div>
       </section>
@@ -2276,6 +2464,83 @@ function PreferenceCard({
   );
 }
 
+function RouteAssetReportCard({
+  asset,
+  index,
+}: {
+  asset: ReturnType<typeof buildCityPreferenceProfile>["routeAssetReports"][number];
+  index: number;
+}) {
+  const [primaryEvidence, ...otherEvidence] = asset.evidence;
+  const accent = ["#b86f63", "#5f8c79", "#8a77a8", "#c49a45"][index % 4];
+  const wash = ["#fff3ee", "#eef7f1", "#f3effa", "#fff7df"][index % 4];
+  return (
+    <div
+      className="group overflow-hidden rounded-[22px] border bg-[#fffdfa] shadow-[0_18px_54px_-42px_rgba(61,53,48,0.72)]"
+      style={{ borderColor: `${accent}55` }}
+    >
+      <div className="h-1.5" style={{ backgroundColor: accent }} />
+      <div className="px-4 pt-4 pb-3" style={{ background: `linear-gradient(135deg, ${wash}, #fffdfa 72%)` }}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="display text-[9px] tracking-[0.34em]" style={{ color: accent }}>
+            ASSET {String(index + 1).padStart(2, "0")}
+          </div>
+          <div className="h-px flex-1" style={{ backgroundColor: `${accent}44` }} />
+          <div className="cn-serif text-[10px] text-[var(--ink)] shrink-0">
+            路线骨架
+          </div>
+        </div>
+        <h4 className="cn-serif text-[17px] leading-snug text-[var(--ink)] mt-3">
+          {asset.title}
+        </h4>
+        <p className="cn-serif text-[12px] leading-relaxed text-[var(--ink-soft)] mt-1.5">
+          {asset.subtitle}
+        </p>
+      </div>
+
+      <div className="mx-3 mt-3 rounded-2xl border px-3 py-3 bg-white/85" style={{ borderColor: `${accent}3d` }}>
+        <div className="display text-[9px] tracking-[0.28em]" style={{ color: accent }}>
+          可复用价值
+        </div>
+        <p className="cn-serif text-[13px] leading-relaxed text-[var(--ink)] mt-1">
+          {asset.shareLine}
+        </p>
+      </div>
+
+      <div className="px-4 pt-3 pb-4">
+        {primaryEvidence && (
+          <div className="cn-serif text-[11px] leading-relaxed text-[var(--ink)] border-l-2 pl-2" style={{ borderColor: accent }}>
+            {primaryEvidence}
+          </div>
+        )}
+        {otherEvidence.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {otherEvidence.map((item) => (
+            <span
+              key={item}
+              className="cn-serif text-[10px] px-2.5 py-1 rounded-full text-[var(--ink)] border bg-white/80"
+              style={{ borderColor: `${accent}44` }}
+            >
+              {item}
+            </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ value, label, detail }: { value: number; label: string; detail: string }) {
+  return (
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3">
+      <div className="display text-[28px] leading-none text-[var(--accent)]">{value}</div>
+      <div className="cn-serif text-[13px] text-[var(--ink)] mt-1">{label}</div>
+      <div className="cn-serif text-[11px] text-[var(--ink-soft)] mt-0.5">{detail}</div>
+    </div>
+  );
+}
+
 function LibCard({
   entry,
   kind,
@@ -2290,7 +2555,7 @@ function LibCard({
   return (
     <button
       onClick={onOpen}
-      className="w-full text-left rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3 flex items-center gap-3 transition-transform hover:-translate-y-0.5 hover:shadow-[0_14px_36px_-22px_rgba(0,0,0,0.3)]"
+      className="w-full max-w-full min-w-0 min-h-[92px] overflow-hidden text-left rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3 flex items-center gap-3 transition-transform hover:-translate-y-0.5 hover:shadow-[0_14px_36px_-22px_rgba(0,0,0,0.3)]"
     >
       <div className="w-14 h-14 rounded-xl shrink-0 flex items-center justify-center bg-[var(--muted)] overflow-hidden">
         {kind === "place" ? (
@@ -2300,7 +2565,7 @@ function LibCard({
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="cn-serif text-[14px] text-[var(--ink)] truncate">{entry.name}</div>
+        <div className="cn-serif text-[14px] text-[var(--ink)] truncate max-w-full">{entry.name}</div>
         <div className="cn-serif text-[11px] text-[var(--ink-soft)] truncate">
           {entry.type} · 访 {entry.visits} 次{lit ? ` · 增强 ${entry.level}` : ""}
         </div>
