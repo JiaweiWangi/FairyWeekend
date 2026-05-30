@@ -3,6 +3,9 @@ project_id = "hobtnzrulgkcfxhsanci"
 [functions.generate-quest]
 verify_jwt = false
 
+[functions.generate-quest-agent]
+verify_jwt = false
+
 [functions.resolve-location]
 verify_jwt = false
 
