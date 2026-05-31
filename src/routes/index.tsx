@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useRef, useState, useEffect } from "react";
-import { PERSONA_CARDS, drawCard, RARITY_LABEL } from "@/lib/cards";
+import { PERSONA_CARDS, drawCard, RARITY_LABEL, preloadAllCovers } from "@/lib/cards";
 import { savePendingCard } from "@/lib/persona-store";
 import type { PersonaCard } from "@/lib/persona-types";
 import { AgentChatView } from "@/components/AgentChatView";
@@ -16,6 +16,12 @@ function Index() {
   const [selected, setSelected] = useState<PersonaCard | null>(null);
   const [tarotRevealed, setTarotRevealed] = useState<PersonaCard | null>(null);
   const [shuffleNonce, setShuffleNonce] = useState(0);
+
+  // 进入首页即在后台预加载所有人设卡封面，切换到「我自己选」/「让命运决定」时图就在缓存里
+  useEffect(() => {
+    preloadAllCovers();
+  }, []);
+
 
   // 浮动花瓣
   const petals = useMemo(
@@ -214,8 +220,10 @@ function MiniCardFront({ card }: { card: PersonaCard }) {
             src={card.cover}
             alt={card.identity}
             className="absolute inset-0 w-full h-full object-cover"
-            loading="lazy"
+            decoding="async"
           />
+
+
         ) : (
           <div
             className="absolute inset-0 opacity-70"
