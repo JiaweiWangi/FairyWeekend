@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useRef, useState, useEffect } from "react";
-import { PERSONA_CARDS, drawCard, RARITY_LABEL } from "@/lib/cards";
+import { PERSONA_CARDS, drawCard, RARITY_LABEL, preloadAllCovers } from "@/lib/cards";
 import { savePendingCard } from "@/lib/persona-store";
 import type { PersonaCard } from "@/lib/persona-types";
 import { AgentChatView } from "@/components/AgentChatView";
