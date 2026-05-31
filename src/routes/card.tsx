@@ -408,9 +408,16 @@ function CardPage() {
 
 
       {/* City picker */}
-      <div className="mt-8">
+      <div
+        id="city-picker"
+        className={`mt-8 rounded-3xl transition-all ${
+          needLocationHint && !hasLocation
+            ? "ring-2 ring-[oklch(0.7_0.15_25)] ring-offset-4 ring-offset-[var(--bg)] p-4 -m-4"
+            : ""
+        }`}
+      >
         <label className="cn-serif text-[11px] tracking-[0.3em] text-[var(--ink-soft)] block mb-3">
-          你今天在哪
+          你今天在哪 <span className="text-[oklch(0.65_0.18_25)]">*</span>
         </label>
 
         <button
@@ -434,7 +441,15 @@ function CardPage() {
             return (
               <button
                 key={c}
-                onClick={() => { setCity(c); setAutoLocated(false); setLocatedName(null); coordsRef.current = null; }}
+                onClick={() => {
+                  setCity(c);
+                  setAutoLocated(false);
+                  setLocatedName(null);
+                  coordsRef.current = null;
+                  setHasCoords(false);
+                  setNeedLocationHint(false);
+                  if (error) setError(null);
+                }}
                 className={`chip ${active ? "is-active" : ""}`}
               >
                 {c}
@@ -443,6 +458,7 @@ function CardPage() {
           })}
         </div>
       </div>
+
 
 
       {error && (
