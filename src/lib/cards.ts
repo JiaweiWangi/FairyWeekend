@@ -280,3 +280,21 @@ export const RARITY_LABEL: Record<Rarity, string> = {
   SR: "Super Rare",
   SSR: "Super Super Rare",
 };
+
+// 通过卡片 id 取最新的封面（用于修复历史归档里旧 hash 路径失效的问题）
+export function getCoverById(id?: string): string | undefined {
+  if (!id) return undefined;
+  return COVERS[id];
+}
+
+// 预加载所有人设卡封面（在首页/进入「我自己选」前调用，避免点开瞬时白屏）
+let _coversPreloaded = false;
+export function preloadAllCovers() {
+  if (_coversPreloaded || typeof window === "undefined") return;
+  _coversPreloaded = true;
+  for (const url of Object.values(COVERS)) {
+    const img = new Image();
+    img.decoding = "async";
+    img.src = url;
+  }
+}
