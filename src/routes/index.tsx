@@ -17,6 +17,12 @@ function Index() {
   const [tarotRevealed, setTarotRevealed] = useState<PersonaCard | null>(null);
   const [shuffleNonce, setShuffleNonce] = useState(0);
 
+  // 进入首页即在后台预加载所有人设卡封面，切换到「我自己选」/「让命运决定」时图就在缓存里
+  useEffect(() => {
+    preloadAllCovers();
+  }, []);
+
+
   // 浮动花瓣
   const petals = useMemo(
     () => Array.from({ length: 14 }).map((_, i) => ({
