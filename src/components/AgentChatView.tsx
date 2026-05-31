@@ -313,8 +313,10 @@ export function AgentChatView({ onAccept }: { onAccept: (c: PersonaCard) => void
 
           {/* chips */}
           {lastInteractive?.chips && (
-            <div className="mt-1 pl-1">
+            <div className="mt-2 pl-1">
+              <div className="chip-group-hint">{lastInteractive.multi ? "点选 · 可多选" : "点选其一"}</div>
               <div className="flex flex-wrap gap-2">
+
                 {lastInteractive.chips.map((c, i) => {
                   const isPicked = lastInteractive.multi && picked.includes(i);
                   return (
