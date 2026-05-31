@@ -8,6 +8,7 @@ import {
   type ArchivedChapter,
   type LibraryEntry,
 } from "@/lib/persona-store";
+import { getCoverById } from "@/lib/cards";
 import { VenueIcon, detectVenue } from "@/components/VenueIcon";
 import { UserPhotoCard } from "@/components/UserPhotoCard";
 import type * as ExportPdf from "@/lib/export-pdf";
