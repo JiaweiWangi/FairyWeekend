@@ -669,16 +669,16 @@ function NovelView({
                 <div
                   className="relative h-36 overflow-hidden"
                   style={
-                    ch.card.cover
+                    getCoverById(ch.card.id)
                       ? undefined
                       : {
                           background: `linear-gradient(135deg, ${ch.card.colors[0]}, ${ch.card.colors[1]})`,
                         }
                   }
                 >
-                  {ch.card.cover && (
+                  {getCoverById(ch.card.id) && (
                     <img
-                      src={ch.card.cover}
+                      src={getCoverById(ch.card.id)}
                       alt={ch.card.identity}
                       className="w-full h-full object-cover"
                     />
@@ -805,12 +805,12 @@ function SingleChapterNovel({
         <div
           className="relative h-44 overflow-hidden"
           style={
-            ch.card.cover
+            getCoverById(ch.card.id)
               ? undefined
               : { background: `linear-gradient(135deg, ${ch.card.colors[0]}, ${ch.card.colors[1]})` }
           }
         >
-          {ch.card.cover && <img src={ch.card.cover} alt={ch.card.identity} className="w-full h-full object-cover" />}
+          {getCoverById(ch.card.id) && <img src={getCoverById(ch.card.id)} alt={ch.card.identity} className="w-full h-full object-cover" />}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
           <div className="absolute top-3 left-3 right-3 flex items-start justify-between">
             <div className="rarity-chip" data-rarity={ch.card.rarity}>✦ {ch.card.rarity}</div>
@@ -950,16 +950,16 @@ function ChapterDetail({
         <div
           className="relative h-44 overflow-hidden rounded-t-3xl"
           style={
-            ch.card.cover
+            getCoverById(ch.card.id)
               ? undefined
               : {
                   background: `linear-gradient(135deg, ${ch.card.colors[0]}, ${ch.card.colors[1]})`,
                 }
           }
         >
-          {ch.card.cover && (
+          {getCoverById(ch.card.id) && (
             <img
-              src={ch.card.cover}
+              src={getCoverById(ch.card.id)}
               alt={ch.card.identity}
               className="w-full h-full object-cover"
             />
@@ -1933,7 +1933,7 @@ function PostchainPoster({
   privacy: PostchainPrivacySettings;
   shareText: string;
 }) {
-  const coverPhoto = report.photoUrls[0] || chapter.card.cover;
+  const coverPhoto = report.photoUrls[0] || getCoverById(chapter.card.id);
   return (
     <article
       ref={refEl}
@@ -2765,15 +2765,15 @@ function LibraryDetail({
                     <div
                       className="w-9 h-9 rounded-lg overflow-hidden shrink-0 border border-[var(--border)]"
                       style={
-                        a.card.cover
+                        getCoverById(a.card.id)
                           ? undefined
                           : {
                               background: `linear-gradient(135deg, ${a.card.colors[0]}, ${a.card.colors[1]})`,
                             }
                       }
                     >
-                      {a.card.cover && (
-                        <img src={a.card.cover} alt="" className="w-full h-full object-cover" />
+                      {getCoverById(a.card.id) && (
+                        <img src={getCoverById(a.card.id)} alt="" className="w-full h-full object-cover" />
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -2968,9 +2968,9 @@ function PrintableChapter({ ch, chapterNo }: { ch: ArchivedChapter; chapterNo: n
           marginBottom: 20,
         }}
       >
-        {ch.card.cover && (
+        {getCoverById(ch.card.id) && (
           <img
-            src={ch.card.cover}
+            src={getCoverById(ch.card.id)}
             alt=""
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
             crossOrigin="anonymous"
