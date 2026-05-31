@@ -221,8 +221,8 @@ function MiniCardFront({ card }: { card: PersonaCard }) {
             alt={card.identity}
             className="absolute inset-0 w-full h-full object-cover"
             decoding="async"
-            fetchPriority={idx < 4 ? "high" : "auto"}
           />
+
 
         ) : (
           <div
