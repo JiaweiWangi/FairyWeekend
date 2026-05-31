@@ -210,10 +210,28 @@ function CardPage() {
     return () => clearInterval(t);
   }, [generating]);
 
+  // 是否已经选好"今天在哪"：有手动城市，或定位拿到了坐标
+  const hasLocation = Boolean(city.trim()) || hasCoords;
+
   async function handleStart() {
     if (!card) return;
+    if (locating) {
+      setNeedLocationHint(true);
+      setError("正在定位中，稍等一下…");
+      return;
+    }
+    if (!hasLocation) {
+      setNeedLocationHint(true);
+      setError("先告诉故事一下：你今天在哪？用上面的定位，或挑一个城市。");
+      // 滚动到城市选择区域
+      if (typeof document !== "undefined") {
+        document.getElementById("city-picker")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      return;
+    }
     setGenerating(true);
     setError(null);
+    setNeedLocationHint(false);
     try {
       const { data, error } = await supabase.functions.invoke("generate-quest-agent", {
         body: {
@@ -236,6 +254,7 @@ function CardPage() {
       setGenerating(false);
     }
   }
+
 
   if (!card) return null;
   const [a, b, c] = card.colors;
